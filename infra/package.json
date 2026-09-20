@@ -1,0 +1,18 @@
+{
+  "name": "@coyote/infra",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "synth": "cdk synth -c env=dev --quiet",
+    "diff:dev": "cdk diff -c env=dev --profile coyote",
+    "deploy:dev": "cdk deploy -c env=dev --profile coyote --outputs-file cdk-outputs.dev.json"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.1142.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.270.0",
+    "constructs": "^10.8.1"
+  }
+}

@@ -1,0 +1,27 @@
+import { describe, expect, it } from 'vitest';
+import { normalizeAnswers } from '../src/core/answers';
+import { briefSystemPrompt, briefUserPrompt, contentSystemPrompt, contentUserPrompt } from '../src/core/prompt';
+import { plain } from '../themes/plain';
+import { brief } from './fixtures';
+
+const answers = normalizeAnswers({
+  businessName: 'Panadería Luna',
+  about: 'Panadería de masa madre en Chapinero, Bogotá. Abrimos de lunes a sábado de 7 a 19.',
+  whatsapp: '+57 300 123 4567',
+  address: 'Calle 60 # 9-12',
+});
+
+describe('prompts', () => {
+  it('match the snapshots (review any change with the contact sheet)', () => {
+    expect(briefSystemPrompt()).toMatchSnapshot('brief system');
+    expect(briefUserPrompt(answers, [plain], ['fraunces-worksans'])).toMatchSnapshot('brief user');
+    expect(contentSystemPrompt('es')).toMatchSnapshot('content system es');
+    expect(contentSystemPrompt('pt')).toMatchSnapshot('content system pt');
+    expect(contentUserPrompt(answers, brief)).toMatchSnapshot('content user');
+  });
+
+  it('never sends the phone number to the model', () => {
+    expect(briefUserPrompt(answers, [plain], ['fraunces-worksans'])).not.toContain('573001234567');
+    expect(contentUserPrompt(answers, brief)).not.toContain('573001234567');
+  });
+});

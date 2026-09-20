@@ -9,7 +9,9 @@ import { THEMES } from '../themes';
 import { normalizeAnswers } from '../src/core/answers';
 import { callTool } from '../src/core/bedrock';
 import { generateSite } from '../src/core/pipeline';
+import { modelId as resolveModelId } from '../src/core/models';
 import { checkHtml } from '../src/core/policy';
+import { isRejected, prescreen } from '../src/core/prescreen';
 import { render } from '../src/core/render';
 import { slugify } from '../src/core/slug';
 import { createUrls, urlConfigFromEnv, type UrlConfig } from '../src/core/urls';
@@ -54,9 +56,19 @@ const answers = normalizeAnswers({
   lang: values.lang,
 });
 
-const modelId = process.env.BEDROCK_MODEL_ID ?? 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
+const modelId = resolveModelId();
 const started = Date.now();
-const { brief, content, usage } = await generateSite(answers, { callTool, modelId });
+
+// Same order as the deployed flow: pre-screen first, generate only if it passes.
+const screening = await prescreen(answers, { callTool, modelId });
+if (isRejected(screening)) {
+  console.error(`REJECTED by pre-screen: ${screening.category} (${screening.confidence}) ${screening.reason.slice(0, 240)}`);
+  process.exit(2);
+}
+
+const generated = await generateSite(answers, { callTool, modelId });
+const { brief, content } = generated;
+const usage = [screening.usage, ...generated.usage];
 
 const urls = createUrls(process.env.SITES_BASE_URL || process.env.DOMAIN_NAME ? urlConfigFromEnv(process.env) : LOCAL_URLS);
 const slug = slugify(answers.businessName);

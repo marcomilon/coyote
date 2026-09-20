@@ -22,4 +22,4 @@ Design and progress live in [`PLAN.md`](PLAN.md) (MVP) and [`PLAN-PHASE2.md`](PL
 ## Layout
 - `infra/` — CDK app (`Coyote-dev`, `Coyote-prod`)
 - `services/generator/` — Lambda code, themes, local scripts
-- `web/` — generator UI and "Mi sitio"
+- `web/` — our frontend (Astro from Phase 5): landing, form, "Mi sitio", legal pages

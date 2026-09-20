@@ -7,11 +7,12 @@ A public web form asks 3 questions. A model writes the content, a renderer build
 - **LLM**: Claude on Amazon Bedrock.
 - **Hosting**: one subdomain per site (wildcard cert + CloudFront rewrite).
 - **Auth**: none. Rate-limited.
-- **Stack**: TypeScript everywhere (CDK, Lambda, plain HTML/JS form).
+- **Stack**: TypeScript everywhere (CDK, Lambda, Astro frontend).
 - **IaC**: every AWS resource is defined in CDK. Manual one-offs are marked 👤 in the phases.
 - **Region**: us-east-1 for everything. One stack, no cross-region references. Bedrock, Route 53 Domains, CloudFront SaaS Manager, and ACM for CloudFront are native there. CloudFront edges in São Paulo, Bogotá, Santiago, Buenos Aires, and Mexico City serve the sites. Only the API round-trip (~100 ms per submission) is slower than sa-east-1.
 - **The model writes structured content, never HTML.** A deterministic renderer fills the theme. Edits ("Mi sitio", WhatsApp Flow B) patch the stored content and re-render with no model call.
 - **MVP sites have only the WhatsApp CTA.** The contact form and SES email are post-MVP. They are built with WhatsApp lead delivery first (`PLAN-PHASE2.md`), email second.
+- **Our frontend is Astro, built to static files.** Generated business sites are not Astro: they are rendered at request time in Lambda by `render.ts`, where no build step can run.
 - **Local toolchain**: Node 24, CDK CLI, SAM (not used).
 
 ## Domains
@@ -84,14 +85,17 @@ coyote/
     scripts/local-generate.ts   # run prompt locally → writes ./out/index.html
     scripts/contact-sheet.ts    # screenshot grid of ~20 fixture sites
     test/                 # vitest: slug, urls, render escaping, css sanitizer, policy, prompt snapshot
-  web/                    # generator UI + "Mi sitio" (static, JS allowed)
-    index.html, app.js, styles.css   # es-419 default, pt-BR toggle
+  web/                    # Astro workspace: landing, form, "Mi sitio", reportar, terms, privacy
+    src/pages/            # es at /, pt at /pt/ (Astro i18n routing)
+    src/layouts/, src/components/, src/i18n/
+    src/scripts/          # plain TypeScript for the form, polling, preview, Mi sitio
+    public/config.js      # runtime API URL (written by the dev script and by BucketDeployment)
 ```
 
 ## Local development
-`npm run dev` serves `web/` on `http://localhost:5173` and calls the real API Gateway of the deployed `dev` stack. Only the static frontend runs locally; Lambdas, DynamoDB, S3, Bedrock, and CloudFront are the deployed ones.
+`npm run dev` runs `astro dev` for `web/` on `http://localhost:5173` and calls the real API Gateway of the deployed `dev` stack. Only the frontend runs locally; Lambdas, DynamoDB, S3, Bedrock, and CloudFront are the deployed ones.
 - The browser needs no AWS credentials (the API is public HTTPS). The `coyote` profile is only needed to deploy: `npm run deploy:dev` → `cdk deploy --profile coyote -c env=dev`.
-- The API base URL is the only environment-specific value in the frontend (`web/config.js`). `npm run dev` reads it from `infra/cdk-outputs.dev.json` (written by `cdk deploy --outputs-file`, gitignored). `BucketDeployment` writes the deployed value. A `?api=` query parameter overrides it.
+- The API base URL is the only environment-specific value in the frontend. It is loaded at runtime from `config.js`, not baked in at build time, because CDK only knows the URL after deploying. `npm run dev` writes `web/public/config.js` from `infra/cdk-outputs.dev.json` (written by `cdk deploy --outputs-file`, gitignored). `BucketDeployment` writes the deployed value. A `?api=` query parameter overrides it.
 - `dev` stack only (CDK context `env=dev`), never `prod`:
   - API CORS also allows `http://localhost:5173`.
   - Sites CSP `frame-ancestors` also lists `http://localhost:5173`, or the preview iframe is blocked.
@@ -107,9 +111,10 @@ coyote/
 A language selector (es / pt) sets the site's language. Owner email is not collected in the MVP; it is added in "Mi sitio" when the contact form ships.
 
 ## Generation (`services/generator/src/core`)
-- **Temporary model**: until the Anthropic use case form is approved, develop with Amazon Nova (no form needed): `BEDROCK_MODEL_ID=us.amazon.nova-2-lite-v1:0`. The pipeline is model-agnostic (Converse + forced tool call). Nova's copy is flatter and mostly repeats the answers, so it is for plumbing only.
-- **Model**: Claude Haiku 4.5 for everything (pre-screen, design brief, content). Themes carry the visual quality; the model writes copy and picks tokens. Target ≈ $0.02 per site; 1,000 sites/month < $30. Sonnet 5 is a flagged fallback (`FALLBACK_MODEL_ID`), used only when the quality lint fails twice. Opus is not needed. Nova Micro was rejected: worse es/pt copy for negligible savings.
-- **Token budget**: brief ≈ 2k in / 0.5k out; content ≈ 3k in / 1–1.5k out (`maxTokens` 3k); pre-screen ≈ 0.5k in / 0.1k out. Log `usage` from every call into `jobs` and expose cost per site as a CloudWatch metric.
+- **Current model**: Amazon Nova 2 Lite (`us.amazon.nova-2-lite-v1:0`), no access form needed. The default is defined once, in `src/core/models.ts`; `BEDROCK_MODEL_ID` overrides it. No other file names a model. The pipeline is model-agnostic (Converse + forced tool call).
+- **Planned switch to Claude**, when the user judges the pipeline stable: Nova's copy is flatter and mostly repeats the answers, so copy quality and prompt tuning wait for that switch. The cost and quality notes below describe that target.
+- **Target model**: Claude Haiku 4.5 for everything (pre-screen, design brief, content). Themes carry the visual quality; the model writes copy and picks tokens. Target ≈ $0.02 per site; 1,000 sites/month < $30. Sonnet 5 is a flagged fallback (`FALLBACK_MODEL_ID`), used only when the quality lint fails twice. Opus is not needed. Nova Micro was rejected: worse es/pt copy for negligible savings.
+- **Token budget**: brief ≈ 2k in / 0.5k out; content ≈ 3k in / 1–1.5k out (`maxTokens` 3k); pre-screen ≈ 1.5k in / 0.1k out. Log `usage` from every call into `jobs` and expose cost per site as a CloudWatch metric.
 - **No prompt caching**: Haiku 4.5's minimum cacheable prefix is ~4k tokens (verify) and the seeded theme candidates change the prefix, so hits would be rare.
 - **Model call**: `BedrockRuntimeClient` + `ConverseCommand`, explicit `maxTokens`, `retryMode: "adaptive"`. Model IDs from env `BEDROCK_MODEL_ID` / `FALLBACK_MODEL_ID`. Use the `us.` inference profile; check IDs with `aws bedrock list-inference-profiles --region us-east-1 --profile coyote`.
 - **Structured content via tool use**: force a `publish_content` tool whose schema is the content model (`content.ts`, zod → JSON Schema):
@@ -131,13 +136,14 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
    - Output: generated text sits in a `toolUse` block, which Converse guardrails may not evaluate (verify). So `generate` calls `ApplyGuardrail` on the visible text extracted from the content JSON. Cheaper and fewer false positives than scanning HTML/CSS.
    - Standard tier. The Classic tier covers only en/fr/es; Portuguese needs Standard, which requires cross-region guardrail inference (verify).
    - Content filters: sexual and hate at HIGH. Violence, insults, misconduct start at MEDIUM and are tuned on the fixtures (HIGH rejects butchers, martial-arts gyms, tattoo studios). Prompt-attack filter on input.
-   - Denied topics, each defined narrowly with es/pt/en examples: adult/escort services; online casinos and betting sites (not a licensed lottery kiosk); illegal drugs and weapons; financial fraud, crypto "investment" schemes, pyramid/MLM; impersonation of banks, governments, delivery companies, or well-known brands; credential/payment collection; pirated content; political campaign material and proselytising content (not a church or community centre's address-and-schedule page); anything sexualising minors.
+   - Denied topics, each defined narrowly with es/pt/en examples: adult/escort services; all gambling (casinos, betting, lottery agencies and kiosks, bingo), licensed or not; businesses whose main activity is selling alcohol, tobacco, or vapes (bars, liquor stores, vape shops; a restaurant that also serves drinks is allowed); pawn shops and money exchange offices; illegal drugs and weapons; financial fraud, crypto "investment" schemes, pyramid/MLM; impersonation of banks, governments, delivery companies, or well-known brands; credential/payment collection; pirated content; political campaign material and proselytising content (not a church or community centre's address-and-schedule page); anything sexualising minors.
    - Word filter: small managed profanity list + custom terms (es/pt slurs, scam phrases like "verifica tu cuenta", "atualize seus dados").
    - Blocked → fixed message, job `REJECTED` with a generic reason. Never show guardrail details to the user.
    - IAM: the generator role's `bedrock:InvokeModel` has a `bedrock:GuardrailIdentifier` condition, so a call without the guardrail is denied.
 
 2. **Pre-screen classifier** (Haiku 4.5, tool use, ~200 tokens)
-   - Input: the 3 answers. Output tool `classify`: `{ decision: "allow" | "reject", category, confidence }`.
+   - Input: business name, description, address (never the phone number). Output tool `classify`: `{ reason, decision: "allow" | "reject", category, confidence }`. A reject below `REJECT_MIN_CONFIDENCE` (0.5) is not trusted; the other layers still apply. About 1.5k tokens per call (the rules are in the system prompt), ≈ $0.0015 on Haiku.
+   - It judges meaning, so it catches what the hardcoded list cannot: look-alike spellings ("B4ncol0mbia"), impersonation with no brand named, and prompt injection in the answers (treated as a reason to reject).
    - Reject list mirrors the denied topics, plus an impersonation check (name/description matches a bank, government agency, courier, or major brand).
    - Runs in `submit` after the rate limit, so rejected requests never reach generation or S3. Returns HTTP 422 with "No podemos crear este sitio".
 
@@ -153,7 +159,15 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
    - `npm run unpublish -- <slug>`: removes the prefix and adds the slug to `blocklist` so it cannot be regenerated.
    - CloudWatch metric + alarm on `REJECTED` rate (a spike means probing).
 
-Policy text (es/pt) lives in `web/terms.html`, linked from the form. The submit button states acceptance.
+**Detecting abuse.** Every alarm emails the admin through one SNS topic (`alerts`).
+- Lambdas emit metrics with CloudWatch EMF (no extra API calls): `Submitted`, `RateLimited` (429s), `PrescreenRejected` and `PolicyRejected` (by category), `Published`, `Failed`, `TokensIn`/`TokensOut`.
+- Alarms: sites published per hour above normal; `RateLimited` spike (someone hitting the cap repeatedly); `REJECTED` rate spike (probing); tokens per day above budget; API Gateway 4xx/5xx and throttle count; `generate` errors.
+- Money: AWS Budget alert plus AWS Cost Anomaly Detection (free) on the account.
+- One CloudWatch dashboard with the metrics above.
+- `npm run abuse:report`: reads `jobs` for the last 24 h and prints the top IP hashes by requests, their decisions and categories, and the newest published slugs. This is the tool for "who is doing this", since metrics only say "something is happening".
+- Visitor reports (footer link) arrive by email through `abuse-reports`.
+
+Policy text (es/pt) lives in the terms page, linked from the form. The submit button states acceptance.
 
 ## Design quality
 A model left alone produces the same page every time: purple-to-blue gradient hero, "Bienvenidos a…", three centered icon cards, Inter/Roboto, generic copy. Countermeasures, highest impact first:
@@ -212,7 +226,7 @@ No accounts, no Cognito. In the MVP, whoever has the link owns the site. The own
 - On publish, the result page shows the link once: `https://app.<domain>/mi-sitio#token=…`. The token is in the fragment so it never reaches logs or referrers. Token = random 32 bytes, stored hashed in `sites`, 1-year expiry.
 - Buttons: "Copiar" and "Guardar en WhatsApp" (`wa.me/<ownerNumber>?text=<link>`; the owner messages the link to themselves).
 - Re-issue ("Enviarme mi enlace") comes with WhatsApp (template `enlace_mi_sitio` to `sites.ownerPhone`) and later email. Until then a lost link means creating a new site.
-- "Mi sitio" page (`web/`, JS allowed): edit contact details, hours, services (patches `sites.content` and re-renders, no model call); regenerate (max 2 per site, from the stored answers); unpublish; delete my data. Post-MVP: last 30 days of messages, pause notifications, add/verify email, buy a domain.
+- "Mi sitio" page (Astro page with a script): edit contact details, hours, services (patches `sites.content` and re-renders, no model call); regenerate (max 2 per site, from the stored answers); unpublish; delete my data. Post-MVP: last 30 days of messages, pause notifications, add/verify email, buy a domain.
 - API: `GET /me`, `POST /me/regenerate`, `POST /me/content`, `POST /me/unpublish`, `DELETE /me`. All require `Authorization: Bearer <token>` and are rate-limited per token.
 
 ## Preview before publish
@@ -222,7 +236,7 @@ No accounts, no Cognito. In the MVP, whoever has the link owns the site. The own
 - Previews expire after 24 h (lifecycle rule).
 
 ## Privacy and legal
-- `web/privacidad.html` + `web/terms.html` (es/pt): what we store (answers, owner WhatsApp number, IP hashes for rate limiting; later owner email and visitor messages for 30 d), why, retention, how to delete (magic-link page or email). Covers the basics of LGPD (BR), LFPDPPP (MX), Ley 1581 (CO), Ley 25.326 (AR).
+- Privacy and terms pages (es/pt, written in Markdown): what we store (answers, owner WhatsApp number, IP hashes for rate limiting; later owner email and visitor messages for 30 d), why, retention, how to delete (magic-link page or email). Covers the basics of LGPD (BR), LFPDPPP (MX), Ley 1581 (CO), Ley 25.326 (AR).
 - Generated sites link to the platform privacy page in the footer.
 - IPs stored only as salted hashes. No cookies or analytics on generated sites.
 
@@ -237,7 +251,7 @@ No accounts, no Cognito. In the MVP, whoever has the link owns the site. The own
 - *(domain mode)* ACM certificates, DNS-validated: `<sites-domain>` + `*.<sites-domain>` (own hosted zone); `app.<domain>` and `api.<domain>` via `HostedZone.fromLookup`.
 - *(domain mode)* Route 53 alias records: `app.<domain>`, `api.<domain>`, `<sites-domain>`, `*.<sites-domain>`.
 - S3 `sitesBucket`: private, versioned, block public access. Lifecycle: noncurrent versions 30 d, `_preview/` 1 d, `_uploads/` 1 d. S3 `appBucket`: generator UI.
-- **CloudFront #1 — app**: OAC to `appBucket`, alias `app.<domain>`. A viewer-request function maps clean URLs (`/mi-sitio`, `/reportar`, `/privacidad`) to `.html`. CSP: own scripts, `connect-src https://api.<domain>`, `frame-src https://preview.<sites-domain>`. HSTS.
+- **CloudFront #1 — app**: OAC to `appBucket`, alias `app.<domain>`. A viewer-request function maps clean URLs to Astro's output (`/mi-sitio` → `/mi-sitio/index.html`). CSP: `script-src 'self'` (Astro is configured to emit external script files, no inline scripts), `connect-src https://api.<domain>`, `frame-src https://preview.<sites-domain>`. HSTS.
 - **CloudFront #2 — sites**: OAC to `sitesBucket`, aliases `<sites-domain>` + `*.<sites-domain>`. One viewer-request CloudFront Function, both modes unit-tested:
   - `Host == preview.<sites-domain>` → `/_preview/<path>`
   - `Host == {slug}.<sites-domain>` → `/{slug}/<path or index.html>`
@@ -245,7 +259,7 @@ No accounts, no Cognito. In the MVP, whoever has the link owns the site. The own
   - domainless (`Host` is the `cloudfront.net` name): no host rewrite; `/{slug}` → 301 `/{slug}/`; `/{slug}/` → `/{slug}/index.html`; same for `/_preview/{jobId}/`; `/` → redirect to the app.
   - ResponseHeadersPolicy: `default-src 'none'; script-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action https://api.<domain>; frame-ancestors https://app.<domain>`. HSTS.
   - Domainless CSP: `form-action`/`frame-ancestors` use the API and app distribution URLs. The app CSP uses `frame-src https://*.cloudfront.net` to avoid a circular reference between the two distributions.
-- `BucketDeployment` of `web/` → `appBucket`.
+- `BucketDeployment` of `web/dist/` (the Astro build) plus the generated `config.js` → `appBucket`.
 - DynamoDB, MVP: `jobs` (pk `jobId`, TTL 90 d; answers, safety outcomes, usage), `sites` (pk `slug`; content, brief, theme, ownerWhatsApp, tokenHash, status, createdAt), `ratelimit` (pk `ip`, TTL), `blocklist` (pk `slug`). Post-MVP: `messages`, `suppression`, `wa_*` (`PLAN-PHASE2.md`), `domains`, GSI on `sites.ownerPhone`.
 - `CfnGuardrail` + `CfnGuardrailVersion` (Standard tier; filters, denied topics, word filters as above). ID/version passed to Lambdas via env.
 - Lambdas: `NodejsFunction`, Node 22, esbuild. MVP: `submit` (sync, 15 s), `generate` (async, 5 min, 1 GB, on-failure destination → `job-failed` handler), `status`, `publish`, `uploads`, `me`, `report`. Post-MVP: `contact`, `ses-events`, `digest`, `domains`, `wa-*`.
@@ -288,10 +302,13 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 
 ### Phase 2b — Content safety core
 - [x] `policy.ts` content checks + rendered-HTML invariants + tests; wired into `pipeline.ts` (throws `PolicyRejection`) and `generate:local`
-- [ ] Pre-screen classifier (`classify` tool)
+- [x] Pre-screen classifier (`prescreen.ts`, `classify` tool); runs first in `generate:local`
 - [ ] Guardrail definition (Standard tier, filters, narrow denied topics, word lists)
 - [ ] Verify the three unconfirmed items (guardrail tiers for pt, `toolUse` evaluation, cache minimum)
-- [ ] Fixture set (~40: bakery, dentist, butcher, martial-arts gym, tattoo studio, lottery kiosk, church vs. escort agency, "Banco X verifica tu cuenta", online casino) run locally; thresholds tuned; 👤 church/lottery policy line confirmed
+- [x] Fixture set (44 good/borderline/bad cases, `test/fixtures/prescreen-cases.ts`); `npm run prescreen:fixtures` runs them on the real model and compares with the hardcoded list. Nova 2 Lite: 44/44 correct; the model catches 21/21 bad cases, the list alone 4/21
+- [ ] Re-run the fixtures on Haiku 4.5 and tune `REJECT_MIN_CONFIDENCE` (waits for Claude access)
+- [x] 👤 Policy calls confirmed. Rejected: all gambling including licensed lottery kiosks, bars and liquor stores, tobacco and vape shops, pawn shops, money exchange, cannabis, firearms, political campaigns, betting tips
+- [ ] 👤 Still to confirm: church or community-centre info page = allowed; restaurant or café that also serves drinks = allowed
 
 ### Phase 3 — Infra (domainless mode)
 - [ ] `sitesBucket` + `appBucket` with lifecycle rules
@@ -312,22 +329,27 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [ ] IAM: `InvokeModel` with `GuardrailIdentifier` condition; call without guardrail is denied
 - [ ] Check with `curl`: job reaches `DONE`; 4th request/day → 429 with no Bedrock invocation
 
-### Phase 5 — Form UI
-- [ ] `web/` form (es-419, pt-BR toggle), optional uploads step, terms acceptance
-- [ ] `npm run dev` (local frontend → deployed dev API via `cdk-outputs.dev.json`)
+### Phase 5 — Frontend (Astro)
+- [ ] `web/` becomes an Astro workspace: layouts, es at `/` and pt at `/pt/`, one translations file; replaces the placeholder page and `scripts/dev.mjs`
+- [ ] Landing page (zero JS)
+- [ ] Form (3 questions, optional uploads step, terms acceptance); validates with the same zod schema as the API (`answers.ts`)
+- [ ] `npm run dev` = `astro dev` on :5173 → deployed dev API (writes `web/public/config.js` from `cdk-outputs.dev.json`)
 - [ ] Polling/progress state, error and REJECTED states
-- [ ] Result screen: link + copy; deploy via `BucketDeployment`
+- [ ] Result screen: link + copy
+- [ ] Build emits external scripts only; app CSP `script-src 'self'` verified in the browser; `web/dist/` deployed via `BucketDeployment`
 
 ### Phase 5b — Magic link + preview
 - [ ] Preview iframe + "Publicar" / "Genera otra versión"; `POST /jobs/{id}/publish`; regeneration cap
 - [ ] Token issue (hashed, fragment link), "Copiar" + "Guardar en WhatsApp"
 - [ ] "Mi sitio" page + `/me/*` routes; content patch re-renders with no Bedrock call
-- [ ] `web/privacidad.html` + `web/terms.html` (es/pt)
+- [ ] Privacy and terms pages (es/pt, Markdown); `reportar` page
 
 ### Phase 6 — Hardening
 - [ ] Report endpoint + SNS + distinct-IP quarantine
 - [ ] `npm run unpublish` + blocklist; `npm run rerender-all`
-- [ ] Alarms (generate errors, REJECTED rate) + AWS Budget
+- [ ] EMF metrics from the Lambdas; alarms (publish rate, `RateLimited`, `REJECTED` rate, tokens/day, API 4xx/5xx/throttles, generate errors) → SNS `alerts` email; dashboard
+- [ ] AWS Budget + Cost Anomaly Detection
+- [ ] `npm run abuse:report` (top IP hashes, decisions, newest slugs from `jobs`)
 - [ ] CI/CD: merge → deploy `dev`; manual approval → `prod` (OIDC role)
 - [ ] `README` runbook
 - [ ] Full "Verification" section passes on `dev`
@@ -413,7 +435,7 @@ Every site is free at `{slug}.<sites-domain>`. A `.com` is a paid upsell after p
 
 **Rules**
 - .com only at first. LatAm ccTLDs (.com.br, .com.ar, .mx, .co, .cl) need local IDs/registries; later.
-- The customer is the registrant of record (ICANN transfer/ownership rights); we hold the AWS account. `web/terms.html` states this and the "bring your own domain" option (customer adds 2 DNS records shown on their site page).
+- The customer is the registrant of record (ICANN transfer/ownership rights); we hold the AWS account. The terms page states this and the "bring your own domain" option (customer adds 2 DNS records shown on their site page).
 - Route 53 Domains is billed monthly to the AWS account, so the AWS Budget alarm covers it. Add a `domains` cost metric (count × $21) to the dashboard.
 - Amazon Registrar sends the registrant an ICANN verification email. The site page explains this so customers click it (unverified → domain suspended after 15 days).
 
@@ -421,7 +443,7 @@ Every site is free at `{slug}.<sites-domain>`. A `.com` is a paid upsell after p
 - **`coyote` profile and Bedrock model access** not set up yet. They block phase 3 onward and the Bedrock part of phase 2. Phases 1, 2a, and the pure-function parts of 2/2b can proceed.
 - **Domains**: path-based sites mean the subdomain rewrite, wildcard cert, and reserved-subdomain rules are only unit/synth-tested until a domain is set. Final domains are undecided; the sites one must be a separate registrable domain bought before launch. A domain switch changes every site URL and magic link, so do it before real users exist. PSL acceptance takes weeks and is not blocking.
 - **To verify at build time**: Guardrails Classic vs Standard language coverage for Portuguese; whether Converse guardrails evaluate `toolUse` content (`ApplyGuardrail` is called either way); Haiku 4.5 prompt-cache minimum prefix.
-- **Guardrail false positives** on legitimate businesses (butcher, gym, bar, kiosk, church). The borderline fixtures in phase 2b are the control. The church/lottery line is a product policy call to confirm.
+- **Guardrail false positives** on legitimate businesses (butcher, gym, tattoo studio, church). The borderline fixtures in phase 2b are the control. The church line and the restaurant-that-serves-drinks line are product policy calls to confirm.
 - **Abuse**: anonymous generation costs money per call. The rate limit is the MVP control; add WAF + CAPTCHA if abused.
 - **Lost magic link** has no recovery until WhatsApp re-issue ships.
 

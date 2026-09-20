@@ -4,5 +4,8 @@ out/
 *.tsbuildinfo
 infra/cdk-outputs.*.json
 web/config.js
+web/public/config.js
+web/dist/
+web/.astro/
 .env*
 .DS_Store

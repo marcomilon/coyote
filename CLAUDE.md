@@ -17,7 +17,7 @@ npx vitest run -t "domainless"              # by test name
 npm run synth          # cdk synth, env=dev; must work with no AWS credentials
 npm run diff:dev       # cdk diff against deployed dev (--profile coyote)
 npm run deploy:dev     # cdk deploy dev (--profile coyote); writes infra/cdk-outputs.dev.json
-npm run dev            # serve web/ on :5173 against the DEPLOYED dev API
+npm run dev            # serve web/ on :5173 against the DEPLOYED dev API (becomes `astro dev` in Phase 5)
 ```
 Tests live in `infra/test/` and `services/*/test/` (see `vitest.config.ts`). There is no linter configured.
 
@@ -25,7 +25,7 @@ Tests live in `infra/test/` and `services/*/test/` (see `vitest.config.ts`). The
 - Always use the CLI profile **`coyote`** (account 887799775985, us-east-1): `--profile coyote` for `aws`/`cdk`, `AWS_PROFILE=coyote` for local scripts. Never fall back to the default profile. CI uses a GitHub OIDC role instead.
 - Everything is in us-east-1, one CDK stack per environment: `Coyote-dev`, `Coyote-prod` (context `env`).
 - All AWS resources are created through CDK. No console or CLI-created resources except the one-offs the plan marks 👤.
-- Bedrock models: `us.anthropic.claude-haiku-4-5-20251001-v1:0` (everything) and `us.anthropic.claude-sonnet-5` (flagged fallback).
+- Bedrock model: the default lives only in `services/generator/src/core/models.ts` (currently Amazon Nova 2 Lite); `BEDROCK_MODEL_ID` overrides it. Never hardcode a model ID anywhere else. Claude (Haiku 4.5) is the planned switch once the pipeline is stable; the user decides when.
 
 ## Architecture (big picture)
 - **Flow**: `web/` form → API Gateway → `submit` Lambda (rate limit → pre-screen classifier → atomic slug claim) → async `generate` Lambda (design brief → content JSON → lint/policy/guardrail → render → S3) → browser polls `GET /jobs/{id}`.
@@ -40,6 +40,7 @@ Tests live in `infra/test/` and `services/*/test/` (see `vitest.config.ts`). The
 - MVP sites carry only a WhatsApp CTA. The contact form, SES email, WhatsApp flows, and custom domains are post-MVP and specified in the plans.
 
 ## Conventions
+- Our frontend (`web/`) is Astro, built to static files; interactive parts are plain TypeScript in Astro scripts, and the API URL comes from a runtime `config.js`. Generated business sites are never Astro: `render.ts` builds them in Lambda.
 - ESM TypeScript everywhere, `moduleResolution: "Bundler"`, extensionless relative imports. The CDK app runs through `tsx` (`infra/cdk.json`).
 - `npm run synth` and unit tests must keep passing without AWS credentials (no `fromLookup` in domainless mode).
 - User-facing copy is Spanish (es-419) first, with Portuguese (pt-BR).

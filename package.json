@@ -16,7 +16,8 @@
     "synth": "npm run synth -w infra",
     "diff:dev": "npm run diff:dev -w infra",
     "deploy:dev": "npm run deploy:dev -w infra",
-    "generate:local": "npm run generate:local -w services/generator --"
+    "generate:local": "npm run generate:local -w services/generator --",
+    "prescreen:fixtures": "npm run prescreen:fixtures -w services/generator --"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

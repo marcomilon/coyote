@@ -80,7 +80,7 @@ describe('CoyoteStack, domainless', () => {
   });
 
   it('exposes the routes', () => {
-    for (const routeKey of ['POST /generate', 'GET /jobs/{id}', 'POST /jobs/{id}/publish', 'POST /jobs/{id}/regenerate', 'GET /me', 'DELETE /me', 'POST /me/content', 'POST /me/unpublish']) {
+    for (const routeKey of ['POST /generate', 'GET /jobs/{id}', 'POST /jobs/{id}/publish', 'POST /jobs/{id}/regenerate', 'GET /me', 'DELETE /me', 'POST /me/content', 'POST /me/unpublish', 'POST /report/{slug}']) {
       template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: routeKey });
     }
   });
@@ -101,6 +101,15 @@ describe('CoyoteStack, domainless', () => {
       MaximumRetryAttempts: 0,
       DestinationConfig: { OnFailure: Match.anyValue() },
     });
+  });
+
+  it('alarms on abuse and cost, and emails only when an address is configured', () => {
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 9);
+    template.resourceCountIs('AWS::Budgets::Budget', 1);
+    template.resourceCountIs('AWS::CE::AnomalyMonitor', 1);
+    template.resourceCountIs('AWS::SNS::Subscription', 0);
+    const withEmail = synth({ alertEmail: 'admin@example.invalid' });
+    withEmail.resourceCountIs('AWS::SNS::Subscription', 2);
   });
 
   it('is disposable: cdk destroy removes all data', () => {

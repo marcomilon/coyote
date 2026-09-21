@@ -13,6 +13,10 @@ Usage: ./coyote.sh <command> [args]
 
 Commands:
   deploy [cdk args]              Deploy the stack. Writes infra/cdk-outputs.json
+  abuse-report                   Requests, rejections, and new sites of the last 24 h
+  unpublish <slug>               Take a site down for good and blocklist its slug
+  restore <slug>                 Bring a quarantined site back online
+  rerender-all                   Re-render every published site (after theme, renderer, or domain changes)
   help                           Show this help
 
 Environment:
@@ -59,10 +63,16 @@ cmd_deploy() {
   npx cdk deploy Coyote --app cdk.out --profile "$PROFILE" --outputs-file cdk-outputs.json "$@"
 }
 
+cmd_admin() {
+  cd "$ROOT/services/generator"
+  AWS_PROFILE="$PROFILE" npx tsx scripts/admin.ts "$@"
+}
+
 command="${1:-help}"
 shift || true
 case "$command" in
   deploy) cmd_deploy "$@" ;;
+  abuse-report | unpublish | restore | rerender-all) cmd_admin "$command" "$@" ;;
   help | -h | --help) usage ;;
   *)
     usage >&2

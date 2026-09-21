@@ -3,6 +3,7 @@ import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { callTool } from '../core/bedrock';
+import { emitMetrics } from '../core/metrics';
 import { modelId } from '../core/models';
 import { submit } from '../core/submit';
 import { json, parseBody } from './http';
@@ -30,6 +31,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     now: Date.now,
     newId: randomUUID,
   });
+
+  if (result.status !== 400) emitMetrics({ [result.status === 202 ? 'Submitted' : result.status === 429 ? 'RateLimited' : 'Rejected']: 1 });
 
   switch (result.status) {
     case 202:

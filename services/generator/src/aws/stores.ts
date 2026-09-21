@@ -72,6 +72,34 @@ export function createStores(config: StoreConfig): Stores {
       return Item !== undefined;
     },
 
+    async block(slug) {
+      await db.send(new PutCommand({ TableName: config.blocklistTable, Item: { slug, blockedAt: Date.now() } }));
+    },
+
+    async putOnce(key, ttl) {
+      try {
+        await db.send(new PutCommand({ TableName: config.rateLimitTable, Item: { ip: key, ttl }, ConditionExpression: 'attribute_not_exists(ip)' }));
+        return true;
+      } catch (error) {
+        if (isConditionFailure(error)) return false;
+        throw error;
+      }
+    },
+
+    async increment(key, ttl) {
+      const { Attributes } = await db.send(
+        new UpdateCommand({
+          TableName: config.rateLimitTable,
+          Key: { ip: key },
+          UpdateExpression: 'SET #ttl = if_not_exists(#ttl, :ttl) ADD #count :one',
+          ExpressionAttributeNames: { '#count': 'count', '#ttl': 'ttl' },
+          ExpressionAttributeValues: { ':one': 1, ':ttl': ttl },
+          ReturnValues: 'UPDATED_NEW',
+        }),
+      );
+      return Number(Attributes?.count ?? 0);
+    },
+
     async claimSlug(site) {
       try {
         await db.send(

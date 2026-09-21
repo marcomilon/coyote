@@ -77,8 +77,7 @@ const page = render({
   content,
   brief,
   siteUrl: urls.siteUrl(slug),
-  reportUrl: urls.reportUrl(slug),
-  privacyUrl: urls.privacyUrl,
+  ...urls.pageLinks(slug, answers.lang),
 });
 
 const htmlViolations = checkHtml(page, { platformOrigins: [new URL(urls.appUrl).origin, urls.siteOrigin(slug)] });

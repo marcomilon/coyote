@@ -46,3 +46,11 @@ describe('urlConfigFromEnv', () => {
     expect(() => urlConfigFromEnv({})).toThrow();
   });
 });
+
+describe('pageLinks', () => {
+  it('points generated pages at the report and privacy pages in their language', () => {
+    const urls = createUrls({ mode: 'domain', domainName: 'brand.test', sitesDomainName: 'sites.test' });
+    expect(urls.pageLinks('luna', 'es')).toEqual({ reportUrl: 'https://app.brand.test/reportar?sitio=luna', privacyUrl: 'https://app.brand.test/privacidad' });
+    expect(urls.pageLinks('lua', 'pt')).toEqual({ reportUrl: 'https://app.brand.test/pt/denunciar?sitio=lua', privacyUrl: 'https://app.brand.test/pt/privacidade' });
+  });
+});

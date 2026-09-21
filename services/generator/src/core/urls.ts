@@ -32,6 +32,8 @@ export interface Urls {
   miSitioUrl(token: string): string;
   reportUrl(slug: string): string;
   privacyUrl: string;
+  /** The platform links every generated page carries, in the page's language. */
+  pageLinks(slug: string, lang: 'es' | 'pt'): { reportUrl: string; privacyUrl: string };
 }
 
 const trimSlash = (url: string) => url.replace(/\/+$/, '');
@@ -63,9 +65,14 @@ export function createUrls(config: UrlConfig): Urls {
   });
 }
 
-function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'reportUrl' | 'privacyUrl'>): Urls {
+function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'reportUrl' | 'privacyUrl' | 'pageLinks'>): Urls {
+  const sitio = (slug: string) => `?sitio=${encodeURIComponent(slug)}`;
   return {
     ...base,
+    pageLinks: (slug, lang) =>
+      lang === 'pt'
+        ? { reportUrl: `${base.appUrl}/pt/denunciar${sitio(slug)}`, privacyUrl: `${base.appUrl}/pt/privacidade` }
+        : { reportUrl: `${base.appUrl}/reportar${sitio(slug)}`, privacyUrl: `${base.appUrl}/privacidad` },
     miSitioUrl: (token) => `${base.appUrl}/mi-sitio#token=${encodeURIComponent(token)}`,
     reportUrl: (slug) => `${base.appUrl}/reportar?sitio=${encodeURIComponent(slug)}`,
     privacyUrl: `${base.appUrl}/privacidad`,

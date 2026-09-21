@@ -162,7 +162,7 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
 4. **After publication**
    - Every page has a footer "Sitio creado con Coyote · Reportar · Privacidad", added by the renderer, not the theme. Sites have no JS or forms, so "Reportar" links to the app page `/reportar?sitio={slug}`, which calls `POST /report/{slug}`. Reports go to an SNS topic (email to the admin). Auto-unpublish only after N reports from distinct IP hashes (otherwise anonymous reports can be used against competitors). Quarantine moves the S3 prefix to `_quarantine/`, is reversible, and shows on the owner's "Mi sitio" page.
    - `jobs` stores the 3 answers, IP hash, guardrail outcome, and classifier decision for 90 days.
-   - `npm run unpublish -- <slug>`: removes the prefix and adds the slug to `blocklist` so it cannot be regenerated.
+   - `./coyote.sh unpublish <slug>`: removes the pages and adds the slug to `blocklist` so it cannot be claimed again. `./coyote.sh restore <slug>` undoes a quarantine.
    - CloudWatch metric + alarm on `REJECTED` rate (a spike means probing).
 
 **Detecting abuse.** Every alarm emails the admin through one SNS topic (`alerts`).
@@ -170,7 +170,7 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
 - Alarms: sites published per hour above normal; `RateLimited` spike (someone hitting the cap repeatedly); `REJECTED` rate spike (probing); tokens per day above budget; API Gateway 4xx/5xx and throttle count; `generate` errors.
 - Money: AWS Budget alert plus AWS Cost Anomaly Detection (free) on the account.
 - One CloudWatch dashboard with the metrics above.
-- `npm run abuse:report`: reads `jobs` for the last 24 h and prints the top IP hashes by requests, their decisions and categories, and the newest published slugs. This is the tool for "who is doing this", since metrics only say "something is happening".
+- `./coyote.sh abuse-report`: reads `jobs` for the last 24 h and prints the top IP hashes by requests, their decisions and categories, and the newest published slugs. This is the tool for "who is doing this", since metrics only say "something is happening".
 - Visitor reports (footer link) arrive by email through `abuse-reports`.
 
 Policy text (es/pt) lives in the terms page, linked from the form. The submit button states acceptance.
@@ -352,16 +352,17 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Magic link: token `<slug>.<secret>`, only the sha256 of the secret stored, 1-year expiry, returned once by the first publish, shown with "Copiar", "Guardar en mi WhatsApp", "Abrir Mi sitio"
 - [x] "Mi sitio" page (`/mi-sitio`, `/pt/meu-site`) + one `owner` Lambda for `GET /me`, `POST /me/content|regenerate|unpublish|republish`, `DELETE /me`. An edit goes patch → policy → `ApplyGuardrail` → re-render, with no model call. 60 owner requests per site per day. "Delete my data" removes the pages and the site record and redacts the text of every job of that site. Publish, edit, unpublish, republish, and delete invalidate the CDN cache, so they show at once. Verified end to end on the deployed stack
 - [x] Privacy and terms pages (es/pt, Markdown), linked from the footer
-- [ ] `reportar` page (arrives with the report endpoint in phase 6)
+- [x] `reportar` page (es/pt). Generated pages link to the report and privacy pages in their own language (`urls.pageLinks`)
 - [ ] 👤 Before public launch: legal review of the privacy and terms texts, and a contact address in them
 
 ### Phase 6 — Hardening
-- [ ] Report endpoint + SNS + distinct-IP quarantine
-- [ ] `npm run unpublish` + blocklist; `npm run rerender-all`
-- [ ] EMF metrics from the Lambdas; alarms (publish rate, `RateLimited`, `REJECTED` rate, tokens/day, API 4xx/5xx/throttles, generate errors) → SNS `alerts` email; dashboard
-- [ ] AWS Budget + Cost Anomaly Detection
-- [ ] `npm run abuse:report` (top IP hashes, decisions, newest slugs from `jobs`)
-- [ ] `README` runbook
+- [x] Report endpoint (`POST /report/{slug}`) + `reportar` / `pt/denunciar` pages + SNS email per report. One visitor counts once per site; 3 distinct visitors quarantine it (pages moved to `_quarantine/`, status `quarantined`, the owner cannot republish it)
+- [x] `./coyote.sh unpublish <slug>` (delete + blocklist), `restore <slug>`, `rerender-all`
+- [x] EMF metrics from the Lambdas (namespace `Coyote`); 9 alarms → SNS `alerts`; dashboard `Coyote` (`infra/lib/monitoring.ts`)
+- [ ] 👤 Alert emails: `export COYOTE_ALERT_EMAIL=…`, deploy, confirm the two AWS subscription emails. Until then the alarms email nobody
+- [x] AWS Budget ($20/month, alerts at 80% and 100%) + Cost Anomaly Detection (≥ $5)
+- [x] `./coyote.sh abuse-report` (requests per hashed IP, rejections by layer, newest published sites)
+- [x] `README` runbook
 - [ ] Full "Verification" section passes on the deployed stack
 - [ ] 👤 *(optional, when stable)* switch to `consideralohecho.com`; first real deploy of domain mode; subdomain rewrite verified
 - [ ] 👤 Choose the two final domain names: the brand domain (`<domain>`) and the separate one for user sites (`<sites-domain>`). Choosing the brand also unblocks Meta Business verification (`PLAN-PHASE2.md` step 1), which takes weeks, so decide early if WhatsApp is next

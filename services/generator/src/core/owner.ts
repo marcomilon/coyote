@@ -46,7 +46,7 @@ export function ownerView(site: SiteRecord, urls: Urls) {
 function renderSite(site: SiteRecord, content: SiteContent, urls: Urls): string {
   const theme = THEMES[site.brief!.theme];
   if (!theme) throw new Error(`unknown theme ${site.brief!.theme}`);
-  const page = render({ theme, content, brief: site.brief!, siteUrl: urls.siteUrl(site.slug), reportUrl: urls.reportUrl(site.slug), privacyUrl: urls.privacyUrl });
+  const page = render({ theme, content, brief: site.brief!, siteUrl: urls.siteUrl(site.slug), ...urls.pageLinks(site.slug, content.lang) });
   const violations = checkHtml(page, { platformOrigins: [new URL(urls.appUrl).origin, urls.siteOrigin(site.slug)] });
   if (violations.length > 0) throw new Error(`rendered page breaks the HTML policy: ${JSON.stringify(violations)}`);
   return page;
@@ -75,13 +75,15 @@ export async function updateContent(site: SiteRecord, patch: unknown, deps: Owne
 }
 
 export async function unpublish(site: SiteRecord, { stores }: OwnerDeps): Promise<void> {
+  if (site.status !== 'published') return;
   await stores.deletePrefix(`${site.slug}/`);
   await stores.saveSite({ slug: site.slug, status: 'unpublished' });
   await stores.invalidateSite(site.slug);
 }
 
 export async function republish(site: SiteRecord, deps: OwnerDeps): Promise<{ status: 200 } | { status: 409 }> {
-  if (!site.content || !site.brief) return { status: 409 };
+  // Only the owner's own unpublish can be undone here. A quarantined or blocked site stays offline.
+  if (site.status !== 'unpublished' || !site.content || !site.brief) return { status: 409 };
   await deps.stores.putPage(`${site.slug}/index.html`, renderSite(site, site.content, deps.urls));
   await deps.stores.saveSite({ slug: site.slug, status: 'published' });
   await deps.stores.invalidateSite(site.slug);

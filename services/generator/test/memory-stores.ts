@@ -17,6 +17,18 @@ export function memoryStores() {
       return true;
     },
     isBlocked: async (slug) => blocked.has(slug),
+    async block(slug) {
+      blocked.add(slug);
+    },
+    async putOnce(key) {
+      if (counters.has(key)) return false;
+      counters.set(key, 1);
+      return true;
+    },
+    async increment(key) {
+      counters.set(key, (counters.get(key) ?? 0) + 1);
+      return counters.get(key)!;
+    },
     async claimSlug(site) {
       if (sites.has(site.slug)) return false;
       sites.set(site.slug, site);

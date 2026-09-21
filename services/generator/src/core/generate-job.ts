@@ -31,15 +31,21 @@ export function visibleText(content: SiteContent): string {
  * Runs one PENDING job to DONE (preview written), REJECTED (content policy), or FAILED (our error).
  * Rejected and failed jobs give their slug back.
  */
-export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Promise<void> {
+export type GenerateOutcome = { outcome: 'SKIPPED' } | { outcome: 'DONE' | 'REJECTED' | 'FAILED'; tokensIn: number; tokensOut: number };
+
+export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Promise<GenerateOutcome> {
   const { stores, urls } = deps;
   const job = await stores.getJob(jobId);
-  if (!job || job.status !== 'PENDING' || !job.slug) return;
+  if (!job || job.status !== 'PENDING' || !job.slug) return { outcome: 'SKIPPED' };
   const slug = job.slug;
+  let tokensIn = 0;
+  let tokensOut = 0;
 
   try {
     const { brief, content, usage } = await generateSite(job.answers, { ...deps, slug: job.seed ?? slug });
     const allUsage = [...job.usage, ...usage];
+    tokensIn = usage.reduce((n, u) => n + u.inputTokens, 0);
+    tokensOut = usage.reduce((n, u) => n + u.outputTokens, 0);
 
     if (!(await deps.outputAllowed(visibleText(content)))) throw new GuardrailBlocked();
 
@@ -48,8 +54,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       content,
       brief,
       siteUrl: urls.siteUrl(slug),
-      reportUrl: urls.reportUrl(slug),
-      privacyUrl: urls.privacyUrl,
+      ...urls.pageLinks(slug, content.lang),
     });
     const htmlViolations = checkHtml(page, { platformOrigins: [new URL(urls.appUrl).origin, urls.siteOrigin(slug)] });
     // A violation here is a theme bug, not the requester's fault.
@@ -58,6 +63,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     await stores.putPage(previewKey(jobId), page);
     // The site record changes only when the owner publishes this version.
     await stores.updateJob(jobId, { status: 'DONE', previewUrl: urls.previewUrl(jobId), usage: allUsage, result: { content, brief } });
+    return { outcome: 'DONE', tokensIn, tokensOut };
   } catch (error) {
     if (!job.regenerate) await stores.releaseSlug(slug, jobId);
     if (error instanceof PolicyRejection) {
@@ -67,6 +73,8 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     } else {
       console.error('generate failed', { jobId, error });
       await stores.updateJob(jobId, { status: 'FAILED', error: String(error).slice(0, 500) });
+      return { outcome: 'FAILED', tokensIn, tokensOut };
     }
+    return { outcome: 'REJECTED', tokensIn, tokensOut };
   }
 }

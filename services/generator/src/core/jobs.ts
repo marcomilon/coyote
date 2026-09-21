@@ -31,7 +31,8 @@ export interface Job {
   seed?: string;
 }
 
-export type SiteStatus = 'claimed' | 'published' | 'unpublished';
+/** quarantined: taken offline by visitor reports. blocked: removed by the admin for good. */
+export type SiteStatus = 'claimed' | 'published' | 'unpublished' | 'quarantined' | 'blocked';
 
 export interface SiteRecord {
   slug: string;
@@ -55,6 +56,11 @@ export interface Stores {
   /** Counts one request for this key. Resolves to false when the daily limit is already reached. */
   hitRateLimit(key: string, max: number, ttl: number): Promise<boolean>;
   isBlocked(slug: string): Promise<boolean>;
+  block(slug: string): Promise<void>;
+  /** Resolves to true only the first time a key is seen. */
+  putOnce(key: string, ttl: number): Promise<boolean>;
+  /** Adds one to a counter and resolves to the new value. */
+  increment(key: string, ttl: number): Promise<number>;
   /** Atomic: resolves to false when the slug is already taken. */
   claimSlug(site: SiteRecord): Promise<boolean>;
   /** Frees a slug that never got a published site. */

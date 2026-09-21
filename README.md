@@ -24,3 +24,23 @@ Design and progress live in [`PLAN.md`](PLAN.md) (MVP) and [`PLAN-PHASE2.md`](PL
 - `infra/` — CDK app, one stack (`Coyote`)
 - `services/generator/` — Lambda code, themes, local scripts
 - `web/` — our frontend (Astro from Phase 5): landing, form, "Mi sitio", legal pages
+
+## Runbook
+
+All commands use the AWS profile `coyote` (override with `COYOTE_AWS_PROFILE`).
+
+| I want to… | Do this |
+|---|---|
+| Deploy | `./coyote.sh deploy`. It builds the frontend, checks that every Lambda bundle loads, then runs `cdk deploy`. |
+| Get alert emails | `export COYOTE_ALERT_EMAIL=you@example.com` before `./coyote.sh deploy`, then confirm the two subscription emails from AWS. Without it the alarms exist but email nobody. |
+| See what is happening | CloudWatch dashboard **Coyote** (requests, rejections, tokens, API errors). |
+| Investigate an alarm | `./coyote.sh abuse-report`: requests per visitor (hashed IP), rejections with the layer that stopped them, and the newest published sites. Open the new sites and look at them. |
+| Take a site down for good | `./coyote.sh unpublish <slug>`. Deletes the pages and blocklists the slug. |
+| Bring back a quarantined site | `./coyote.sh restore <slug>`. Three distinct visitors reporting a site quarantine it automatically; each report emails the admin. |
+| Re-render every site | `./coyote.sh rerender-all`, after changing a theme, the renderer, or the domains. |
+| Change the model | Edit `DEFAULT_MODEL_ID` in `services/generator/src/core/models.ts` (or deploy with `-c modelId=…`), then deploy. The IAM permission follows it. |
+| Check Bedrock quota or throttling | Service Quotas → Amazon Bedrock, and the `GenerationFailures` alarm. |
+| Remove everything | `cd infra && npx cdk destroy --profile coyote`. This account is a sandbox: all data is deleted. |
+
+### Alarms
+`PublishRate` (>20 sites/h), `RateLimited` (>20/h), `Rejected` (>15/h, someone probing), `GenerationFailures` (>3/h), `Quarantined` (any), `TokensPerDay` (>2M), `GenerateErrors`, `Api5xx`, `Api4xx`. Plus an AWS Budget of $20/month (alerts at 80% and 100%) and Cost Anomaly Detection (≥ $5 impact).

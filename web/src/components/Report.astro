@@ -1,0 +1,37 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const s = t(lang);
+const r = s.report;
+---
+
+<Layout lang={lang} title={r.title} description={r.description} alternate={lang === 'es' ? '/pt/denunciar' : '/reportar'} withConfig>
+  <div class="mysite wrap" id="report" data-state="editor" data-strings={JSON.stringify({ sent: r.sent, missing: r.missing, error: r.error })}>
+    <section data-view="message" class="panel" aria-live="assertive">
+      <h2 data-message-title></h2>
+      <p data-message-text></p>
+    </section>
+    <section data-view="editor">
+      <header><h1>{r.heading}</h1></header>
+      <form class="ticket" novalidate>
+        <p>{r.intro}</p>
+        <fieldset>
+          <p class="sub">{r.site}: <strong data-slug></strong></p>
+          <label class="sub" for="reason">{r.reason}</label>
+          <textarea id="reason" name="reason" maxlength="500"></textarea>
+        </fieldset>
+        <div class="submit-row"><button class="btn" type="submit">{r.submit}</button></div>
+        <p class="notice" data-notice data-kind="error" role="alert"></p>
+      </form>
+    </section>
+  </div>
+</Layout>
+
+<script>
+  import '../scripts/report';
+</script>

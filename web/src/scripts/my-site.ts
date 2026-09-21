@@ -188,3 +188,5 @@ form.addEventListener('submit', async (event) => {
 });
 
 void load();
+
+export {};

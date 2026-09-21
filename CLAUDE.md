@@ -16,7 +16,8 @@ npx vitest run infra/test/stack.test.ts     # one file
 npx vitest run -t "domainless"              # by test name
 npm run synth          # cdk synth; must work with no AWS credentials
 npm run diff           # cdk diff against the deployed stack (--profile coyote)
-./coyote.sh deploy     # cdk deploy Coyote (--profile coyote); writes infra/cdk-outputs.json
+./coyote.sh deploy     # builds web, checks Lambda bundles, cdk deploy (--profile coyote); writes infra/cdk-outputs.json
+./coyote.sh abuse-report | unpublish <slug> | restore <slug> | rerender-all   # admin commands (see README runbook)
 npm run dev            # astro dev for web/ on :5173 against the DEPLOYED API. Runs in the background; stop with `npx astro dev stop` in web/
 ```
 `coyote.sh` (repo root) is the home for project commands; add new operational commands there as `cmd_<name>` functions rather than as loose scripts.

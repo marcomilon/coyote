@@ -24,6 +24,7 @@ import { createUrls } from '../../services/generator/src/core/urls';
 import { appCsp, sitesCsp } from './csp';
 import { GeneratorApi } from './generator-api';
 import { CoyoteGuardrail } from './guardrail';
+import { Monitoring } from './monitoring';
 
 /**
  * One stack, one environment. This AWS account is the development sandbox: localhost may call the API,
@@ -37,6 +38,8 @@ export interface CoyoteStackProps extends StackProps {
   sitesDomainName?: string;
   /** Bedrock model or inference profile. Defaults to the one in services/generator/src/core/models.ts. */
   modelId?: string;
+  /** Where alarms, visitor reports, and cost alerts are emailed. Unset = no emails. */
+  alertEmail?: string;
   /** The built frontend. Defaults to web/dist (run `npm run build -w web` first). */
   webDist?: string;
   /** Route 53 zone that holds `domainName`. Defaults to `domainName`. */
@@ -288,7 +291,7 @@ export class CoyoteStack extends Stack {
       ? { DOMAIN_NAME: props.domainName!, SITES_DOMAIN_NAME: props.sitesDomainName! }
       : { APP_BASE_URL: appUrl, API_BASE_URL: apiUrl, SITES_BASE_URL: sitesBaseUrl };
 
-    new GeneratorApi(this, 'GeneratorApi', {
+    const generatorApi = new GeneratorApi(this, 'GeneratorApi', {
       api: this.api,
       jobsTable: this.jobsTable,
       sitesTable: this.sitesTable,
@@ -297,15 +300,30 @@ export class CoyoteStack extends Stack {
       sitesBucket: this.sitesBucket,
       sitesDistribution,
       guardrail: this.guardrail,
+      abuseReports: this.abuseReports,
       modelId: props.modelId ?? DEFAULT_MODEL_ID,
       rateLimitPerDay: 100, // sandbox account; production uses 3
       urlEnv: this.urlEnv,
+    });
+
+    new Monitoring(this, 'Monitoring', {
+      api: this.api,
+      generate: generatorApi.generate,
+      abuseReports: this.abuseReports,
+      alertEmail: props.alertEmail,
+      monthlyBudgetUsd: 20,
     });
 
     new CfnOutput(this, 'AppUrl', { value: appUrl });
     new CfnOutput(this, 'ApiUrl', { value: apiUrl });
     new CfnOutput(this, 'SitesBaseUrl', { value: domain ? `https://${domain.sitesHost}` : sitesBaseUrl });
     new CfnOutput(this, 'SitesBucketName', { value: this.sitesBucket.bucketName });
+    // For the admin commands in coyote.sh.
+    new CfnOutput(this, 'SitesDistributionId', { value: sitesDistribution.distributionId });
+    new CfnOutput(this, 'JobsTableName', { value: this.jobsTable.tableName });
+    new CfnOutput(this, 'SitesTableName', { value: this.sitesTable.tableName });
+    new CfnOutput(this, 'RateLimitTableName', { value: this.rateLimitTable.tableName });
+    new CfnOutput(this, 'BlocklistTableName', { value: this.blocklistTable.tableName });
     new CfnOutput(this, 'GuardrailId', { value: this.guardrail.guardrailId });
     new CfnOutput(this, 'GuardrailVersion', { value: this.guardrail.version });
   }

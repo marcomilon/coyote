@@ -13,6 +13,7 @@ import {
   aws_lambda_nodejs as nodejs,
   aws_logs as logs,
   aws_s3 as s3,
+  aws_sns as sns,
 } from 'aws-cdk-lib';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Construct } from 'constructs';
@@ -28,6 +29,7 @@ export interface GeneratorApiProps {
   /** Owner actions and publishing invalidate the cached site. */
   sitesDistribution: cloudfront.IDistribution;
   guardrail: CoyoteGuardrail;
+  abuseReports: sns.ITopic;
   /** Bedrock inference profile or model ID. Also scopes the IAM permission. */
   modelId: string;
   rateLimitPerDay: number;
@@ -40,6 +42,8 @@ const handlers = `${root}services/generator/src/handlers`;
 
 /** The Lambdas behind the HTTP API: submit → (async) generate → status → publish. */
 export class GeneratorApi extends Construct {
+  readonly generate: lambda.IFunction;
+
   constructor(scope: Construct, id: string, props: GeneratorApiProps) {
     super(scope, id);
     const stack = Stack.of(this);
@@ -89,14 +93,11 @@ export class GeneratorApi extends Construct {
       retryAttempts: 0, // a retry would pay for the model calls twice
       onFailure: new destinations.LambdaDestination(jobFailed),
     });
+    this.generate = generate;
+    // Not a secret: it only keeps raw IPs out of the tables. The stack ID is unique per deployment.
+    const ipSalt = Fn.select(2, Fn.split('/', stack.stackId));
     const submit = fn('Submit', 'submit', {
-      environment: {
-        ...environment,
-        GENERATE_FUNCTION_NAME: generate.functionName,
-        RATE_LIMIT_PER_DAY: String(props.rateLimitPerDay),
-        // Not a secret: it only keeps raw IPs out of the table. The stack ID is unique per deployment.
-        IP_HASH_SALT: Fn.select(2, Fn.split('/', stack.stackId)),
-      },
+      environment: { ...environment, GENERATE_FUNCTION_NAME: generate.functionName, RATE_LIMIT_PER_DAY: String(props.rateLimitPerDay), IP_HASH_SALT: ipSalt },
     });
     const status = fn('Status', 'status', { memorySize: 256 });
     const withInvalidation = { ...environment, SITES_DISTRIBUTION_ID: props.sitesDistribution.distributionId };
@@ -117,7 +118,13 @@ export class GeneratorApi extends Construct {
     props.sitesBucket.grantPut(publish);
     generate.grantInvoke(submit);
     generate.grantInvoke(owner);
-    for (const f of [publish, owner]) props.sitesDistribution.grantCreateInvalidation(f);
+    const report = fn('Report', 'report', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, ABUSE_TOPIC_ARN: props.abuseReports.topicArn } });
+    props.rateLimitTable.grantReadWriteData(report);
+    props.sitesTable.grantReadWriteData(report);
+    props.sitesBucket.grantReadWrite(report);
+    props.sitesBucket.grantDelete(report);
+    props.abuseReports.grantPublish(report);
+    for (const f of [publish, owner, report]) props.sitesDistribution.grantCreateInvalidation(f);
     props.rateLimitTable.grantReadWriteData(owner);
     props.sitesBucket.grantPut(owner);
     props.sitesBucket.grantRead(owner);
@@ -154,6 +161,7 @@ export class GeneratorApi extends Construct {
     route('/generate', apigwv2.HttpMethod.POST, submit);
     route('/jobs/{id}', apigwv2.HttpMethod.GET, status);
     route('/jobs/{id}/publish', apigwv2.HttpMethod.POST, publish);
+    route('/report/{slug}', apigwv2.HttpMethod.POST, report);
     route('/jobs/{id}/regenerate', apigwv2.HttpMethod.POST, owner);
     route('/me', apigwv2.HttpMethod.GET, owner);
     route('/me', apigwv2.HttpMethod.DELETE, owner);

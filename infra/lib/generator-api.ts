@@ -5,6 +5,7 @@ import {
   RemovalPolicy,
   Stack,
   aws_apigatewayv2 as apigwv2,
+  aws_cloudfront as cloudfront,
   aws_dynamodb as dynamodb,
   aws_iam as iam,
   aws_lambda as lambda,
@@ -24,6 +25,8 @@ export interface GeneratorApiProps {
   rateLimitTable: dynamodb.ITableV2;
   blocklistTable: dynamodb.ITableV2;
   sitesBucket: s3.IBucket;
+  /** Owner actions and publishing invalidate the cached site. */
+  sitesDistribution: cloudfront.IDistribution;
   guardrail: CoyoteGuardrail;
   /** Bedrock inference profile or model ID. Also scopes the IAM permission. */
   modelId: string;
@@ -96,12 +99,15 @@ export class GeneratorApi extends Construct {
       },
     });
     const status = fn('Status', 'status', { memorySize: 256 });
-    const publish = fn('Publish', 'publish');
+    const withInvalidation = { ...environment, SITES_DISTRIBUTION_ID: props.sitesDistribution.distributionId };
+    const publish = fn('Publish', 'publish', { environment: withInvalidation });
+    // Everything an owner does after publishing, plus "another version" before publishing.
+    const owner = fn('Owner', 'owner', { environment: { ...withInvalidation, GENERATE_FUNCTION_NAME: generate.functionName } });
 
     // Data access, least privilege per function.
     props.rateLimitTable.grantReadWriteData(submit);
     props.blocklistTable.grantReadData(submit);
-    for (const f of [submit, generate, jobFailed, publish]) {
+    for (const f of [submit, generate, jobFailed, publish, owner]) {
       props.jobsTable.grantReadWriteData(f);
       props.sitesTable.grantReadWriteData(f);
     }
@@ -110,6 +116,12 @@ export class GeneratorApi extends Construct {
     props.sitesBucket.grantRead(publish, '_preview/*');
     props.sitesBucket.grantPut(publish);
     generate.grantInvoke(submit);
+    generate.grantInvoke(owner);
+    for (const f of [publish, owner]) props.sitesDistribution.grantCreateInvalidation(f);
+    props.rateLimitTable.grantReadWriteData(owner);
+    props.sitesBucket.grantPut(owner);
+    props.sitesBucket.grantRead(owner);
+    props.sitesBucket.grantDelete(owner);
 
     // Bedrock: model calls are only allowed with our guardrail attached.
     const foundationModel = props.modelId.replace(/^(us|eu|apac|global)\./, '');
@@ -135,11 +147,16 @@ export class GeneratorApi extends Construct {
       f.addToRolePolicy(invokeModel);
       f.addToRolePolicy(applyGuardrail);
     }
+    owner.addToRolePolicy(applyGuardrail); // edits are checked by the guardrail; the owner Lambda never calls a model
 
     const route = (path: string, method: apigwv2.HttpMethod, handler: lambda.IFunction) =>
       props.api.addRoutes({ path, methods: [method], integration: new HttpLambdaIntegration(`${handler.node.id}Integration`, handler) });
     route('/generate', apigwv2.HttpMethod.POST, submit);
     route('/jobs/{id}', apigwv2.HttpMethod.GET, status);
     route('/jobs/{id}/publish', apigwv2.HttpMethod.POST, publish);
+    route('/jobs/{id}/regenerate', apigwv2.HttpMethod.POST, owner);
+    route('/me', apigwv2.HttpMethod.GET, owner);
+    route('/me', apigwv2.HttpMethod.DELETE, owner);
+    for (const action of ['content', 'regenerate', 'unpublish', 'republish']) route(`/me/${action}`, apigwv2.HttpMethod.POST, owner);
   }
 }

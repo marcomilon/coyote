@@ -38,7 +38,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
   const slug = job.slug;
 
   try {
-    const { brief, content, usage } = await generateSite(job.answers, { ...deps, slug });
+    const { brief, content, usage } = await generateSite(job.answers, { ...deps, slug: job.seed ?? slug });
     const allUsage = [...job.usage, ...usage];
 
     if (!(await deps.outputAllowed(visibleText(content)))) throw new GuardrailBlocked();
@@ -56,18 +56,10 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     if (htmlViolations.length > 0) throw new Error(`rendered page breaks the HTML policy: ${JSON.stringify(htmlViolations)}`);
 
     await stores.putPage(previewKey(jobId), page);
-    await stores.saveSite({
-      slug,
-      status: 'preview',
-      jobId,
-      createdAt: job.createdAt,
-      content,
-      brief,
-      ownerWhatsApp: job.answers.contact.whatsapp,
-    });
-    await stores.updateJob(jobId, { status: 'DONE', previewUrl: urls.previewUrl(jobId), usage: allUsage });
+    // The site record changes only when the owner publishes this version.
+    await stores.updateJob(jobId, { status: 'DONE', previewUrl: urls.previewUrl(jobId), usage: allUsage, result: { content, brief } });
   } catch (error) {
-    await stores.releaseSlug(slug, jobId);
+    if (!job.regenerate) await stores.releaseSlug(slug, jobId);
     if (error instanceof PolicyRejection) {
       await stores.updateJob(jobId, { status: 'REJECTED', rejectedBy: 'policy', rejectDetail: error.message.slice(0, 500) });
     } else if (error instanceof GuardrailBlocked) {

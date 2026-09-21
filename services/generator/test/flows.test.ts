@@ -126,8 +126,10 @@ describe('runGenerateJob', () => {
     expect(t.jobs.get('job-1')).toMatchObject({ status: 'DONE', previewUrl: 'https://sites.test/_preview/job-1/' });
     expect(t.jobs.get('job-1')!.usage.map((u) => u.step)).toEqual(['classify', 'design_brief', 'publish_content']);
     expect(t.objects.get('_preview/job-1/index.html')).toContain('https://wa.me/573001234567');
-    expect(t.sites.get('panaderia-luna')).toMatchObject({ status: 'preview', ownerWhatsApp: '573001234567' });
-    expect(t.sites.get('panaderia-luna')!.content!.headline).toBe(content.headline);
+    expect(t.jobs.get('job-1')!.result!.content.headline).toBe(content.headline);
+    // The site record is untouched until the owner publishes.
+    expect(t.sites.get('panaderia-luna')).toMatchObject({ status: 'claimed' });
+    expect(t.sites.get('panaderia-luna')!.content).toBeUndefined();
   });
 
   it('rejects content that breaks the policy and frees the slug', async () => {
@@ -172,16 +174,17 @@ describe('publish and status', () => {
   it('copies the preview to the site folder, keeps the stored content, and is idempotent', async () => {
     const t = setup();
     await submit(body, '1.2.3.4', t.deps);
-    expect(await publish('job-1', { stores: t.stores, urls })).toEqual({ status: 409 }); // not generated yet
+    expect(await publish('job-1', { stores: t.stores, urls, now: t.deps.now })).toEqual({ status: 409 }); // not generated yet
     await runGenerateJob('job-1', t.generateDeps);
 
-    const result = await publish('job-1', { stores: t.stores, urls });
-    expect(result).toEqual({ status: 200, siteUrl: 'https://sites.test/panaderia-luna/' });
+    const result = await publish('job-1', { stores: t.stores, urls, now: t.deps.now });
+    expect(result).toMatchObject({ status: 200, siteUrl: 'https://sites.test/panaderia-luna/', ownerWhatsApp: '573001234567' });
     expect(t.objects.get('panaderia-luna/index.html')).toBe(t.objects.get('_preview/job-1/index.html'));
     expect(t.sites.get('panaderia-luna')).toMatchObject({ status: 'published' });
     expect(t.sites.get('panaderia-luna')!.content).toBeDefined();
-    expect(await publish('job-1', { stores: t.stores, urls })).toEqual(result);
-    expect(await publish('nope', { stores: t.stores, urls })).toEqual({ status: 404 });
+    // The magic link is shown once: a second call returns the site URL only.
+    expect(await publish('job-1', { stores: t.stores, urls, now: t.deps.now })).toEqual({ status: 200, siteUrl: 'https://sites.test/panaderia-luna/' });
+    expect(await publish('nope', { stores: t.stores, urls, now: t.deps.now })).toEqual({ status: 404 });
   });
 
   it('shows the browser only public fields, and FAILED for a stuck job', async () => {

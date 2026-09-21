@@ -9,6 +9,9 @@ interface Strings {
   errors: Record<string, string>;
   publish: string;
   publishing: string;
+  noMore: string;
+  createPath: string;
+  mySitePath: string;
   copy: string;
   copied: string;
   rejected: Message;
@@ -80,6 +83,7 @@ function showJob(job: JobView, jobId: string) {
     $<HTMLIFrameElement>('iframe').src = job.previewUrl;
     $<HTMLAnchorElement>('[data-preview-link]').href = job.previewUrl;
     $<HTMLButtonElement>('[data-publish]').onclick = () => publish(jobId);
+    $<HTMLButtonElement>('[data-another]').onclick = () => another(jobId);
     show('preview');
   } else if (job.status === 'PUBLISHED' && job.siteUrl) {
     const link = $<HTMLAnchorElement>('[data-site-link]');
@@ -121,12 +125,46 @@ async function publish(jobId: string) {
   button.disabled = true;
   button.textContent = strings.publishing;
   try {
-    const { status, body } = await api<{ siteUrl?: string }>(`/jobs/${jobId}/publish`, { method: 'POST' });
-    if (status === 200 && body.siteUrl) return showJob({ status: 'PUBLISHED', siteUrl: body.siteUrl }, jobId);
+    const { status, body } = await api<{ siteUrl?: string; miSitioUrl?: string; ownerWhatsApp?: string }>(`/jobs/${jobId}/publish`, { method: 'POST' });
+    if (status === 200 && body.siteUrl) {
+      if (body.miSitioUrl) showMagicLink(body.miSitioUrl, body.ownerWhatsApp);
+      return showJob({ status: 'PUBLISHED', siteUrl: body.siteUrl }, jobId);
+    }
     showMessage(strings.failed);
   } catch {
     button.disabled = false;
     button.textContent = strings.publish;
+  }
+}
+
+/** The owner's link is returned once, on the first publish. It points at this app's "Mi sitio" page. */
+function showMagicLink(miSitioUrl: string, ownerWhatsApp?: string) {
+  const link = new URL(miSitioUrl);
+  const local = `${location.origin}${strings.mySitePath}${link.hash}`;
+  $<HTMLElement>('[data-magic]').hidden = false;
+  $<HTMLAnchorElement>('[data-magic-open]').href = local;
+  $<HTMLAnchorElement>('[data-magic-whatsapp]').href = `https://wa.me/${ownerWhatsApp ?? ''}?text=${encodeURIComponent(local)}`;
+  $<HTMLButtonElement>('[data-magic-copy]').onclick = async (event) => {
+    await navigator.clipboard.writeText(local);
+    const button = event.currentTarget as HTMLButtonElement;
+    const label = button.textContent;
+    button.textContent = strings.copied;
+    window.setTimeout(() => (button.textContent = label), 1800);
+  };
+}
+
+async function another(jobId: string) {
+  const button = $<HTMLButtonElement>('[data-another]');
+  button.disabled = true;
+  try {
+    const { status, body } = await api<{ jobId?: string }>(`/jobs/${jobId}/regenerate`, { method: 'POST' });
+    if (status === 202 && body.jobId) {
+      history.replaceState(null, '', `#job=${body.jobId}`);
+      return void poll(body.jobId);
+    }
+    if (status === 429) button.textContent = strings.noMore;
+  } catch {
+    button.disabled = false;
   }
 }
 

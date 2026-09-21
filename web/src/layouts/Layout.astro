@@ -44,8 +44,8 @@ const s = t(lang);
     <footer class="site-footer wrap">
       <span>© {s.footer.made}</span>
       <nav>
-        <span>{s.footer.terms}</span>
-        <span>{s.footer.privacy}</span>
+        <a href={s.paths.terms}>{s.footer.terms}</a>
+        <a href={s.paths.privacy}>{s.footer.privacy}</a>
       </nav>
     </footer>
   </body>

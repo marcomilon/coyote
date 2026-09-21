@@ -13,6 +13,9 @@ const other = t(s.otherLang.code);
 const clientStrings = {
   errors: c.errors,
   publish: c.preview.publish,
+  noMore: c.preview.noMore,
+  createPath: s.paths.create,
+  mySitePath: s.paths.mySite,
   publishing: c.preview.publishing,
   copy: c.done.copy,
   copied: c.done.copied,
@@ -95,6 +98,7 @@ const clientStrings = {
         <h2>{c.preview.title}</h2>
         <div>
           <a class="btn small ghost" data-preview-link target="_blank" rel="noopener">{c.preview.open}</a>
+          <button class="btn small ghost" type="button" data-another>{c.preview.another}</button>
           <button class="btn small" type="button" data-publish>{c.preview.publish}</button>
         </div>
       </div>
@@ -109,6 +113,15 @@ const clientStrings = {
         <button class="btn small blue" type="button" data-copy>{c.done.copy}</button>
       </div>
       <p>{c.done.share}</p>
+      <div class="magic" data-magic hidden>
+        <h3>{c.magic.title}</h3>
+        <p>{c.magic.text}</p>
+        <div class="actions">
+          <button class="btn small blue" type="button" data-magic-copy>{c.magic.copy}</button>
+          <a class="btn small ghost" data-magic-whatsapp target="_blank" rel="noopener">{c.magic.whatsapp}</a>
+          <a class="btn small ghost" data-magic-open>{c.magic.open}</a>
+        </div>
+      </div>
       <div class="actions">
         <a class="btn" data-site-link-button target="_blank" rel="noopener">{c.done.visit}</a>
         <a class="btn ghost" href={s.paths.create}>{c.done.again}</a>

@@ -7,6 +7,7 @@ export function memoryStores() {
   const counters = new Map<string, number>();
   const blocked = new Set<string>();
   const objects = new Map<string, string>();
+  const invalidated: string[] = [];
 
   const stores: Stores = {
     async hitRateLimit(key, max) {
@@ -26,7 +27,18 @@ export function memoryStores() {
       if (site && site.jobId === jobId && site.status !== 'published') sites.delete(slug);
     },
     async saveSite(site) {
-      sites.set(site.slug, { ...sites.get(site.slug), ...site });
+      sites.set(site.slug, { ...sites.get(site.slug), ...site } as SiteRecord);
+    },
+    getSite: async (slug) => sites.get(slug),
+    async deleteSite(slug) {
+      sites.delete(slug);
+    },
+    async redactJob(jobId) {
+      const job = jobs.get(jobId);
+      if (job) jobs.set(jobId, { ...job, answers: { deleted: true } as never, result: undefined });
+    },
+    async deletePrefix(prefix) {
+      for (const key of [...objects.keys()]) if (key.startsWith(prefix)) objects.delete(key);
     },
     async putJob(job) {
       jobs.set(job.jobId, structuredClone(job));
@@ -37,6 +49,9 @@ export function memoryStores() {
       if (!job) throw new Error('no such job');
       jobs.set(jobId, { ...job, ...patch });
     },
+    async invalidateSite(slug) {
+      invalidated.push(slug);
+    },
     async putPage(key, page) {
       objects.set(key, page);
     },
@@ -44,5 +59,5 @@ export function memoryStores() {
       for (const [key, value] of [...objects]) if (key.startsWith(from)) objects.set(to + key.slice(from.length), value);
     },
   };
-  return { stores, jobs, sites, counters, blocked, objects };
+  return { stores, jobs, sites, counters, blocked, objects, invalidated };
 }

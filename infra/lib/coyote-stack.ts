@@ -295,6 +295,7 @@ export class CoyoteStack extends Stack {
       rateLimitTable: this.rateLimitTable,
       blocklistTable: this.blocklistTable,
       sitesBucket: this.sitesBucket,
+      sitesDistribution,
       guardrail: this.guardrail,
       modelId: props.modelId ?? DEFAULT_MODEL_ID,
       rateLimitPerDay: 100, // sandbox account; production uses 3

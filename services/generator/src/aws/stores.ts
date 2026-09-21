@@ -1,6 +1,7 @@
+import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
 import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { CopyObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { CopyObjectCommand, DeleteObjectsCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { Job, SiteRecord, Stores } from '../core/jobs';
 
 export interface StoreConfig {
@@ -9,6 +10,8 @@ export interface StoreConfig {
   rateLimitTable: string;
   blocklistTable: string;
   sitesBucket: string;
+  /** Unset in Lambdas that never change a published site. */
+  sitesDistributionId?: string;
 }
 
 export function storeConfigFromEnv(env: Record<string, string | undefined> = process.env): StoreConfig {
@@ -23,6 +26,7 @@ export function storeConfigFromEnv(env: Record<string, string | undefined> = pro
     rateLimitTable: need('RATE_LIMIT_TABLE'),
     blocklistTable: need('BLOCKLIST_TABLE'),
     sitesBucket: need('SITES_BUCKET'),
+    sitesDistributionId: env.SITES_DISTRIBUTION_ID,
   };
 }
 
@@ -41,6 +45,7 @@ function setExpression(patch: Record<string, unknown>) {
 export function createStores(config: StoreConfig): Stores {
   const db = DynamoDBDocumentClient.from(new DynamoDBClient({}), { marshallOptions: { removeUndefinedValues: true } });
   const s3 = new S3Client({});
+  const cloudfront = new CloudFrontClient({});
 
   return {
     async hitRateLimit(key, max, ttl) {
@@ -96,8 +101,44 @@ export function createStores(config: StoreConfig): Stores {
       }
     },
 
-    async saveSite({ slug, ...fields }: SiteRecord) {
+    async saveSite({ slug, ...fields }) {
       await db.send(new UpdateCommand({ TableName: config.sitesTable, Key: { slug }, ...setExpression(fields) }));
+    },
+
+    async getSite(slug) {
+      const { Item } = await db.send(new GetCommand({ TableName: config.sitesTable, Key: { slug } }));
+      return Item as SiteRecord | undefined;
+    },
+
+    async deleteSite(slug) {
+      await db.send(new DeleteCommand({ TableName: config.sitesTable, Key: { slug } }));
+    },
+
+    async redactJob(jobId) {
+      try {
+        await db.send(
+          new UpdateCommand({
+            TableName: config.jobsTable,
+            Key: { jobId },
+            ConditionExpression: 'attribute_exists(jobId)',
+            UpdateExpression: 'SET #a = :redacted REMOVE #r',
+            ExpressionAttributeNames: { '#a': 'answers', '#r': 'result' },
+            ExpressionAttributeValues: { ':redacted': { deleted: true } },
+          }),
+        );
+      } catch (error) {
+        if (!isConditionFailure(error)) throw error;
+      }
+    },
+
+    async deletePrefix(prefix) {
+      let token: string | undefined;
+      do {
+        const page = await s3.send(new ListObjectsV2Command({ Bucket: config.sitesBucket, Prefix: prefix, ContinuationToken: token }));
+        const keys = (page.Contents ?? []).flatMap((object) => (object.Key ? [{ Key: object.Key }] : []));
+        if (keys.length > 0) await s3.send(new DeleteObjectsCommand({ Bucket: config.sitesBucket, Delete: { Objects: keys } }));
+        token = page.NextContinuationToken;
+      } while (token);
     },
 
     async putJob(job) {
@@ -116,6 +157,16 @@ export function createStores(config: StoreConfig): Stores {
           Key: { jobId },
           ConditionExpression: 'attribute_exists(jobId)',
           ...setExpression(patch),
+        }),
+      );
+    },
+
+    async invalidateSite(slug) {
+      if (!config.sitesDistributionId) throw new Error('SITES_DISTRIBUTION_ID is not set for this function');
+      await cloudfront.send(
+        new CreateInvalidationCommand({
+          DistributionId: config.sitesDistributionId,
+          InvalidationBatch: { CallerReference: `${slug}-${Date.now()}`, Paths: { Quantity: 2, Items: [`/${slug}`, `/${slug}/*`] } },
         }),
       );
     },

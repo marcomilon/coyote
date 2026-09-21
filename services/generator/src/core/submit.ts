@@ -104,7 +104,7 @@ async function claimSlug(base: string, job: Job, { stores }: SubmitDeps): Promis
   for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt++) {
     const slug = attempt === 0 ? base : withSuffix(base);
     if (rejectSlug(slug) || (await stores.isBlocked(slug))) continue;
-    if (await stores.claimSlug({ slug, status: 'claimed', jobId: job.jobId, createdAt: job.createdAt })) return slug;
+    if (await stores.claimSlug({ slug, status: 'claimed', jobId: job.jobId, jobIds: [job.jobId], createdAt: job.createdAt })) return slug;
   }
   return undefined;
 }

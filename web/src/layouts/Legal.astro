@@ -1,0 +1,16 @@
+---
+import Layout from './Layout.astro';
+import type { Lang } from '../i18n/strings';
+
+interface Props {
+  frontmatter: { lang: Lang; title: string; description: string; alternate: string };
+}
+const { lang, title, description, alternate } = Astro.props.frontmatter;
+---
+
+<Layout lang={lang} title={`${title} — Coyote`} description={description} alternate={alternate}>
+  <article class="legal wrap">
+    <h1>{title}</h1>
+    <slot />
+  </article>
+</Layout>

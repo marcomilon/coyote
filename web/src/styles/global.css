@@ -177,3 +177,32 @@ input:focus, textarea:focus { outline: 3px solid var(--amarillo); outline-offset
 .linkbox { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; background: #fffaf0; border: 3px solid var(--ink); border-radius: .5rem; padding: .9rem 1rem; box-shadow: var(--shadow); margin: 1.2rem 0 1.4rem; }
 .linkbox a { flex: 1 1 14rem; font-weight: 600; overflow-wrap: anywhere; }
 .actions { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.4rem; }
+
+.magic { margin-top: 2rem; background: var(--amarillo); border: 3px solid var(--ink); border-radius: .5rem; padding: 1.3rem 1.4rem; box-shadow: var(--shadow); }
+.magic h3 { font-size: 1.25rem; margin-bottom: .5rem; }
+.magic .actions { margin-top: 1rem; }
+
+/* ---- Mi sitio ---- */
+.mysite { padding-block: 1.5rem 4rem; max-width: 46rem; }
+.mysite [data-view] { display: none; }
+.mysite[data-state='loading'] [data-view='loading'], .mysite[data-state='editor'] [data-view='editor'], .mysite[data-state='message'] [data-view='message'] { display: block; }
+.mysite header { display: flex; flex-wrap: wrap; gap: .8rem 1.5rem; align-items: center; justify-content: space-between; margin-bottom: 1.8rem; }
+.mysite header h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); }
+.badge { display: inline-block; font: 400 .8rem/1 var(--display); padding: .45rem .7rem; border: 2px solid var(--ink); border-radius: 999px; background: var(--amarillo); }
+.badge[data-status='unpublished'] { background: var(--paper-deep); }
+.rowlist { display: grid; gap: .6rem; margin-bottom: .8rem; }
+.rowlist > div { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: .5rem; }
+.rowlist button, .linkbtn { background: none; border: 0; padding: .3rem; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; color: var(--rojo); }
+.linkbtn { color: var(--ink); }
+.notice { font-weight: 600; margin-top: 1rem; min-height: 1.5rem; }
+.notice[data-kind='error'] { color: var(--rojo); }
+.danger { margin-top: 3rem; border-top: 3px dashed var(--ink); padding-top: 1.6rem; display: grid; gap: 1.2rem; }
+.danger .line { display: flex; flex-wrap: wrap; gap: .8rem 1.2rem; align-items: center; }
+@media (max-width: 36rem) { .rowlist > div { grid-template-columns: 1fr; } }
+
+/* ---- Legal pages ---- */
+.legal { max-width: 44rem; padding-block: 2rem 4rem; }
+.legal h1 { font-size: clamp(2rem, 5vw, 3rem); margin-bottom: 1.5rem; }
+.legal h2 { font-size: 1.3rem; margin: 2.2rem 0 .7rem; }
+.legal p, .legal ul { margin: 0 0 1rem; }
+.legal li { margin-bottom: .4rem; }

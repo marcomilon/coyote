@@ -230,11 +230,11 @@ Infra: `s3:PutObject` presign permission on `_uploads/*` for `submit`; `rekognit
 
 ## Site ownership (magic link)
 No accounts, no Cognito. In the MVP, whoever has the link owns the site. The owner's phone (product phase 2) and verified email (phase 7) later become recovery channels.
-- On publish, the result page shows the link once: `https://app.<domain>/mi-sitio#token=…`. The token is in the fragment so it never reaches logs or referrers. Token = random 32 bytes, stored hashed in `sites`, 1-year expiry.
+- On the first publish, the result page shows the link once: `https://app.<domain>/mi-sitio#token=<slug>.<secret>`. The token is in the fragment so it never reaches logs or referrers. Token = random 32 bytes, stored hashed in `sites`, 1-year expiry.
 - Buttons: "Copiar" and "Guardar en WhatsApp" (`wa.me/<ownerNumber>?text=<link>`; the owner messages the link to themselves).
 - Re-issue ("Enviarme mi enlace") comes with WhatsApp (template `enlace_mi_sitio` to `sites.ownerPhone`) and later email. Until then a lost link means creating a new site.
 - "Mi sitio" page (Astro page with a script): edit contact details, hours, services (patches `sites.content` and re-renders, no model call); regenerate (max 2 per site, from the stored answers); unpublish; delete my data. Post-MVP: last 30 days of messages, pause notifications, add/verify email, buy a domain.
-- API: `GET /me`, `POST /me/regenerate`, `POST /me/content`, `POST /me/unpublish`, `DELETE /me`. All require `Authorization: Bearer <token>` and are rate-limited per token.
+- API: `GET /me`, `POST /me/content`, `POST /me/regenerate`, `POST /me/unpublish`, `POST /me/republish`, `DELETE /me`. All require `Authorization: Bearer <token>` and are rate-limited per site. `POST /jobs/{id}/regenerate` is the same regeneration before publishing, with the job ID as the credential.
 
 ## Preview before publish
 - `generate` writes to `_preview/{jobId}/`. The form shows it in an iframe from `https://preview.<sites-domain>/{jobId}/` (rewrite rule on the sites distribution; `preview` is a reserved slug; sites CSP has `frame-ancestors https://app.<domain>`).
@@ -348,10 +348,12 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Build emits external scripts only; `web/dist/` deployed via `BucketDeployment` (`coyote.sh deploy` builds it first). On the live app: clean URLs work (`/crear`, `/pt/criar`), CSP is `script-src 'self'`, the create script runs and calls the API with no CSP violations
 
 ### Phase 5b — Magic link + preview
-- [ ] "Genera otra versión" + regeneration cap (the preview iframe, "Publicar", and `POST /jobs/{id}/publish` already exist)
-- [ ] Token issue (hashed, fragment link), "Copiar" + "Guardar en WhatsApp"
-- [ ] "Mi sitio" page + `/me/*` routes; content patch re-renders with no Bedrock call
-- [ ] Privacy and terms pages (es/pt, Markdown); `reportar` page
+- [x] Preview iframe, "Publicar", "Genera otra versión" (`POST /jobs/{id}/regenerate`), cap of 2 regenerations per site. A regeneration varies the variety seed, so it offers other themes. Generation results live on the job; the site record and the live page change only on publish
+- [x] Magic link: token `<slug>.<secret>`, only the sha256 of the secret stored, 1-year expiry, returned once by the first publish, shown with "Copiar", "Guardar en mi WhatsApp", "Abrir Mi sitio"
+- [x] "Mi sitio" page (`/mi-sitio`, `/pt/meu-site`) + one `owner` Lambda for `GET /me`, `POST /me/content|regenerate|unpublish|republish`, `DELETE /me`. An edit goes patch → policy → `ApplyGuardrail` → re-render, with no model call. 60 owner requests per site per day. "Delete my data" removes the pages and the site record and redacts the text of every job of that site. Publish, edit, unpublish, republish, and delete invalidate the CDN cache, so they show at once. Verified end to end on the deployed stack
+- [x] Privacy and terms pages (es/pt, Markdown), linked from the footer
+- [ ] `reportar` page (arrives with the report endpoint in phase 6)
+- [ ] 👤 Before public launch: legal review of the privacy and terms texts, and a contact address in them
 
 ### Phase 6 — Hardening
 - [ ] Report endpoint + SNS + distinct-IP quarantine

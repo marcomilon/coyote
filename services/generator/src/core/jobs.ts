@@ -23,9 +23,15 @@ export interface Job {
   previewUrl?: string;
   siteUrl?: string;
   error?: string;
+  /** What generation produced. Copied to the site record only when the owner publishes. */
+  result?: { content: SiteContent; brief: Brief };
+  /** A new version for a slug that already has a job. Never frees the slug. */
+  regenerate?: boolean;
+  /** Seeds the theme and font candidates. Defaults to the slug; regenerations vary it. */
+  seed?: string;
 }
 
-export type SiteStatus = 'claimed' | 'preview' | 'published';
+export type SiteStatus = 'claimed' | 'published' | 'unpublished';
 
 export interface SiteRecord {
   slug: string;
@@ -35,6 +41,13 @@ export interface SiteRecord {
   content?: SiteContent;
   brief?: Brief;
   ownerWhatsApp?: string;
+  /** sha256 of the magic-link secret. The secret itself is shown once and never stored. */
+  tokenHash?: string;
+  /** seconds since epoch */
+  tokenExpiresAt?: number;
+  regenCount?: number;
+  /** Every job that produced a version of this site (for "delete my data"). */
+  jobIds?: string[];
 }
 
 /** Everything the request flows need from DynamoDB and S3. Implemented in src/aws/stores.ts. */
@@ -47,7 +60,14 @@ export interface Stores {
   /** Frees a slug that never got a published site. */
   releaseSlug(slug: string, jobId: string): Promise<void>;
   /** Merges the given fields into the site record (never drops stored content). */
-  saveSite(site: SiteRecord): Promise<void>;
+  saveSite(site: Partial<SiteRecord> & { slug: string }): Promise<void>;
+  getSite(slug: string): Promise<SiteRecord | undefined>;
+  deleteSite(slug: string): Promise<void>;
+  /** Removes the requester's text from a job, keeping the safety outcome. */
+  redactJob(jobId: string): Promise<void>;
+  deletePrefix(prefix: string): Promise<void>;
+  /** Drops the CDN's cached copy of a site, so a change or a removal shows at once instead of after the cache TTL. */
+  invalidateSite(slug: string): Promise<void>;
   putJob(job: Job): Promise<void>;
   getJob(jobId: string): Promise<Job | undefined>;
   updateJob(jobId: string, patch: Partial<Job>): Promise<void>;

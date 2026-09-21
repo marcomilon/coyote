@@ -1,0 +1,86 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const s = t(lang);
+const m = s.mySite;
+const f = m.fields;
+const other = t(s.otherLang.code);
+const clientStrings = { ...m, createPath: s.paths.create };
+---
+
+<Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig>
+  <div class="mysite wrap" id="mysite" data-state="loading" data-strings={JSON.stringify(clientStrings)}>
+    <section data-view="loading" class="panel"><div class="paint" aria-hidden="true"></div></section>
+
+    <section data-view="message" class="panel" aria-live="assertive">
+      <h2 data-message-title></h2>
+      <p data-message-text></p>
+    </section>
+
+    <section data-view="editor">
+      <header>
+        <h1>{m.heading}</h1>
+        <div><span class="badge" data-status></span> <a data-site-link target="_blank" rel="noopener">{m.view}</a></div>
+      </header>
+
+      <form class="ticket" novalidate>
+        <fieldset>
+          <label class="sub" for="headline">{f.headline}</label>
+          <input type="text" id="headline" name="headline" maxlength="80" />
+          <label class="sub" for="subhead">{f.subhead}</label>
+          <input type="text" id="subhead" name="subhead" maxlength="160" />
+          <label class="sub" for="about">{f.about}</label>
+          <textarea id="about" name="about" maxlength="600"></textarea>
+          <label class="sub" for="ctaText">{f.ctaText}</label>
+          <input type="text" id="ctaText" name="ctaText" maxlength="40" />
+        </fieldset>
+
+        <fieldset>
+          <legend class="sub">{f.services}</legend>
+          <div class="rowlist" data-list="services" data-a={f.serviceName} data-b={f.serviceDetail}></div>
+          <button type="button" class="linkbtn" data-add="services">+ {f.addService}</button>
+        </fieldset>
+
+        <fieldset>
+          <legend class="sub">{f.hours}</legend>
+          <div class="rowlist" data-list="hours" data-a={f.days} data-b={f.time}></div>
+          <button type="button" class="linkbtn" data-add="hours">+ {f.addHours}</button>
+        </fieldset>
+
+        <fieldset>
+          <label class="sub" for="whatsapp">{f.whatsapp}</label>
+          <input type="tel" id="whatsapp" name="whatsapp" maxlength="40" inputmode="tel" />
+          <label class="sub" for="address">{f.address}</label>
+          <input type="text" id="address" name="address" maxlength="160" />
+          <div class="two">
+            <div><label class="sub" for="instagram">{f.instagram}</label><input type="text" id="instagram" name="instagram" maxlength="200" autocapitalize="none" /></div>
+            <div><label class="sub" for="facebook">{f.facebook}</label><input type="text" id="facebook" name="facebook" maxlength="200" autocapitalize="none" /></div>
+          </div>
+        </fieldset>
+
+        <div class="submit-row"><button class="btn" type="submit">{m.save}</button></div>
+        <p class="notice" data-notice role="status"></p>
+      </form>
+
+      <div class="danger">
+        <div class="line">
+          <button class="btn small blue" type="button" data-regenerate>{m.regenerate}</button>
+          <span><span data-regen-left></span> {m.regenerateNote}</span>
+        </div>
+        <div class="line">
+          <button class="btn small ghost" type="button" data-toggle></button>
+          <button class="linkbtn" type="button" data-delete>{m.delete}</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<script>
+  import '../scripts/my-site';
+</script>

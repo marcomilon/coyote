@@ -25,6 +25,7 @@
     "generate:local": "tsx scripts/local-generate.ts",
     "prescreen:fixtures": "tsx scripts/prescreen-fixtures.ts",
     "themes:sheet": "tsx scripts/theme-sheet.ts",
-    "fonts:check": "tsx scripts/check-fonts.ts"
+    "fonts:check": "tsx scripts/check-fonts.ts",
+    "verify:live": "tsx scripts/verify-live.ts"
   }
 }

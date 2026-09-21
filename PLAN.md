@@ -313,7 +313,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] `policy.ts` content checks + rendered-HTML invariants + tests; wired into `pipeline.ts` (throws `PolicyRejection`) and `generate:local`
 - [x] Pre-screen classifier (`prescreen.ts`, `classify` tool); runs first in `generate:local`
 - [x] Guardrail definition (`infra/lib/guardrail.ts`: Standard tier, filters, 7 denied topics, scam word list, pinned version)
-- [ ] After the first deploy: run the prescreen fixtures through `ApplyGuardrail`, tune filter strengths and topics
+- [x] The fixtures run through the deployed guardrail (`verify:live`): no legitimate business blocked, 18 of 27 bad cases stopped by it. Filter strengths unchanged
 - [ ] Verify the three unconfirmed items (guardrail tiers for pt, `toolUse` evaluation, cache minimum)
 - [x] Fixture set (44 good/borderline/bad cases, `test/fixtures/prescreen-cases.ts`); `npm run prescreen:fixtures` runs them on the real model and compares with the hardcoded list. Nova 2 Lite: 44/44 correct; the model catches 21/21 bad cases, the list alone 4/21
 - [ ] Re-run the fixtures on Haiku 4.5 and tune `REJECT_MIN_CONFIDENCE` (waits for Claude access)
@@ -364,7 +364,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] AWS Budget ($20/month, alerts at 80% and 100%) + Cost Anomaly Detection (≥ $5)
 - [x] `./coyote.sh abuse-report` (requests per hashed IP, rejections by layer, newest published sites)
 - [x] `README` runbook
-- [ ] Full "Verification" section passes on the deployed stack
+- [x] Full "Verification" section passes on the deployed stack (contact form excluded: post-MVP). `npm run verify:live -w services/generator` runs the 48 safety fixtures through the deployed API: 48/48. Layers that stopped the 27 bad cases: guardrail 18, pre-screen 5, brand list 4
 - [ ] 👤 *(optional, when stable)* switch to `consideralohecho.com`; first real deploy of domain mode; subdomain rewrite verified
 - [ ] 👤 Choose the two final domain names: the brand domain (`<domain>`) and the separate one for user sites (`<sites-domain>`). Choosing the brand also unblocks Meta Business verification (`PLAN-PHASE2.md` step 1), which takes weeks, so decide early if WhatsApp is next
 - [ ] 👤 **Before any public launch: create the production AWS account** and its CLI profile. Add one production switch to the stack then (retain data + point-in-time recovery, no `localhost` in CORS or `frame-ancestors`, rate limit 3/IP/day) and deploy the same code there. Never launch publicly from the sandbox account: moving live sites, records, and a domain to another account later is real migration work
@@ -466,9 +466,9 @@ Every site is free at `{slug}.<sites-domain>`. A `.com` is a paid upsell after p
 - `cdk synth` and `cdk diff` clean; `cdk deploy --all` succeeds.
 - `curl -X POST <ApiUrl>/generate` → job id; poll `GET /jobs/{id}` until `DONE`; open the returned site URL in Chrome and screenshot desktop + mobile widths.
 - Headers: `curl -I <site URL>` shows `script-src 'none'`; the app loads and runs its JS; the preview iframe renders inside the app and nowhere else.
-- Injection: a business name containing `<script>` and a `signatureCss` with `url()`/`@import` both come out inert.
+- Injection: markup in the name or address comes out escaped (a `<script>` name is rejected outright by the guardrail's prompt-attack filter); a `signatureCss` with `url()`/`@import` is dropped (unit-tested: the API cannot force model output).
 - Rate limit: 4th request from one IP in a day returns 429 and produces no Bedrock invocation.
-- Slug: two simultaneous submissions of the same name get different slugs; `bancolombia`, `www`, `preview` are refused.
+- Slug: two simultaneous submissions of the same name get different slugs; a brand name (`bancolombia`) is rejected; reserved names (`www`, `preview`) get a suffixed slug.
 - Failure: force a `generate` error → job ends `FAILED`, slug released.
 - Edit: change hours in "Mi sitio" → page updates with no Bedrock call logged.
 - Safety:

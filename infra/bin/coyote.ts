@@ -12,6 +12,7 @@ new CoyoteStack(app, 'Coyote', {
   env: { region: 'us-east-1', account: domainName ? process.env.CDK_DEFAULT_ACCOUNT : undefined },
   domainName,
   sitesDomainName,
+  modelId: app.node.tryGetContext('modelId') as string | undefined,
   hostedZoneName: app.node.tryGetContext('hostedZoneName') as string | undefined,
   sitesHostedZoneName: app.node.tryGetContext('sitesHostedZoneName') as string | undefined,
 });

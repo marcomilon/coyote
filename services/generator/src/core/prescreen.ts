@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Answers } from './answers';
 import type { CallTool, Usage } from './bedrock';
+import { answersBlock } from './prompt';
 
 export const CATEGORIES = [
   'ok',
@@ -64,11 +65,11 @@ export async function prescreen(
   answers: Answers,
   { callTool, modelId }: { callTool: CallTool; modelId: string },
 ): Promise<PrescreenResult> {
-  const address = answers.contact.address ? `\nAddress: ${answers.contact.address}` : '';
   const { value, usage } = await callTool({
     modelId,
     system: SYSTEM,
-    user: `<answers>\nBusiness name: ${answers.businessName}\nWhat the business does: ${answers.about}${address}\n</answers>`,
+    guarded: answersBlock(answers),
+    user: 'Classify the request above.',
     maxTokens: 300,
     tool: { name: 'classify', description: 'Record the screening decision.', schema: Classification },
   });

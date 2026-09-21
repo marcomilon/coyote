@@ -1,5 +1,14 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`prompts > match the snapshots (review any change with the contact sheet) > answers 1`] = `
+"<answers>
+Business name: Panadería Luna
+What the business does: Panadería de masa madre en Chapinero, Bogotá. Abrimos de lunes a sábado de 7 a 19.
+Address: Calle 60 # 9-12
+Site language: es
+</answers>"
+`;
+
 exports[`prompts > match the snapshots (review any change with the contact sheet) > brief system 1`] = `
 "You are the art director for one-page websites of small businesses in Latin America. From the owner's answers you decide the design direction. You do not write the page.
 
@@ -15,14 +24,7 @@ Rules:
 `;
 
 exports[`prompts > match the snapshots (review any change with the contact sheet) > brief user 1`] = `
-"<answers>
-Business name: Panadería Luna
-What the business does: Panadería de masa madre en Chapinero, Bogotá. Abrimos de lunes a sábado de 7 a 19.
-Address: Calle 60 # 9-12
-Site language: es
-</answers>
-
-Candidate themes:
+"Candidate themes:
 - plain: Plain. Moods: simple, direct. Suits: any. light.
 
 Candidate font pairings:
@@ -80,14 +82,7 @@ signatureCss (optional): plain CSS for the hero's decorative ".signature" elemen
 `;
 
 exports[`prompts > match the snapshots (review any change with the contact sheet) > content user 1`] = `
-"<answers>
-Business name: Panadería Luna
-What the business does: Panadería de masa madre en Chapinero, Bogotá. Abrimos de lunes a sábado de 7 a 19.
-Address: Calle 60 # 9-12
-Site language: es
-</answers>
-
-Design brief:
+"Design brief:
 - tone: cálido y directo
 - signatureElement: Una franja gruesa color ladrillo bajo el nombre
 - proposed headline: Pan de masa madre en Chapinero"

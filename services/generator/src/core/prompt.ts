@@ -49,16 +49,14 @@ Rules:
 - tone: a few words describing the voice of the copy.`;
 }
 
-export function briefUserPrompt(answers: Answers, themes: Theme[], fontPairings: FontPairingId[]): string {
+export function briefUserPrompt(themes: Theme[], fontPairings: FontPairingId[]): string {
   const themeList = themes
     .map((t) => `- ${t.id}: ${t.meta.name}. Moods: ${t.meta.moods.join(', ')}. Suits: ${t.meta.industries.join(', ')}. ${t.meta.scheme}.`)
     .join('\n');
   const fontList = fontPairings
     .map((id) => `- ${id}: ${FONT_PAIRINGS[id].display} + ${FONT_PAIRINGS[id].body}`)
     .join('\n');
-  return `${answersBlock(answers)}
-
-Candidate themes:
+  return `Candidate themes:
 ${themeList}
 
 Candidate font pairings:
@@ -89,16 +87,15 @@ Copy:
 signatureCss (optional): plain CSS for the hero's decorative ".signature" element, following the brief's signatureElement. Every selector must start with ".signature". No url(), no @import, no position: fixed. Use var(--ink), var(--paper), var(--accent). Leave it out if unsure.`;
 }
 
-export function contentUserPrompt(answers: Answers, brief: { tone: string; signatureElement: string; headline: string }): string {
-  return `${answersBlock(answers)}
-
-Design brief:
+export function contentUserPrompt(brief: { tone: string; signatureElement: string; headline: string }): string {
+  return `Design brief:
 - tone: ${brief.tone}
 - signatureElement: ${brief.signatureElement}
 - proposed headline: ${brief.headline}`;
 }
 
-function answersBlock(answers: Answers): string {
+/** The requester's text. Sent as the guarded part of every prompt. The phone number is never included. */
+export function answersBlock(answers: Answers): string {
   const address = answers.contact.address ? `\nAddress: ${answers.contact.address}` : '';
   return `<answers>
 Business name: ${answers.businessName}

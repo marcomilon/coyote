@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { CoyoteStack, type CoyoteStackProps } from '../lib/coyote-stack';
 
 const synth = (props: Partial<CoyoteStackProps> = {}) =>
-  Template.fromStack(new CoyoteStack(new App(), 'Coyote-test', { env: { region: 'us-east-1' }, ...props }));
+  Template.fromStack(
+    // Skip esbuild bundling: these tests only look at the template.
+    new CoyoteStack(new App({ context: { 'aws:cdk:bundling-stacks': [] } }), 'Coyote-test', { env: { region: 'us-east-1' }, ...props }),
+  );
 
 const cspOf = (template: Template, idPrefix: string): string => {
   const policies = template.findResources('AWS::CloudFront::ResponseHeadersPolicy');
@@ -69,6 +72,30 @@ describe('CoyoteStack, domainless', () => {
       expect(topic.Definition.length, topic.Name).toBeLessThanOrEqual(200);
       for (const example of topic.Examples) expect(example.length, example).toBeLessThanOrEqual(100);
     }
+  });
+
+  it('exposes the three routes', () => {
+    for (const routeKey of ['POST /generate', 'GET /jobs/{id}', 'POST /jobs/{id}/publish']) {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: routeKey });
+    }
+  });
+
+  it('only lets Lambdas call the model with our guardrail attached', () => {
+    const statements = Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
+      (policy) => policy.Properties.PolicyDocument.Statement as { Action: string | string[]; Condition?: unknown }[],
+    );
+    const invoke = statements.filter((s) => [s.Action].flat().includes('bedrock:InvokeModel'));
+    expect(invoke.length).toBeGreaterThan(0);
+    for (const statement of invoke) expect(JSON.stringify(statement.Condition)).toContain('bedrock:GuardrailIdentifier');
+    expect(JSON.stringify(invoke)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0');
+    expect(JSON.stringify(invoke)).toContain('foundation-model/amazon.nova-2-lite-v1:0');
+  });
+
+  it('never retries a failed generation and records the failure', () => {
+    template.hasResourceProperties('AWS::Lambda::EventInvokeConfig', {
+      MaximumRetryAttempts: 0,
+      DestinationConfig: { OnFailure: Match.anyValue() },
+    });
   });
 
   it('is disposable: cdk destroy removes all data', () => {

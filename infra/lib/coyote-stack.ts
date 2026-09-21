@@ -19,8 +19,10 @@ import {
   aws_sns as sns,
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
+import { DEFAULT_MODEL_ID } from '../../services/generator/src/core/models';
 import { createUrls } from '../../services/generator/src/core/urls';
 import { appCsp, sitesCsp } from './csp';
+import { GeneratorApi } from './generator-api';
 import { CoyoteGuardrail } from './guardrail';
 
 /**
@@ -33,6 +35,8 @@ export interface CoyoteStackProps extends StackProps {
   domainName?: string;
   /** Registrable domain for user sites. Unset = domainless mode. */
   sitesDomainName?: string;
+  /** Bedrock model or inference profile. Defaults to the one in services/generator/src/core/models.ts. */
+  modelId?: string;
   /** Route 53 zone that holds `domainName`. Defaults to `domainName`. */
   hostedZoneName?: string;
   /** Route 53 zone that holds `sitesDomainName`. Defaults to `sitesDomainName`. */
@@ -217,7 +221,7 @@ export class CoyoteStack extends Stack {
     });
 
     // ---------------------------------------------------------------------------------------
-    // API (routes and Lambdas arrive in phase 4)
+    // API (the routes are added by GeneratorApi below)
     // ---------------------------------------------------------------------------------------
     this.api = new apigwv2.HttpApi(this, 'Api', {
       apiName: 'coyote',
@@ -278,6 +282,19 @@ export class CoyoteStack extends Stack {
     this.urlEnv = domain
       ? { DOMAIN_NAME: props.domainName!, SITES_DOMAIN_NAME: props.sitesDomainName! }
       : { APP_BASE_URL: appUrl, API_BASE_URL: apiUrl, SITES_BASE_URL: sitesBaseUrl };
+
+    new GeneratorApi(this, 'GeneratorApi', {
+      api: this.api,
+      jobsTable: this.jobsTable,
+      sitesTable: this.sitesTable,
+      rateLimitTable: this.rateLimitTable,
+      blocklistTable: this.blocklistTable,
+      sitesBucket: this.sitesBucket,
+      guardrail: this.guardrail,
+      modelId: props.modelId ?? DEFAULT_MODEL_ID,
+      rateLimitPerDay: 100, // sandbox account; production uses 3
+      urlEnv: this.urlEnv,
+    });
 
     new CfnOutput(this, 'AppUrl', { value: appUrl });
     new CfnOutput(this, 'ApiUrl', { value: apiUrl });

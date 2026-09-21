@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeAnswers } from '../src/core/answers';
-import { briefSystemPrompt, briefUserPrompt, contentSystemPrompt, contentUserPrompt } from '../src/core/prompt';
+import { answersBlock, briefSystemPrompt, briefUserPrompt, contentSystemPrompt, contentUserPrompt } from '../src/core/prompt';
 import { plain } from '../themes/plain';
 import { brief } from './fixtures';
 
@@ -14,14 +14,15 @@ const answers = normalizeAnswers({
 describe('prompts', () => {
   it('match the snapshots (review any change with the contact sheet)', () => {
     expect(briefSystemPrompt()).toMatchSnapshot('brief system');
-    expect(briefUserPrompt(answers, [plain], ['fraunces-worksans'])).toMatchSnapshot('brief user');
+    expect(answersBlock(answers)).toMatchSnapshot('answers');
+    expect(briefUserPrompt([plain], ['fraunces-worksans'])).toMatchSnapshot('brief user');
     expect(contentSystemPrompt('es')).toMatchSnapshot('content system es');
     expect(contentSystemPrompt('pt')).toMatchSnapshot('content system pt');
-    expect(contentUserPrompt(answers, brief)).toMatchSnapshot('content user');
+    expect(contentUserPrompt(brief)).toMatchSnapshot('content user');
   });
 
   it('never sends the phone number to the model', () => {
-    expect(briefUserPrompt(answers, [plain], ['fraunces-worksans'])).not.toContain('573001234567');
-    expect(contentUserPrompt(answers, brief)).not.toContain('573001234567');
+    expect(answersBlock(answers)).not.toContain('573001234567');
+    expect(answersBlock(answers)).toContain('Calle 60 # 9-12');
   });
 });

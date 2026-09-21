@@ -14,8 +14,8 @@ const answers = normalizeAnswers({
 describe('prescreen', () => {
   it('sends the answers as data, without the phone number, and returns the classification', async () => {
     let seen = '';
-    const callTool = (async ({ user, tool }) => {
-      seen = user;
+    const callTool = (async ({ guarded, tool }) => {
+      seen = guarded;
       expect(tool.name).toBe('classify');
       return {
         value: { reason: 'Bakery.', decision: 'allow', category: 'ok', confidence: 0.98 },

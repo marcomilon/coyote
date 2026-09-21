@@ -129,6 +129,8 @@ A language selector (es / pt) sets the site's language. Owner email is not colle
 - **Stored state**: the `sites` item holds `content`, `brief`, `theme`, answers hash. Re-rendering is a pure function of that record.
 - **Slug**: slugify(business name). Claimed atomically in `submit` with a conditional put on `sites` (`attribute_not_exists(slug)`). Clean slug first; 4-char random suffix only on collision. Refused before claiming: reserved words (`www`, `api`, `app`, `mail`, `preview`, `admin`, `static`, anything starting with `_`), the `blocklist` table, and the brand-impersonation list (`bancolombia.<sites-domain>` is the likeliest phishing vector).
 - **Rate limit** (ships with the API in phase 4): API GW route throttling (e.g. 5 rps / burst 10) + per-IP DynamoDB counter with TTL (e.g. 3 sites/IP/day). Checked before the pre-screen call, so a blocked request spends no Bedrock money. WAF deferred.
+- **Guardrail on the input**: only the requester's text is sent as `guardContent`. Our own prompts name the banned categories and would otherwise trip the topic filters on every request.
+- **Bundling**: Lambdas are bundled to CommonJS with the AWS SDK included. `css-tree` is aliased to its self-contained build (its ESM entry breaks when bundled). `./coyote.sh deploy` loads every bundle before deploying, because unit tests run unbundled code and cannot see this kind of failure.
 - **Failures**: the `generate` async invoke has an on-failure destination that marks the job `FAILED` and releases the slug. `status` also reports `FAILED` for any job `PENDING` longer than 6 min.
 
 ## Content safety
@@ -328,12 +330,12 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Check: hand-uploaded `test/index.html` serves at `<sites-dist>/test/` with `script-src 'none'`; `/test` → 301 `/test/`; preview path serves; `_uploads/` and unknown sites → 404 page; root → app; app serves `config.js` with the real API URL
 
 ### Phase 4 — API + handlers + rate limit
-- [ ] `submit`: rate limit → pre-screen → atomic slug claim → job PENDING → async invoke
-- [ ] `generate`: brief → content → lint/policy → `ApplyGuardrail` → render → S3 `_preview/` + `sites` record; `usage` logged
-- [ ] `status` (+ PENDING > 6 min ⇒ FAILED); on-failure destination releases slug
+- [x] `submit`: validate → rate limit → brand list → pre-screen → atomic slug claim → job PENDING → async invoke (`core/submit.ts`)
+- [x] `generate`: brief → content → policy → `ApplyGuardrail` → render → HTML check → S3 `_preview/` + `sites` record; `usage` stored on the job (`core/generate-job.ts`). The slop lint joins in phase 2a
+- [x] `status` (+ PENDING > 6 min ⇒ FAILED); on-failure destination releases slug; `publish` route (copies the preview to `/{slug}/`, idempotent)
 - [ ] `uploads` presign + `sharp` processing + Rekognition moderation
-- [ ] IAM: `InvokeModel` with `GuardrailIdentifier` condition; call without guardrail is denied
-- [ ] Check with `curl`: job reaches `DONE`; 4th request/day → 429 with no Bedrock invocation; CORS preflight allows the app and `localhost:5173`, refuses other origins
+- [x] IAM: `InvokeModel` scoped to the configured model with the `GuardrailIdentifier` condition. Policy simulation: no guardrail, another guardrail, or another model → denied
+- [x] Checked on the deployed API: job reaches `DONE` in ~8 s, preview and published site serve with `script-src 'none'`; same name twice → suffixed slug; brand, guardrail, and classifier rejections → 422 with no reason (reason stored in `jobs`); at the limit → 429 with nothing stored and no model call; CORS allows the app and `localhost:5173` only
 
 ### Phase 5 — Frontend (Astro)
 - [ ] `web/` becomes an Astro workspace: layouts, es at `/` and pt at `/pt/`, one translations file; replaces the placeholder page and `scripts/dev.mjs`
@@ -345,7 +347,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [ ] Build emits external scripts only; app CSP `script-src 'self'` verified in the browser; `web/dist/` deployed via `BucketDeployment`
 
 ### Phase 5b — Magic link + preview
-- [ ] Preview iframe + "Publicar" / "Genera otra versión"; `POST /jobs/{id}/publish`; regeneration cap
+- [ ] Preview iframe + "Publicar" / "Genera otra versión"; regeneration cap (`POST /jobs/{id}/publish` already exists)
 - [ ] Token issue (hashed, fragment link), "Copiar" + "Guardar en WhatsApp"
 - [ ] "Mi sitio" page + `/me/*` routes; content patch re-renders with no Bedrock call
 - [ ] Privacy and terms pages (es/pt, Markdown); `reportar` page

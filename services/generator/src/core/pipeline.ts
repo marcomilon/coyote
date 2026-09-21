@@ -6,7 +6,7 @@ import { briefSchema, type Brief } from './brief';
 import { ModelContent, SiteContent } from './content';
 import { FONT_PAIRING_IDS } from './fonts';
 import { checkContent, PolicyRejection, scrubModelContent } from './policy';
-import { briefSystemPrompt, briefUserPrompt, contentSystemPrompt, contentUserPrompt } from './prompt';
+import { answersBlock, briefSystemPrompt, briefUserPrompt, contentSystemPrompt, contentUserPrompt } from './prompt';
 
 export interface GenerateOptions {
   callTool: CallTool;
@@ -33,7 +33,8 @@ export async function generateSite(answers: Answers, { callTool, modelId }: Gene
   const brief = await callWithRetry(callTool, usage, {
     modelId,
     system: briefSystemPrompt(),
-    user: briefUserPrompt(answers, themeIds.map((id) => THEMES[id]!), fontIds),
+    guarded: answersBlock(answers),
+    user: briefUserPrompt(themeIds.map((id) => THEMES[id]!), fontIds),
     maxTokens: 1000,
     tool: {
       name: 'design_brief',
@@ -45,7 +46,8 @@ export async function generateSite(answers: Answers, { callTool, modelId }: Gene
   const written = await callWithRetry(callTool, usage, {
     modelId,
     system: contentSystemPrompt(answers.lang),
-    user: contentUserPrompt(answers, brief),
+    guarded: answersBlock(answers),
+    user: contentUserPrompt(brief),
     maxTokens: 3000,
     tool: {
       name: 'publish_content',

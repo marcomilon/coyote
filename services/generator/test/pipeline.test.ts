@@ -45,8 +45,9 @@ describe('generateSite', () => {
   it('retries once with the validation errors as feedback', async () => {
     const prompts: string[] = [];
     let contentCalls = 0;
-    const callTool = (async ({ tool, user }) => {
+    const callTool = (async ({ tool, user, guarded }) => {
       if (tool.name === 'design_brief') return { value: brief, usage: usage(tool.name) };
+      expect(guarded).toContain('<answers>');
       prompts.push(user);
       if (++contentCalls === 1) throw new ModelOutputError('headline: too long', usage(tool.name));
       return { value: modelContent, usage: usage(tool.name) };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { checkContent, checkHtml, scrubModelContent, scrubText } from '../src/core/policy';
 import { render } from '../src/core/render';
-import { plain } from '../themes/plain';
+import { editorial as plain } from '../themes/editorial';
 import { brief, content } from './fixtures';
 
 const codes = (violations: { code: string }[]) => violations.map((v) => v.code);

@@ -19,6 +19,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "generate:local": "tsx scripts/local-generate.ts",
-    "prescreen:fixtures": "tsx scripts/prescreen-fixtures.ts"
+    "prescreen:fixtures": "tsx scripts/prescreen-fixtures.ts",
+    "themes:sheet": "tsx scripts/theme-sheet.ts",
+    "fonts:check": "tsx scripts/check-fonts.ts"
   }
 }

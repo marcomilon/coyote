@@ -38,7 +38,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
   const slug = job.slug;
 
   try {
-    const { brief, content, usage } = await generateSite(job.answers, deps);
+    const { brief, content, usage } = await generateSite(job.answers, { ...deps, slug });
     const allUsage = [...job.usage, ...usage];
 
     if (!(await deps.outputAllowed(visibleText(content)))) throw new GuardrailBlocked();

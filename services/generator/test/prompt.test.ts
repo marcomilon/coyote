@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeAnswers } from '../src/core/answers';
 import { answersBlock, briefSystemPrompt, briefUserPrompt, contentSystemPrompt, contentUserPrompt } from '../src/core/prompt';
-import { plain } from '../themes/plain';
+import { editorial as plain } from '../themes/editorial';
 import { brief } from './fixtures';
 
 const answers = normalizeAnswers({
@@ -15,7 +15,7 @@ describe('prompts', () => {
   it('match the snapshots (review any change with the contact sheet)', () => {
     expect(briefSystemPrompt()).toMatchSnapshot('brief system');
     expect(answersBlock(answers)).toMatchSnapshot('answers');
-    expect(briefUserPrompt([plain], ['fraunces-worksans'])).toMatchSnapshot('brief user');
+    expect(briefUserPrompt([{ theme: plain, fontPairings: ['fraunces-worksans', 'dmserif-dmsans'] }])).toMatchSnapshot('brief user');
     expect(contentSystemPrompt('es')).toMatchSnapshot('content system es');
     expect(contentSystemPrompt('pt')).toMatchSnapshot('content system pt');
     expect(contentUserPrompt(brief)).toMatchSnapshot('content user');

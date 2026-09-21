@@ -1,5 +1,12 @@
 import type { Theme } from '../src/core/theme';
-import { plain } from './plain';
+import { artesanal } from './artesanal';
+import { cartel } from './cartel';
+import { clinico } from './clinico';
+import { editorial } from './editorial';
+import { nocturno } from './nocturno';
+import { tropical } from './tropical';
 
-export const THEMES: Record<string, Theme> = { [plain.id]: plain };
-export const THEME_IDS = Object.keys(THEMES) as [string, ...string[]];
+const ALL = [editorial, cartel, artesanal, nocturno, tropical, clinico];
+
+export const THEMES: Record<string, Theme> = Object.fromEntries(ALL.map((theme) => [theme.id, theme]));
+export const THEME_IDS = ALL.map((theme) => theme.id) as [string, ...string[]];

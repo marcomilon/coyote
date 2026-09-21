@@ -1,6 +1,7 @@
 import type { Brief } from './brief';
 import type { SiteContent } from './content';
 import type { SafeHtml } from './html';
+import type { FontPairing } from './fonts';
 import type { Strings } from './i18n';
 
 /** Links are built by the renderer from typed contact fields, never taken from model text. */
@@ -25,8 +26,15 @@ export interface Theme {
     industries: string[];
     moods: string[];
     scheme: 'light' | 'dark';
+    /** Which font pairing styles suit this theme. */
+    fontStyles: FontPairing['style'][];
+    /** Used when the model's palette is unreadable or does not match the scheme. */
+    defaultPalette: { ink: string; paper: string; accent: string };
   };
-  /** Static, hand-written CSS. Uses --ink, --paper, --accent, --font-display, --font-body. */
+  /**
+   * Static, hand-written CSS. Tokens: --ink, --paper, --accent, --on-accent (readable text on the accent),
+   * --font-display, --font-display-weight, --font-body. Derive tints with color-mix().
+   */
   css: string;
   /**
    * Everything inside <body> except the platform footer. Must include one `.signature` element

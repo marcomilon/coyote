@@ -18,7 +18,8 @@
     "generate:local": "npm run generate:local -w services/generator --",
     "prescreen:fixtures": "npm run prescreen:fixtures -w services/generator --",
     "diff": "npm run diff -w infra",
-    "deploy": "./coyote.sh deploy"
+    "deploy": "./coyote.sh deploy",
+    "themes:sheet": "npm run themes:sheet -w services/generator"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.163",

@@ -42,6 +42,7 @@ Tests live in `infra/test/` and `services/*/test/` (see `vitest.config.ts`). The
 - MVP sites carry only a WhatsApp CTA. The contact form, SES email, WhatsApp flows, and custom domains are post-MVP and specified in the plans.
 
 ## Conventions
+- Themes live in `services/generator/themes/` (one file each, registered in `themes/index.ts`). A theme is static CSS plus a `body()` template using the `html` tag; it must include one `.signature` element, work with zero photos, use only the tokens (`--ink`, `--paper`, `--accent`, `--on-accent`, `--font-display`, `--font-display-weight`, `--font-body`), and pass `checkHtml`. After any theme or prompt change run `npm run themes:sheet` and look at the result.
 - Our frontend (`web/`) is Astro, built to static files; interactive parts are plain TypeScript in Astro scripts, and the API URL comes from a runtime `config.js`. Generated business sites are never Astro: `render.ts` builds them in Lambda.
 - ESM TypeScript everywhere, `moduleResolution: "Bundler"`, extensionless relative imports. The CDK app runs through `tsx` (`infra/cdk.json`).
 - `npm run synth` and unit tests must keep passing without AWS credentials (no `fromLookup` in domainless mode).

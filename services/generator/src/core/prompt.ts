@@ -1,6 +1,6 @@
 import type { Answers, Lang } from './answers';
-import { FONT_PAIRINGS, type FontPairingId } from './fonts';
-import type { Theme } from './theme';
+import { FONT_PAIRINGS } from './fonts';
+import type { Candidate } from './variety';
 
 /** Also used by the slop lint (quality.ts). */
 export const BANNED_PHRASES: Record<Lang, string[]> = {
@@ -42,25 +42,22 @@ export function briefSystemPrompt(): string {
 ${SHARED_RULES}
 
 Rules:
-- theme and fontPairing: choose only from the candidates given. Pick what fits this specific business, not its industry stereotype.
+- theme and fontPairing: choose only from the candidates given, and the font pairing must be one listed under the theme you chose. Pick what fits this specific business, not its industry stereotype.
 - palette: three hex colors taken from the business itself (its products, materials, place, mood). One dominant color and one sharp accent. "paper" and "ink" must have strong contrast (readable body text). Never a purple, indigo, or blue-on-white gradient look.
 - signatureElement: one concrete, memorable visual idea for the hero (for example giant type, a diagonal split, a hand-drawn divider, a menu-board layout). One sentence.
 - headline: at most 6 words, concrete and local. Never starts with "Bienvenidos" / "Bem-vindos".
 - tone: a few words describing the voice of the copy.`;
 }
 
-export function briefUserPrompt(themes: Theme[], fontPairings: FontPairingId[]): string {
-  const themeList = themes
-    .map((t) => `- ${t.id}: ${t.meta.name}. Moods: ${t.meta.moods.join(', ')}. Suits: ${t.meta.industries.join(', ')}. ${t.meta.scheme}.`)
+export function briefUserPrompt(candidates: Candidate[]): string {
+  const list = candidates
+    .map(({ theme, fontPairings }) => {
+      const fonts = fontPairings.map((id) => `    - ${id}: ${FONT_PAIRINGS[id].display} + ${FONT_PAIRINGS[id].body}`).join('\n');
+      const scheme = theme.meta.scheme === 'dark' ? 'DARK theme: "paper" must be a dark color and "ink" a light one' : 'light theme: "paper" is light and "ink" is dark';
+      return `- ${theme.id}: ${theme.meta.name}. Moods: ${theme.meta.moods.join(', ')}. Suits: ${theme.meta.industries.join(', ')}. ${scheme}.\n  Font pairings for this theme:\n${fonts}`;
+    })
     .join('\n');
-  const fontList = fontPairings
-    .map((id) => `- ${id}: ${FONT_PAIRINGS[id].display} + ${FONT_PAIRINGS[id].body}`)
-    .join('\n');
-  return `Candidate themes:
-${themeList}
-
-Candidate font pairings:
-${fontList}`;
+  return `Candidate themes (choose one, then one of its font pairings):\n${list}`;
 }
 
 export function contentSystemPrompt(lang: Lang): string {

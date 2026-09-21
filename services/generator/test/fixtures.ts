@@ -2,7 +2,7 @@ import type { Brief } from '../src/core/brief';
 import { SiteContent } from '../src/core/content';
 
 export const brief: Brief = {
-  theme: 'plain',
+  theme: 'editorial',
   palette: { ink: '#1f1a17', paper: '#f6efe4', accent: '#c2410c' },
   fontPairing: 'fraunces-worksans',
   tone: 'cálido y directo',

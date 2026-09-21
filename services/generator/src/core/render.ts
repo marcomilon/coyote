@@ -1,5 +1,6 @@
 import type { Brief } from './brief';
 import type { SiteContent } from './content';
+import { readableOn } from './color';
 import { sanitizeSignatureCss } from './css';
 import { FONT_PAIRINGS, googleFontsUrl, type FontPairingId } from './fonts';
 import { html, raw } from './html';
@@ -51,7 +52,7 @@ export function render(input: RenderInput): string {
   const fonts = FONT_PAIRINGS[brief.fontPairing as FontPairingId];
   if (!fonts) throw new Error(`unknown font pairing: ${brief.fontPairing}`);
 
-  const tokens = `:root{--ink:${ink};--paper:${paper};--accent:${accent};--font-display:${fonts.display};--font-display-weight:${fonts.displayWeight};--font-body:${fonts.body}}`;
+  const tokens = `:root{--ink:${ink};--paper:${paper};--accent:${accent};--on-accent:${readableOn(accent, ink, paper)};--font-display:${fonts.display};--font-display-weight:${fonts.displayWeight};--font-body:${fonts.body}}`;
   const signature = content.signatureCss ? sanitizeSignatureCss(content.signatureCss) : null;
   const signatureCss = signature?.ok ? signature.css : '';
 

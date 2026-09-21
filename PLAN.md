@@ -197,7 +197,8 @@ A model left alone produces the same page every time: purple-to-blue gradient he
 
 5. **Slop lint before publish** (`quality.ts`, pure functions), on the brief + content JSON
    - Font pairing in the allowlist; palette hues outside purple/indigo; no banned phrases; headline ≤ 8 words; no emoji in headline or service names; `signatureCss` passes the sanitizer.
-   - Fail → regenerate once with the lint messages. Second fail → fallback model. Still failing → drop the offending optional fields and render (themes tolerate missing optional slots).
+   - Fail → regenerate once with the lint messages. A second miss ships as it is: the lint is about taste, and the policy check is what guards safety. (Fallback model on a second miss: later, with Claude.)
+   - The brief is repaired deterministically instead of regenerated: see `fixBrief`. Renderer token `--on-accent` picks ink or paper, whichever reads better on the accent.
 
 6. **Critic pass** (flag, off by default): a Haiku call scores the content 1–5 (distinctive vs generic, copy specificity). Below 3 → regenerate once with the critique.
 
@@ -300,12 +301,12 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [ ] Re-run on Haiku 4.5 and tune the prompts on its output (waits for the Anthropic use case form; do not tune prompts on Nova)
 
 ### Phase 2a — Theme library + design brief
-- [ ] Font-pairing allowlist (~20)
-- [ ] Themes 1–6 as template functions, each reviewed in the browser (desktop + mobile, zero photos)
-- [ ] Variety seed (3 candidate themes + 3 pairings from slug hash)
-- [ ] `quality.ts` slop lint + regeneration/fallback chain
+- [x] Font-pairing allowlist: 21 pairings in 5 styles (serif, sans, contrast, poster, soft), each with its heading weight; `npm run fonts:check -w services/generator` requests every Google Fonts URL
+- [x] Themes 1–6 as template functions: `editorial` (magazine), `cartel` (street poster), `artesanal` (handmade), `nocturno` (dark, framed), `tropical` (color blocks), `clinico` (information first). Each declares suited industries, moods, scheme, compatible font styles, and a default palette. `npm run themes:sheet` renders all of them with sample content (no model call) into `services/generator/out/themes/index.html`. Reviewed on desktop and at 390 px. Photo and logo slots come with the `uploads` route
+- [x] Variety seed (`variety.ts`): the slug seeds 3 candidate themes, each with 3 compatible font pairings; the model picks a theme and one of that theme's pairings
+- [x] `quality.ts`: `fixBrief` repairs the brief without a model call (font not in the theme's list → the theme's first candidate; palette with ink/paper contrast < 7, accent/paper < 3, or the wrong light/dark scheme → the theme's default palette). `lintContent` (banned phrases, headline > 8 words, emoji, exclamation hype) triggers one regeneration with the problems as feedback. The fallback-model step waits for Claude
 - [ ] SVG logo templates (~10) + favicon/OG rendering
-- [ ] `scripts/contact-sheet.ts`; 20 fixtures look like 20 different businesses
+- [ ] `scripts/contact-sheet.ts`: ~20 fixture businesses through the real model, screenshots in one grid (the offline `themes:sheet` exists; this one is for judging copy and variety, so it waits for Claude)
 
 ### Phase 2b — Content safety core
 - [x] `policy.ts` content checks + rendered-HTML invariants + tests; wired into `pipeline.ts` (throws `PolicyRejection`) and `generate:local`

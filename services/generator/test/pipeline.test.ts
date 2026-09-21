@@ -21,7 +21,7 @@ describe('generateSite', () => {
       usage: usage(tool.name),
     })) as CallTool;
 
-    const site = await generateSite(answers, { callTool, modelId: 'test' });
+    const site = await generateSite(answers, { callTool, modelId: 'test', slug: 'panaderia-luna' });
     expect(site.content.contact.whatsapp).toBe('573001234567');
     expect(site.content.businessName).toBe('Panadería Luna');
     expect(site.usage.map((u) => u.step)).toEqual(['design_brief', 'publish_content']);
@@ -34,11 +34,11 @@ describe('generateSite', () => {
         usage: usage(tool.name),
       })) as CallTool;
 
-    const clean = await generateSite(answers, { callTool: respond('Pide en https://evil.test/pan hoy'), modelId: 'test' });
+    const clean = await generateSite(answers, { callTool: respond('Pide en https://evil.test/pan hoy'), modelId: 'test', slug: 'panaderia-luna' });
     expect(clean.content.about).toBe('Pide en hoy');
 
     await expect(
-      generateSite(answers, { callTool: respond('Verifica tu cuenta para seguir comprando.'), modelId: 'test' }),
+      generateSite(answers, { callTool: respond('Verifica tu cuenta para seguir comprando.'), modelId: 'test', slug: 'panaderia-luna' }),
     ).rejects.toBeInstanceOf(PolicyRejection);
   });
 
@@ -53,7 +53,7 @@ describe('generateSite', () => {
       return { value: modelContent, usage: usage(tool.name) };
     }) as CallTool;
 
-    const site = await generateSite(answers, { callTool, modelId: 'test' });
+    const site = await generateSite(answers, { callTool, modelId: 'test', slug: 'panaderia-luna' });
     expect(contentCalls).toBe(2);
     expect(prompts[1]).toContain('headline: too long');
     expect(site.usage).toHaveLength(3);

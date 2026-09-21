@@ -1,16 +1,18 @@
 import type { z } from 'zod';
-import { THEMES, THEME_IDS } from '../../themes';
 import type { Answers } from './answers';
 import { ModelOutputError, type CallTool, type ToolRequest, type Usage } from './bedrock';
 import { briefSchema, type Brief } from './brief';
 import { ModelContent, SiteContent } from './content';
-import { FONT_PAIRING_IDS } from './fonts';
 import { checkContent, PolicyRejection, scrubModelContent } from './policy';
+import { fixBrief, lintContent } from './quality';
+import { candidatesFor } from './variety';
 import { answersBlock, briefSystemPrompt, briefUserPrompt, contentSystemPrompt, contentUserPrompt } from './prompt';
 
 export interface GenerateOptions {
   callTool: CallTool;
   modelId: string;
+  /** Seeds the theme and font candidates. */
+  slug: string;
 }
 
 export interface Generated {
@@ -23,18 +25,18 @@ export interface Generated {
  * Answers → design brief → content. Contact details come from the answers, never from the model.
  * Throws PolicyRejection when the content breaks the content policy.
  */
-export async function generateSite(answers: Answers, { callTool, modelId }: GenerateOptions): Promise<Generated> {
+export async function generateSite(answers: Answers, { callTool, modelId, slug }: GenerateOptions): Promise<Generated> {
   const usage: Usage[] = [];
 
-  // Phase 2a narrows both lists to seeded candidates.
-  const themeIds = THEME_IDS;
-  const fontIds = FONT_PAIRING_IDS;
+  const candidates = candidatesFor(slug);
+  const themeIds = candidates.map((c) => c.theme.id) as [string, ...string[]];
+  const fontIds = [...new Set(candidates.flatMap((c) => c.fontPairings))] as [string, ...string[]];
 
-  const brief = await callWithRetry(callTool, usage, {
+  const proposed = await callWithRetry(callTool, usage, {
     modelId,
     system: briefSystemPrompt(),
     guarded: answersBlock(answers),
-    user: briefUserPrompt(themeIds.map((id) => THEMES[id]!), fontIds),
+    user: briefUserPrompt(candidates),
     maxTokens: 1000,
     tool: {
       name: 'design_brief',
@@ -43,18 +45,27 @@ export async function generateSite(answers: Answers, { callTool, modelId }: Gene
     },
   });
 
-  const written = await callWithRetry(callTool, usage, {
+  const brief = fixBrief(proposed, candidates);
+
+  const contentRequest = {
     modelId,
     system: contentSystemPrompt(answers.lang),
     guarded: answersBlock(answers),
     user: contentUserPrompt(brief),
     maxTokens: 3000,
-    tool: {
-      name: 'publish_content',
-      description: 'Publish the copy for this business website.',
-      schema: ModelContent,
-    },
-  });
+    tool: { name: 'publish_content', description: 'Publish the copy for this business website.', schema: ModelContent },
+  };
+  let written = await callWithRetry(callTool, usage, contentRequest);
+
+  // Slop lint: one regeneration with the problems as feedback. A second miss ships as it is;
+  // the lint is about taste, the policy check below is about safety.
+  const problems = lintContent(written, answers.lang);
+  if (problems.length > 0) {
+    written = await callWithRetry(callTool, usage, {
+      ...contentRequest,
+      user: `${contentRequest.user}\n\nYour previous copy had these problems. Write it again without them:\n- ${problems.join('\n- ')}`,
+    });
+  }
 
   const content = SiteContent.parse({
     ...scrubModelContent(written),

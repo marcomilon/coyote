@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '../src/core/render';
-import { plain } from '../themes/plain';
+import { editorial as plain } from '../themes/editorial';
 import { brief, content } from './fixtures';
 
 const base = {

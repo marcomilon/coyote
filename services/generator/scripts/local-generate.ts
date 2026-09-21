@@ -66,12 +66,12 @@ if (isRejected(screening)) {
   process.exit(2);
 }
 
-const generated = await generateSite(answers, { callTool, modelId });
+const slug = slugify(answers.businessName);
+const generated = await generateSite(answers, { callTool, modelId, slug });
 const { brief, content } = generated;
 const usage = [screening.usage, ...generated.usage];
 
 const urls = createUrls(process.env.SITES_BASE_URL || process.env.DOMAIN_NAME ? urlConfigFromEnv(process.env) : LOCAL_URLS);
-const slug = slugify(answers.businessName);
 const page = render({
   theme: THEMES[brief.theme]!,
   content,

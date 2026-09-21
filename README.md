@@ -32,7 +32,7 @@ All commands use the AWS profile `coyote` (override with `COYOTE_AWS_PROFILE`).
 | I want to… | Do this |
 |---|---|
 | Deploy | `./coyote.sh deploy`. It builds the frontend, checks that every Lambda bundle loads, then runs `cdk deploy`. |
-| Get alert emails | `export COYOTE_ALERT_EMAIL=you@example.com` before `./coyote.sh deploy`, then confirm the two subscription emails from AWS. Without it the alarms exist but email nobody. |
+| Get alert emails | `./coyote.sh subscribe-alerts you@example.com`. AWS sends one confirmation email per topic. **Do not click** "Confirm subscription": copy its link address and run `./coyote.sh confirm-alerts '<link>'`. Confirming through the API disables the no-login unsubscribe link, which mail scanners otherwise follow, silently removing the subscription. `./coyote.sh protect-alerts` fixes subscriptions that were confirmed by clicking. |
 | See what is happening | CloudWatch dashboard **Coyote** (requests, rejections, tokens, API errors). |
 | Investigate an alarm | `./coyote.sh abuse-report`: requests per visitor (hashed IP), rejections with the layer that stopped them, and the newest published sites. Open the new sites and look at them. |
 | Take a site down for good | `./coyote.sh unpublish <slug>`. Deletes the pages and blocklists the slug. |

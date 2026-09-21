@@ -13,8 +13,6 @@ new CoyoteStack(app, 'Coyote', {
   domainName,
   sitesDomainName,
   modelId: app.node.tryGetContext('modelId') as string | undefined,
-  // Kept out of the repo: export COYOTE_ALERT_EMAIL before deploying.
-  alertEmail: process.env.COYOTE_ALERT_EMAIL || undefined,
   hostedZoneName: app.node.tryGetContext('hostedZoneName') as string | undefined,
   sitesHostedZoneName: app.node.tryGetContext('sitesHostedZoneName') as string | undefined,
 });

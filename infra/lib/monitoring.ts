@@ -9,7 +9,6 @@ import {
   aws_iam as iam,
   aws_lambda as lambda,
   aws_sns as sns,
-  aws_sns_subscriptions as subscriptions,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -18,13 +17,14 @@ export interface MonitoringProps {
   generate: lambda.IFunction;
   /** Visitor reports go here (one email per report). */
   abuseReports: sns.Topic;
-  /** Where alarms, reports, and cost alerts are emailed. Unset = topics without subscribers. */
-  alertEmail?: string;
   monthlyBudgetUsd: number;
 }
 
 /**
- * Abuse and cost detection. Every alarm emails the admin through the `alerts` topic.
+ * Abuse and cost detection. Every alarm goes to the `alerts` topic.
+ * Email subscriptions are NOT created here: an email subscription must be confirmed through the API with
+ * AuthenticateOnUnsubscribe, or any mail scanner that follows the unsubscribe link silently removes it.
+ * Use `./coyote.sh subscribe-alerts <email>` and `./coyote.sh confirm-alerts '<link>'`.
  * The Lambdas write the "Coyote" metrics as EMF log lines (services/generator/src/core/metrics.ts).
  */
 export class Monitoring extends Construct {
@@ -43,10 +43,6 @@ export class Monitoring extends Construct {
         resources: [this.alerts.topicArn],
       }),
     );
-    if (props.alertEmail) {
-      this.alerts.addSubscription(new subscriptions.EmailSubscription(props.alertEmail));
-      props.abuseReports.addSubscription(new subscriptions.EmailSubscription(props.alertEmail));
-    }
 
     const metric = (metricName: string, period = Duration.hours(1)) =>
       new cw.Metric({ namespace: 'Coyote', metricName, statistic: 'Sum', period });

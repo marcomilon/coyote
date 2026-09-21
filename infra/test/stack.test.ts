@@ -103,13 +103,11 @@ describe('CoyoteStack, domainless', () => {
     });
   });
 
-  it('alarms on abuse and cost, and emails only when an address is configured', () => {
+  it('alarms on abuse and cost; email subscriptions are managed by coyote.sh, not the stack', () => {
     template.resourceCountIs('AWS::CloudWatch::Alarm', 9);
     template.resourceCountIs('AWS::Budgets::Budget', 1);
     template.resourceCountIs('AWS::CE::AnomalyMonitor', 1);
     template.resourceCountIs('AWS::SNS::Subscription', 0);
-    const withEmail = synth({ alertEmail: 'admin@example.invalid' });
-    withEmail.resourceCountIs('AWS::SNS::Subscription', 2);
   });
 
   it('is disposable: cdk destroy removes all data', () => {

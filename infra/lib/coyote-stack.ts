@@ -38,8 +38,6 @@ export interface CoyoteStackProps extends StackProps {
   sitesDomainName?: string;
   /** Bedrock model or inference profile. Defaults to the one in services/generator/src/core/models.ts. */
   modelId?: string;
-  /** Where alarms, visitor reports, and cost alerts are emailed. Unset = no emails. */
-  alertEmail?: string;
   /** The built frontend. Defaults to web/dist (run `npm run build -w web` first). */
   webDist?: string;
   /** Route 53 zone that holds `domainName`. Defaults to `domainName`. */
@@ -310,7 +308,6 @@ export class CoyoteStack extends Stack {
       api: this.api,
       generate: generatorApi.generate,
       abuseReports: this.abuseReports,
-      alertEmail: props.alertEmail,
       monthlyBudgetUsd: 20,
     });
 

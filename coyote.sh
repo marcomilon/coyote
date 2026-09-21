@@ -17,6 +17,11 @@ Commands:
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
   rerender-all                   Re-render every published site (after theme, renderer, or domain changes)
+  subscribe-alerts <email>       Email alarms, visitor reports, and cost alerts to this address (then confirm-alerts)
+  protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
+                                 AWS sends new confirmation emails; confirm each with confirm-alerts, never by clicking
+  confirm-alerts '<link>'        Confirm an SNS email subscription so that only the AWS account can undo it.
+                                 Paste the "Confirm subscription" link from the AWS email, in quotes
   help                           Show this help
 
 Environment:
@@ -63,6 +68,59 @@ cmd_deploy() {
   npx cdk deploy Coyote --app cdk.out --profile "$PROFILE" --outputs-file cdk-outputs.json "$@"
 }
 
+# Every SNS email carries an unsubscribe link that works without logging in. Mail scanners and link
+# previews follow it and silently deactivate the subscription. Confirming through the API with
+# AuthenticateOnUnsubscribe makes that link useless: only this AWS account can unsubscribe.
+cmd_confirm_alerts() {
+  local link="${1:-}"
+  link="${link//\\/}" # zsh escapes ? = & when a URL is pasted; drop those backslashes
+  if [[ "$link" == *"unsubscribe.html"* ]]; then
+    die "that is the UNSUBSCRIBE link (do not open it). Use the link behind \"Confirm subscription\" in the email titled \"AWS Notification - Subscription Confirmation\": it contains confirmation.html, TopicArn= and Token="
+  fi
+  [[ "$link" == *"Token="* && "$link" == *"TopicArn="* ]] || die "paste the full \"Confirm subscription\" link from the AWS email, in single quotes"
+  local topic token
+  topic="$(sed -E 's/.*TopicArn=([^&]+).*/\1/' <<<"$link")"
+  token="$(sed -E 's/.*Token=([^&]+).*/\1/' <<<"$link")"
+  aws sns confirm-subscription --profile "$PROFILE" --region us-east-1 --topic-arn "$topic" --token "$token" \
+    --authenticate-on-unsubscribe true --query SubscriptionArn --output text
+  echo "Confirmed. The unsubscribe link in future emails no longer works without AWS credentials."
+}
+
+cmd_subscribe_alerts() {
+  local email="${1:-}" topic
+  [[ "$email" == *@*.* ]] || die "usage: ./coyote.sh subscribe-alerts <email>"
+  for topic in $(aws sns --profile "$PROFILE" --region us-east-1 list-topics --query "Topics[?contains(TopicArn, ':Coyote-')].TopicArn" --output text); do
+    aws sns --profile "$PROFILE" --region us-east-1 subscribe --topic-arn "$topic" --protocol email --notification-endpoint "$email" >/dev/null
+    echo "subscribed: ${topic##*:}"
+  done
+  echo
+  echo "AWS sent one confirmation email per topic. For each: copy the \"Confirm subscription\" link"
+  echo "(right-click, copy link address, do NOT click it) and run:  ./coyote.sh confirm-alerts '<link>'"
+}
+
+# A subscription confirmed by clicking the email link cannot be upgraded afterwards, so it is replaced:
+# unsubscribe through the API, subscribe the same address again, and confirm the new one with confirm-alerts.
+cmd_protect_alerts() {
+  local sns=(aws sns --profile "$PROFILE" --region us-east-1) topic sub email protected replaced=0
+  for topic in $("${sns[@]}" list-topics --query "Topics[?contains(TopicArn, ':Coyote-')].TopicArn" --output text); do
+    for sub in $("${sns[@]}" list-subscriptions-by-topic --topic-arn "$topic" --query "Subscriptions[?Protocol=='email'].SubscriptionArn" --output text); do
+      [[ "$sub" == arn:* ]] || continue # pending ones have no ARN yet
+      protected="$("${sns[@]}" get-subscription-attributes --subscription-arn "$sub" --query 'Attributes.ConfirmationWasAuthenticated' --output text)"
+      [[ "$protected" == "true" ]] && { echo "already protected: ${topic##*:}"; continue; }
+      email="$("${sns[@]}" get-subscription-attributes --subscription-arn "$sub" --query 'Attributes.Endpoint' --output text)"
+      "${sns[@]}" unsubscribe --subscription-arn "$sub"
+      "${sns[@]}" subscribe --topic-arn "$topic" --protocol email --notification-endpoint "$email" >/dev/null
+      echo "replaced: ${topic##*:}"
+      replaced=$((replaced + 1))
+    done
+  done
+  if [[ "$replaced" -gt 0 ]]; then
+    echo
+    echo "AWS sent $replaced new confirmation email(s). For each one: copy the \"Confirm subscription\" link"
+    echo "(right-click, copy link address, do NOT click it) and run:  ./coyote.sh confirm-alerts '<link>'"
+  fi
+}
+
 cmd_admin() {
   cd "$ROOT/services/generator"
   AWS_PROFILE="$PROFILE" npx tsx scripts/admin.ts "$@"
@@ -73,6 +131,9 @@ shift || true
 case "$command" in
   deploy) cmd_deploy "$@" ;;
   abuse-report | unpublish | restore | rerender-all) cmd_admin "$command" "$@" ;;
+  confirm-alerts) cmd_confirm_alerts "$@" ;;
+  protect-alerts) cmd_protect_alerts ;;
+  subscribe-alerts) cmd_subscribe_alerts "$@" ;;
   help | -h | --help) usage ;;
   *)
     usage >&2

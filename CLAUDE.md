@@ -10,14 +10,14 @@ Coyote generates single-page static websites for LatAm small businesses from a 3
 ## Commands
 ```
 npm install            # all workspaces
-npm run build          # type-check every workspace (tsc --noEmit; nothing is emitted, esbuild bundles Lambdas at synth)
+npm run build          # type-check every workspace and build web/dist (synth and the stack tests need web/dist or a webDist prop)
 npm test               # vitest run
 npx vitest run infra/test/stack.test.ts     # one file
 npx vitest run -t "domainless"              # by test name
 npm run synth          # cdk synth; must work with no AWS credentials
 npm run diff           # cdk diff against the deployed stack (--profile coyote)
 ./coyote.sh deploy     # cdk deploy Coyote (--profile coyote); writes infra/cdk-outputs.json
-npm run dev            # serve web/ on :5173 against the DEPLOYED API (becomes `astro dev` in Phase 5)
+npm run dev            # astro dev for web/ on :5173 against the DEPLOYED API. Runs in the background; stop with `npx astro dev stop` in web/
 ```
 `coyote.sh` (repo root) is the home for project commands; add new operational commands there as `cmd_<name>` functions rather than as loose scripts.
 

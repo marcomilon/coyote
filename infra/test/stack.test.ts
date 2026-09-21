@@ -1,12 +1,17 @@
 import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { CoyoteStack, type CoyoteStackProps } from '../lib/coyote-stack';
 
 const synth = (props: Partial<CoyoteStackProps> = {}) =>
   Template.fromStack(
     // Skip esbuild bundling: these tests only look at the template.
-    new CoyoteStack(new App({ context: { 'aws:cdk:bundling-stacks': [] } }), 'Coyote-test', { env: { region: 'us-east-1' }, ...props }),
+    new CoyoteStack(new App({ context: { 'aws:cdk:bundling-stacks': [] } }), 'Coyote-test', {
+      env: { region: 'us-east-1' },
+      webDist: fileURLToPath(new URL('../assets/sites-errors', import.meta.url)), // any folder: the tests do not need a frontend build
+      ...props,
+    }),
   );
 
 const cspOf = (template: Template, idPrefix: string): string => {

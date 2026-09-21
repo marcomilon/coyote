@@ -1,0 +1,14 @@
+{
+  "name": "@coyote/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../scripts/write-config.mjs && astro dev --port 5173",
+    "build": "tsc --noEmit -p tsconfig.json && astro build",
+    "preview": "astro preview --port 5173"
+  },
+  "dependencies": {
+    "astro": "^7.3.3",
+    "zod": "^4.6.5"
+  }
+}

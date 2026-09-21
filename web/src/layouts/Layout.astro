@@ -1,0 +1,52 @@
+---
+import '../styles/global.css';
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description: string;
+  /** Path of this page in the other language. */
+  alternate: string;
+  /** Loads /config.js (the API URL). Only pages that call the API need it. */
+  withConfig?: boolean;
+}
+const { lang, title, description, alternate, withConfig = false } = Astro.props;
+const s = t(lang);
+---
+
+<!doctype html>
+<html lang={s.htmlLang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="alternate" hreflang={s.otherLang.code} href={alternate} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bungee&family=Hanken+Grotesk:wght@400;600;700&family=Yellowtail&display=swap"
+    />
+    {withConfig && <script is:inline src="/config.js" />}
+  </head>
+  <body>
+    <div class="awning" aria-hidden="true"></div>
+    <header class="site-header wrap">
+      <a class="brand" href={s.paths.home}><b>Coyote</b><span>{s.brandTagline}</span></a>
+      <nav>
+        <a href={alternate} lang={s.otherLang.code}>{s.otherLang.label}</a>
+        <a class="btn small" href={s.paths.create}>{s.nav.create}</a>
+      </nav>
+    </header>
+    <main><slot /></main>
+    <footer class="site-footer wrap">
+      <span>© {s.footer.made}</span>
+      <nav>
+        <span>{s.footer.terms}</span>
+        <span>{s.footer.privacy}</span>
+      </nav>
+    </footer>
+  </body>
+</html>

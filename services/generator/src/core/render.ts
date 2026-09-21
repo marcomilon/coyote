@@ -22,7 +22,7 @@ const BASE_CSS = `
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);line-height:1.55}
-h1,h2,h3{font-family:var(--font-display);line-height:1.1;margin:0}
+h1,h2,h3{font-family:var(--font-display);font-weight:var(--font-display-weight);line-height:1.1;margin:0}
 img{max-width:100%;display:block}
 a{color:inherit}
 .coyote-footer{padding:1.5rem 1.25rem;font-size:.8rem;opacity:.7;text-align:center}
@@ -51,7 +51,7 @@ export function render(input: RenderInput): string {
   const fonts = FONT_PAIRINGS[brief.fontPairing as FontPairingId];
   if (!fonts) throw new Error(`unknown font pairing: ${brief.fontPairing}`);
 
-  const tokens = `:root{--ink:${ink};--paper:${paper};--accent:${accent};--font-display:${fonts.display};--font-body:${fonts.body}}`;
+  const tokens = `:root{--ink:${ink};--paper:${paper};--accent:${accent};--font-display:${fonts.display};--font-display-weight:${fonts.displayWeight};--font-body:${fonts.body}}`;
   const signature = content.signatureCss ? sanitizeSignatureCss(content.signatureCss) : null;
   const signatureCss = signature?.ok ? signature.css : '';
 

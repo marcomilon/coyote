@@ -49,6 +49,9 @@ cmd_deploy() {
   aws sts get-caller-identity --profile "$PROFILE" >/dev/null ||
     die "AWS profile '$PROFILE' is not working. Check 'aws sts get-caller-identity --profile $PROFILE'."
 
+  echo "Building the frontend…"
+  (cd "$ROOT" && npm run build -w web --silent)
+
   cd "$ROOT/infra"
   rm -rf cdk.out
   npx cdk synth --quiet

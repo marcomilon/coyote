@@ -22,7 +22,7 @@ section{padding:3.5rem 0}
 section h2{font-size:1.6rem;margin-bottom:1.5rem}
 .services{display:grid;gap:1.5rem 3rem;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));list-style:none;padding:0;margin:0}
 .services li{border-top:2px solid var(--ink);padding-top:.75rem}
-.services strong{display:block;font-family:var(--font-display);font-size:1.15rem}
+.services strong{display:block;font-family:var(--font-display);font-weight:var(--font-display-weight);font-size:1.15rem}
 .about p{max-width:42rem;font-size:1.05rem;margin:0}
 .visit{display:grid;gap:2rem;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))}
 .visit dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:.35rem 1.5rem}

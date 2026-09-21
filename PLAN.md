@@ -91,7 +91,7 @@ coyote/
   web/                    # Astro workspace: landing, form, "Mi sitio", reportar, terms, privacy
     src/pages/            # es at /, pt at /pt/ (Astro i18n routing)
     src/layouts/, src/components/, src/i18n/
-    src/scripts/          # plain TypeScript for the form, polling, preview, Mi sitio
+    src/scripts/          # plain TypeScript for the form, polling, preview, Mi sitio (type-checked with tsc; `astro check` does not run on TypeScript 7)
     public/config.js      # runtime API URL (written by the dev script and by BucketDeployment)
 ```
 
@@ -338,16 +338,16 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Checked on the deployed API: job reaches `DONE` in ~8 s, preview and published site serve with `script-src 'none'`; same name twice → suffixed slug; brand, guardrail, and classifier rejections → 422 with no reason (reason stored in `jobs`); at the limit → 429 with nothing stored and no model call; CORS allows the app and `localhost:5173` only
 
 ### Phase 5 — Frontend (Astro)
-- [ ] `web/` becomes an Astro workspace: layouts, es at `/` and pt at `/pt/`, one translations file; replaces the placeholder page and `scripts/dev.mjs`
-- [ ] Landing page (zero JS)
-- [ ] Form (3 questions, optional uploads step, terms acceptance); validates with the same zod schema as the API (`answers.ts`)
-- [ ] `npm run dev` = `astro dev` on :5173 → deployed API (writes `web/public/config.js` from `cdk-outputs.json`)
-- [ ] Polling/progress state, error and REJECTED states
-- [ ] Result screen: link + copy
-- [ ] Build emits external scripts only; app CSP `script-src 'self'` verified in the browser; `web/dist/` deployed via `BucketDeployment`
+- [x] `web/` is an Astro 7 workspace: one layout, es at `/` and pt at `/pt/`, one translations file (`src/i18n/strings.ts`). `scripts/write-config.mjs` replaces `scripts/dev.mjs`
+- [x] Landing page (zero JS). Look: hand-painted shop signs ("rótulos"), striped awning, order-ticket form; fonts Bungee, Yellowtail, Hanken Grotesk
+- [x] Form at `/crear` and `/pt/criar` (3 questions, site language, terms note); validates with the same zod schema as the API (`answers.ts`). The uploads step arrives with the `uploads` route
+- [x] `npm run dev` = `astro dev` on :5173 → deployed API (writes `web/public/config.js` from `cdk-outputs.json`). Astro 7 starts the server in the background; stop it with `npx astro dev stop` in `web/`
+- [x] Polling/progress state, preview with "Publicar", rejected / rate-limited / failed messages. The job ID lives in the URL hash, so a reload resumes. Checked in headless Chrome against real jobs
+- [x] Result screen: link + copy
+- [ ] Build emits external scripts only (verified: no inline scripts in `dist/`); `web/dist/` deployed via `BucketDeployment` (`coyote.sh deploy` builds it first); app CSP `script-src 'self'` verified on the deployed app *(after the next deploy)*
 
 ### Phase 5b — Magic link + preview
-- [ ] Preview iframe + "Publicar" / "Genera otra versión"; regeneration cap (`POST /jobs/{id}/publish` already exists)
+- [ ] "Genera otra versión" + regeneration cap (the preview iframe, "Publicar", and `POST /jobs/{id}/publish` already exist)
 - [ ] Token issue (hashed, fragment link), "Copiar" + "Guardar en WhatsApp"
 - [ ] "Mi sitio" page + `/me/*` routes; content patch re-renders with no Bedrock call
 - [ ] Privacy and terms pages (es/pt, Markdown); `reportar` page

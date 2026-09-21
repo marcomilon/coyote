@@ -12,13 +12,13 @@ Design and progress live in [`PLAN.md`](PLAN.md) (MVP) and [`PLAN-PHASE2.md`](PL
 | Command | What it does |
 |---|---|
 | `npm install` | Install all workspaces |
-| `npm run build` | Type-check every workspace |
+| `npm run build` | Type-check every workspace and build the frontend into `web/dist` |
 | `npm test` | Run unit tests (vitest) |
 | `npm run synth` | `cdk synth`; needs no credentials |
 | `npm run diff` | `cdk diff` against the deployed stack |
 | `./coyote.sh deploy` | Deploy the `Coyote` stack with the `coyote` profile; writes `infra/cdk-outputs.json`. `npm run deploy` is an alias |
 | `./coyote.sh help` | List the project commands |
-| `npm run dev` | Serve `web/` on http://localhost:5173 against the deployed API |
+| `npm run dev` | `astro dev` for `web/` on http://localhost:5173 against the deployed API (stop: `npx astro dev stop` in `web/`) |
 
 ## Layout
 - `infra/` — CDK app, one stack (`Coyote`)

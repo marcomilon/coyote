@@ -1,0 +1,60 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const s = t(lang);
+const h = s.home;
+const other = t(s.otherLang.code);
+const sign =
+  lang === 'es'
+    ? { top: 'Desde 1998', name: 'Panadería Luna', items: ['Pan de masa madre', 'Croissants', 'Café del Huila'], wa: 'Pide por WhatsApp', stamp: 'Abierto' }
+    : { top: 'Desde 1998', name: 'Padaria Lua', items: ['Fermentação natural', 'Croissants', 'Café especial'], wa: 'Peça pelo WhatsApp', stamp: 'Aberto' };
+---
+
+<Layout lang={lang} title={h.title} description={h.description} alternate={other.paths.home}>
+  <section class="hero wrap">
+    <div>
+      <p class="script">{h.kicker}</p>
+      <h1>{h.headline.map((line) => <span>{line}</span>)}</h1>
+      <p class="lead">{h.lead}</p>
+      <a class="btn" href={s.paths.create}>{h.cta}</a>
+      <span class="cta-note">{h.ctaNote}</span>
+    </div>
+    <div class="rotulo" aria-hidden="true">
+      <span class="stamp">{sign.stamp}</span>
+      <p class="top">{sign.top}</p>
+      <p class="name">{sign.name}</p>
+      <ul>{sign.items.map((item) => <li>{item}</li>)}</ul>
+      <span class="wa">{sign.wa}</span>
+    </div>
+  </section>
+
+  <section class="steps">
+    <div class="wrap">
+      <h2>{h.stepsTitle}</h2>
+      <ol>
+        {h.steps.map((step) => (
+          <li>
+            <span class="n">{step.n}</span>
+            <h3>{step.title}</h3>
+            <p>{step.text}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+    <div class="marquee" aria-label={h.forTitle}>
+      <div>{[...h.forList, ...h.forList].map((name) => <span>{name}</span>)}</div>
+    </div>
+  </section>
+
+  <section class="closing">
+    <div class="wrap">
+      <p>{h.closing}</p>
+      <a class="btn" href={s.paths.create}>{h.cta}</a>
+    </div>
+  </section>
+</Layout>

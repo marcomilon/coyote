@@ -4,7 +4,8 @@
   "type": "module",
   "workspaces": [
     "infra",
-    "services/*"
+    "services/*",
+    "web"
   ],
   "engines": {
     "node": ">=22"
@@ -12,7 +13,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "vitest run",
-    "dev": "node scripts/dev.mjs",
+    "dev": "npm run dev -w web",
     "synth": "npm run synth -w infra",
     "generate:local": "npm run generate:local -w services/generator --",
     "prescreen:fixtures": "npm run prescreen:fixtures -w services/generator --",

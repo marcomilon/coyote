@@ -1,0 +1,128 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const s = t(lang);
+const c = s.create;
+const other = t(s.otherLang.code);
+// The script is language-agnostic: it reads the strings it needs from here.
+const clientStrings = {
+  errors: c.errors,
+  publish: c.preview.publish,
+  publishing: c.preview.publishing,
+  copy: c.done.copy,
+  copied: c.done.copied,
+  rejected: c.rejected,
+  rateLimited: c.rateLimited,
+  failed: c.failed,
+  noApi: c.noApi,
+};
+---
+
+<Layout lang={lang} title={c.title} description={c.description} alternate={other.paths.create} withConfig>
+  <div class="create wrap" id="create" data-state="form" data-strings={JSON.stringify(clientStrings)}>
+    <section data-view="form">
+      <form class="ticket" novalidate>
+        <header>
+          <h1>{c.heading}</h1>
+          <p>{c.sub}</p>
+        </header>
+
+        <fieldset>
+          <label class="q" for="businessName"><i>1</i>{c.q1.label}</label>
+          <input type="text" id="businessName" name="businessName" maxlength="80" autocomplete="organization" placeholder={c.q1.placeholder} required />
+          <p class="error" data-error="businessName" role="alert"></p>
+        </fieldset>
+
+        <fieldset>
+          <label class="q" for="about"><i>2</i>{c.q2.label}</label>
+          <p class="hint" id="about-hint">{c.q2.hint}</p>
+          <textarea id="about" name="about" maxlength="1000" aria-describedby="about-hint" placeholder={c.q2.placeholder} required></textarea>
+          <p class="error" data-error="about" role="alert"></p>
+        </fieldset>
+
+        <fieldset>
+          <legend class="q"><i>3</i>{c.q3.label}</legend>
+          <label class="sub" for="whatsapp">{c.q3.whatsapp}</label>
+          <input type="tel" id="whatsapp" name="whatsapp" maxlength="40" autocomplete="tel" inputmode="tel" placeholder={c.q3.whatsappPlaceholder} required />
+          <p class="error" data-error="contact.whatsapp" role="alert"></p>
+          <label class="sub" for="address">{c.q3.address}</label>
+          <input type="text" id="address" name="address" maxlength="160" autocomplete="street-address" />
+          <p class="error" data-error="contact.address" role="alert"></p>
+          <div class="two">
+            <div>
+              <label class="sub" for="instagram">{c.q3.instagram}</label>
+              <input type="text" id="instagram" name="instagram" maxlength="200" placeholder="@" autocapitalize="none" />
+              <p class="error" data-error="contact.instagram" role="alert"></p>
+            </div>
+            <div>
+              <label class="sub" for="facebook">{c.q3.facebook}</label>
+              <input type="text" id="facebook" name="facebook" maxlength="200" autocapitalize="none" />
+              <p class="error" data-error="contact.facebook" role="alert"></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend class="sub">{c.siteLang}</legend>
+          <div class="langs">
+            <label><input type="radio" name="lang" value="es" checked={lang === 'es'} /><span>Español</span></label>
+            <label><input type="radio" name="lang" value="pt" checked={lang === 'pt'} /><span>Português</span></label>
+          </div>
+        </fieldset>
+
+        <div class="submit-row">
+          <button class="btn" type="submit">{c.submit}</button>
+          <p>{c.terms}</p>
+        </div>
+        <p class="error" data-error="form" role="alert"></p>
+      </form>
+    </section>
+
+    <section data-view="working" class="panel" aria-live="polite">
+      <h2>{c.working.title}</h2>
+      <div class="paint" aria-hidden="true"></div>
+      <ol class="worksteps">{c.working.steps.map((step) => <li>{step}</li>)}</ol>
+      <p class="hint">{c.working.note}</p>
+    </section>
+
+    <section data-view="preview" class="storefront">
+      <div class="bar">
+        <h2>{c.preview.title}</h2>
+        <div>
+          <a class="btn small ghost" data-preview-link target="_blank" rel="noopener">{c.preview.open}</a>
+          <button class="btn small" type="button" data-publish>{c.preview.publish}</button>
+        </div>
+      </div>
+      <div class="frame"><iframe title={c.preview.title} sandbox="" referrerpolicy="no-referrer"></iframe></div>
+    </section>
+
+    <section data-view="done" class="panel">
+      <p class="script">Coyote</p>
+      <h2>{c.done.title}</h2>
+      <div class="linkbox">
+        <a data-site-link target="_blank" rel="noopener"></a>
+        <button class="btn small blue" type="button" data-copy>{c.done.copy}</button>
+      </div>
+      <p>{c.done.share}</p>
+      <div class="actions">
+        <a class="btn" data-site-link-button target="_blank" rel="noopener">{c.done.visit}</a>
+        <a class="btn ghost" href={s.paths.create}>{c.done.again}</a>
+      </div>
+    </section>
+
+    <section data-view="message" class="panel" aria-live="assertive">
+      <h2 data-message-title></h2>
+      <p data-message-text></p>
+      <div class="actions"><a class="btn ghost" href={s.paths.create}>{c.failed.retry}</a></div>
+    </section>
+  </div>
+</Layout>
+
+<script>
+  import '../scripts/create';
+</script>

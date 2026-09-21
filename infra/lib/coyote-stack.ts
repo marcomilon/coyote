@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   CfnOutput,
@@ -37,6 +37,8 @@ export interface CoyoteStackProps extends StackProps {
   sitesDomainName?: string;
   /** Bedrock model or inference profile. Defaults to the one in services/generator/src/core/models.ts. */
   modelId?: string;
+  /** The built frontend. Defaults to web/dist (run `npm run build -w web` first). */
+  webDist?: string;
   /** Route 53 zone that holds `domainName`. Defaults to `domainName`. */
   hostedZoneName?: string;
   /** Route 53 zone that holds `sitesDomainName`. Defaults to `sitesDomainName`. */
@@ -243,9 +245,12 @@ export class CoyoteStack extends Stack {
     });
     const apiUrl = domain ? domain.urls.apiUrl : this.api.apiEndpoint;
 
+    const webDist = props.webDist ?? asset('../../web/dist');
+    if (!existsSync(webDist)) throw new Error(`${webDist} does not exist. Build the frontend first: npm run build -w web`);
     new s3deploy.BucketDeployment(this, 'AppDeployment', {
       sources: [
-        s3deploy.Source.asset(asset('../../web'), { exclude: ['config.js', 'node_modules', '.astro'] }),
+        // config.js is excluded: a local one (written for `astro dev`) must never reach the bucket.
+        s3deploy.Source.asset(webDist, { exclude: ['config.js'] }),
         s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl })};\n`),
       ],
       destinationBucket: this.appBucket,

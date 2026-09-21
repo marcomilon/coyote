@@ -344,7 +344,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] `npm run dev` = `astro dev` on :5173 → deployed API (writes `web/public/config.js` from `cdk-outputs.json`). Astro 7 starts the server in the background; stop it with `npx astro dev stop` in `web/`
 - [x] Polling/progress state, preview with "Publicar", rejected / rate-limited / failed messages. The job ID lives in the URL hash, so a reload resumes. Checked in headless Chrome against real jobs
 - [x] Result screen: link + copy
-- [ ] Build emits external scripts only (verified: no inline scripts in `dist/`); `web/dist/` deployed via `BucketDeployment` (`coyote.sh deploy` builds it first); app CSP `script-src 'self'` verified on the deployed app *(after the next deploy)*
+- [x] Build emits external scripts only; `web/dist/` deployed via `BucketDeployment` (`coyote.sh deploy` builds it first). On the live app: clean URLs work (`/crear`, `/pt/criar`), CSP is `script-src 'self'`, the create script runs and calls the API with no CSP violations
 
 ### Phase 5b — Magic link + preview
 - [ ] "Genera otra versión" + regeneration cap (the preview iframe, "Publicar", and `POST /jobs/{id}/publish` already exist)

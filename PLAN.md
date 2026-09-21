@@ -217,7 +217,7 @@ MVP uses 1 and 2. 3 is behind a flag.
 
 2. **User uploads** (optional 4th step: "Sube tu logo y hasta 3 fotos")
    - `POST /uploads` returns S3 presigned POST URLs (max 5 MB, `image/*`, key under `_uploads/{jobId}/`). The form uploads before submitting.
-   - `generate`: `sharp` resize (logo ≤ 512px, photos ≤ 1600px), strip EXIF, encode WebP, write to `/{slug}/assets/`. An uploaded logo replaces the SVG one. Photos fill the theme's hero/gallery slots.
+   - The browser resizes (logo ≤ 512 px PNG, photos ≤ 1600 px JPEG), which also strips EXIF. `generate` moderates and copies the files to `assets/`. No image library runs in the Lambdas. An uploaded logo replaces the SVG one. Photos fill the theme's hero/gallery slots.
    - Moderation: Rekognition `DetectModerationLabels` on every upload (~$0.001/image). Any explicit/violent/hate label → job `REJECTED`, uploads deleted.
    - `_uploads/` has a 1-day lifecycle rule. Themes must look good with zero photos.
 
@@ -226,7 +226,7 @@ MVP uses 1 and 2. 3 is behind a flag.
    - Available in us-east-1. Output goes through the same Rekognition check.
    - Stock APIs (Unsplash/Pexels) rejected: licensing/attribution rules and an external dependency.
 
-Infra: `s3:PutObject` presign permission on `_uploads/*` for `submit`; `rekognition:DetectModerationLabels` for `generate`; `sharp` as a Lambda layer (arm64).
+Infra: an `uploads` Lambda with `s3:PutObject` on `_uploads/*` (it signs the POST); `rekognition:DetectModerationLabels` for `generate`; bucket CORS for browser POSTs. Refused moderation categories: explicit and non-explicit nudity, violence, visually disturbing, hate symbols, drugs and tobacco, gambling. Alcohol and swimwear pass (restaurants and beachwear shops exist).
 
 ## Site ownership (magic link)
 No accounts, no Cognito. In the MVP, whoever has the link owns the site. The owner's phone (product phase 2) and verified email (phase 7) later become recovery channels.
@@ -305,7 +305,8 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Themes 1–6 as template functions: `editorial` (magazine), `cartel` (street poster), `artesanal` (handmade), `nocturno` (dark, framed), `tropical` (color blocks), `clinico` (information first). Each declares suited industries, moods, scheme, compatible font styles, and a default palette. `npm run themes:sheet` renders all of them with sample content (no model call) into `services/generator/out/themes/index.html`. Reviewed on desktop and at 390 px. Photo and logo slots come with the `uploads` route
 - [x] Variety seed (`variety.ts`): the slug seeds 3 candidate themes, each with 3 compatible font pairings; the model picks a theme and one of that theme's pairings
 - [x] `quality.ts`: `fixBrief` repairs the brief without a model call (font not in the theme's list → the theme's first candidate; palette with ink/paper contrast < 7, accent/paper < 3, or the wrong light/dark scheme → the theme's default palette). `lintContent` (banned phrases, headline > 8 words, emoji, exclamation hype) triggers one regeneration with the problems as feedback. The fallback-model step waits for Claude
-- [ ] SVG logo templates (~10) + favicon/OG rendering
+- [x] SVG logo marks (`services/generator/logos/`): 6 templates built from the business initials, picked by a hash of the site URL, in the page's colors and display font; also used as an SVG favicon. An uploaded logo replaces the mark. All six themes place the logo and the photo slots (first photo = hero image); `themes:sheet` renders each theme with and without photos
+- [ ] Later: icon-based logo templates chosen by the brief, and a 1200×630 Open Graph image (needs a rasterizer with fonts in the Lambda)
 - [ ] `scripts/contact-sheet.ts`: ~20 fixture businesses through the real model, screenshots in one grid (the offline `themes:sheet` exists; this one is for judging copy and variety, so it waits for Claude)
 
 ### Phase 2b — Content safety core
@@ -334,7 +335,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] `submit`: validate → rate limit → brand list → pre-screen → atomic slug claim → job PENDING → async invoke (`core/submit.ts`)
 - [x] `generate`: brief → content → policy → `ApplyGuardrail` → render → HTML check → S3 `_preview/` + `sites` record; `usage` stored on the job (`core/generate-job.ts`). The slop lint joins in phase 2a
 - [x] `status` (+ PENDING > 6 min ⇒ FAILED); on-failure destination releases slug; `publish` route (copies the preview to `/{slug}/`, idempotent)
-- [ ] `uploads` presign + `sharp` processing + Rekognition moderation
+- [x] `uploads`: `POST /uploads` hands out presigned POST slots with fixed names and types (`logo.png`, `photo-1..3.jpg`, ≤ 2 MB each, 20 requests/IP/day). The browser resizes before uploading (logo ≤ 512 px PNG, photos ≤ 1600 px JPEG; the re-encode strips EXIF), so the Lambdas need no `sharp`. `generate` runs Rekognition moderation on every file before any model call (a flagged or invalid image → `REJECTED`, `rejectedBy: image`), then copies the clean files to `assets/`. A regeneration reuses the previous version's images. Verified on the deployed stack with real images, a non-image, and an oversized file
 - [x] IAM: `InvokeModel` scoped to the configured model with the `GuardrailIdentifier` condition. Policy simulation: no guardrail, another guardrail, or another model → denied
 - [x] Checked on the deployed API: job reaches `DONE` in ~8 s, preview and published site serve with `script-src 'none'`; same name twice → suffixed slug; brand, guardrail, and classifier rejections → 422 with no reason (reason stored in `jobs`); at the limit → 429 with nothing stored and no model call; CORS allows the app and `localhost:5173` only
 

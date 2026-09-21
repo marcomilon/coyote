@@ -17,7 +17,7 @@ export interface Job {
   answers: Answers;
   slug?: string;
   screening?: { decision: string; category: string; confidence: number; reason: string };
-  rejectedBy?: 'brand' | 'prescreen' | 'guardrail' | 'policy';
+  rejectedBy?: 'brand' | 'prescreen' | 'guardrail' | 'policy' | 'image';
   rejectDetail?: string;
   usage: Usage[];
   previewUrl?: string;
@@ -25,6 +25,10 @@ export interface Job {
   error?: string;
   /** What generation produced. Copied to the site record only when the owner publishes. */
   result?: { content: SiteContent; brief: Brief };
+  /** Files the requester uploaded before submitting (`_uploads/<uploadId>/`). */
+  uploadId?: string;
+  /** A regeneration reuses the images of the previous version: the S3 prefix that holds its `assets/`. */
+  assetsFrom?: string;
   /** A new version for a slug that already has a job. Never frees the slug. */
   regenerate?: boolean;
   /** Seeds the theme and font candidates. Defaults to the slug; regenerations vary it. */
@@ -79,6 +83,9 @@ export interface Stores {
   updateJob(jobId: string, patch: Partial<Job>): Promise<void>;
   putPage(key: string, page: string): Promise<void>;
   copyPrefix(from: string, to: string): Promise<void>;
+  listKeys(prefix: string): Promise<string[]>;
+  /** Copies one object and sets the content type it is served with. */
+  copyObject(from: string, to: string, contentType: string): Promise<void>;
 }
 
 export const JOB_TTL_SECONDS = 90 * 24 * 60 * 60;

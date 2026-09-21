@@ -17,6 +17,10 @@ export interface ThemeInput {
   brief: Brief;
   links: SiteLinks;
   t: Strings;
+  /** The business logo: the uploaded image, or a generated SVG mark. Ready to place. */
+  logo: SafeHtml;
+  /** Uploaded photos as ready-to-place <img> elements. Often empty: a theme must look good without them. */
+  photos: SafeHtml[];
 }
 
 export interface Theme {
@@ -37,7 +41,8 @@ export interface Theme {
    */
   css: string;
   /**
-   * Everything inside <body> except the platform footer. Must include one `.signature` element
+   * Everything inside <body> except the platform footer. Must place `logo`, use `photos` when there are
+   * any (the first is the hero image), and include one `.signature` element
    * (decorative, `position: relative; overflow: hidden`) for the model's signatureCss.
    */
   body(input: ThemeInput): SafeHtml;

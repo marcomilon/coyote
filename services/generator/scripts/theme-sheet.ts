@@ -23,6 +23,15 @@ const SAMPLES: Record<string, unknown> = {
 const outDir = resolve('out/themes');
 mkdirSync(outDir, { recursive: true });
 
+// Placeholder photos so the photo slots can be judged without real uploads.
+mkdirSync(resolve(outDir, 'assets'), { recursive: true });
+['#c9a27a', '#7a9cb5', '#9bb58a'].forEach((color, i) =>
+  writeFileSync(
+    resolve(outDir, 'assets', `photo-${i + 1}.svg`),
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200"><rect width="100%" height="100%" fill="${color}"/><circle cx="1150" cy="380" r="260" fill="#fff" opacity=".25"/><path d="M0 1200 520 640l330 330 250-210 500 440z" fill="#000" opacity=".18"/></svg>`,
+  ),
+);
+
 for (const theme of Object.values(THEMES)) {
   const fontPairing = (Object.keys(FONT_PAIRINGS) as FontPairingId[]).find((id) => theme.meta.fontStyles.includes(FONT_PAIRINGS[id].style))!;
   const page = render({
@@ -36,9 +45,18 @@ for (const theme of Object.values(THEMES)) {
   const violations = checkHtml(page, { platformOrigins: ['https://example.invalid'] });
   if (violations.length > 0) throw new Error(`${theme.id} breaks the HTML policy: ${JSON.stringify(violations)}`);
   writeFileSync(resolve(outDir, `${theme.id}.html`), page);
+  const withPhotos = render({
+    theme,
+    content: SiteContent.parse({ ...(SAMPLES[theme.id] as object), media: { photos: ['assets/photo-1.svg', 'assets/photo-2.svg', 'assets/photo-3.svg'] } }),
+    brief: { theme: theme.id, palette: theme.meta.defaultPalette, fontPairing, tone: '', signatureElement: '', headline: '' },
+    siteUrl: 'https://example.invalid/site/',
+    reportUrl: 'https://example.invalid/reportar',
+    privacyUrl: 'https://example.invalid/privacidad',
+  });
+  writeFileSync(resolve(outDir, `${theme.id}-photos.html`), withPhotos);
 }
 
-const ids = Object.keys(THEMES);
+const ids = Object.keys(THEMES).flatMap((id) => [id, `${id}-photos`]);
 writeFileSync(
   resolve(outDir, 'index.html'),
   `<!doctype html><meta charset="utf-8"><title>Coyote themes</title><style>body{margin:0;background:#222;color:#eee;font:14px system-ui;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px}figure{margin:0}iframe{width:200%;height:1400px;border:0;transform:scale(.5);transform-origin:0 0;background:#fff}div{height:700px;overflow:hidden}figcaption{padding:6px 2px}</style>${ids.map((id) => `<figure><figcaption>${id}</figcaption><div><iframe src="${id}.html"></iframe></div></figure>`).join('')}`,

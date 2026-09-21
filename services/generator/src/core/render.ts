@@ -3,6 +3,7 @@ import type { SiteContent } from './content';
 import { readableOn } from './color';
 import { sanitizeSignatureCss } from './css';
 import { FONT_PAIRINGS, googleFontsUrl, type FontPairingId } from './fonts';
+import { faviconDataUri, markSvg, type MarkInput } from '../../logos';
 import { html, raw } from './html';
 import { strings } from './i18n';
 import type { SiteLinks, Theme } from './theme';
@@ -25,6 +26,9 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);line-height:1.55}
 h1,h2,h3{font-family:var(--font-display);font-weight:var(--font-display-weight);line-height:1.1;margin:0}
 img{max-width:100%;display:block}
+.mark{width:3rem;height:3rem;flex:none;object-fit:contain}
+.photos{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))}
+.photos img,.heroimg img{width:100%;height:100%;object-fit:cover;aspect-ratio:4/3}
 a{color:inherit}
 .coyote-footer{padding:1.5rem 1.25rem;font-size:.8rem;opacity:.7;text-align:center}
 .coyote-footer a{margin-left:.5rem}
@@ -56,6 +60,13 @@ export function render(input: RenderInput): string {
   const signature = content.signatureCss ? sanitizeSignatureCss(content.signatureCss) : null;
   const signatureCss = signature?.ok ? signature.css : '';
 
+  const seed = new URL(siteUrl).pathname + new URL(siteUrl).host;
+  const mark: MarkInput = { businessName: content.businessName, ink, paper, accent, onAccent: readableOn(accent, ink, paper), fontFamily: fonts.display, fontWeight: fonts.displayWeight };
+  const logo = content.media.logo
+    ? html`<img class="mark" src="${content.media.logo}" alt="${content.businessName}">`
+    : markSvg(mark, seed);
+  const photos = content.media.photos.map((src, i) => html`<img src="${src}" alt="${content.businessName}" loading="${i === 0 ? 'eager' : 'lazy'}" decoding="async">`);
+
   const page = html`<!doctype html>
 <html lang="${t.htmlLang}">
 <head>
@@ -64,6 +75,7 @@ export function render(input: RenderInput): string {
 <title>${content.title}</title>
 <meta name="description" content="${content.description}">
 <link rel="canonical" href="${siteUrl}">
+<link rel="icon" href="${content.media.logo ?? faviconDataUri(mark, seed)}">
 <meta property="og:type" content="website">
 <meta property="og:title" content="${content.title}">
 <meta property="og:description" content="${content.description}">
@@ -74,7 +86,7 @@ export function render(input: RenderInput): string {
 <style>${raw(tokens)}${raw(BASE_CSS)}${raw(theme.css)}${raw(signatureCss)}</style>
 </head>
 <body>
-${theme.body({ content, brief, links: buildLinks(content), t })}
+${theme.body({ content, brief, links: buildLinks(content), t, logo, photos })}
 <footer class="coyote-footer">${t.madeWith}<a href="${reportUrl}">${t.report}</a><a href="${privacyUrl}">${t.privacy}</a></footer>
 </body>
 </html>

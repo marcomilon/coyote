@@ -16,6 +16,7 @@ const Body = z.object({
   instagram: z.string().max(200).optional(),
   facebook: z.string().max(200).optional(),
   lang: z.string().max(5).optional(),
+  uploadId: z.string().uuid().optional(),
 });
 
 export interface SubmitDeps {
@@ -46,8 +47,11 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
   const { stores } = deps;
 
   let answers: Answers;
+  let uploadId: string | undefined;
   try {
-    answers = normalizeAnswers(Body.parse(body));
+    const parsed = Body.parse(body);
+    uploadId = parsed.uploadId;
+    answers = normalizeAnswers(parsed);
   } catch (error) {
     if (error instanceof z.ZodError) return { status: 400, fields: [...new Set(error.issues.map((i) => i.path.join('.')))] };
     throw error;
@@ -65,6 +69,7 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
     ttl: Math.floor(now / 1000) + JOB_TTL_SECONDS,
     ipHash,
     answers,
+    uploadId,
     usage: [],
   };
   const reject = async (rejectedBy: Job['rejectedBy'], rejectDetail: string): Promise<SubmitResult> => {

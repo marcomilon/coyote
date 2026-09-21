@@ -120,6 +120,8 @@ export async function regenerate(source: Job | undefined, deps: OwnerDeps): Prom
     screening: source.screening,
     usage: [],
     regenerate: true,
+    // The original uploads expire after a day, so the images come from the previous version.
+    assetsFrom: site.status === 'published' ? `${source.slug}/` : `_preview/${source.jobId}/`,
     seed: `${source.slug}:${used + 1}`,
   };
   await deps.stores.saveSite({ slug: source.slug, regenCount: used + 1, jobIds: [...new Set([...(site.jobIds ?? []), source.jobId, job.jobId])] });

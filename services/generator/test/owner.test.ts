@@ -23,7 +23,7 @@ async function published() {
   })) as CallTool;
   const base = { stores: memory.stores, urls, now: () => NOW, newId: () => `job-${++id}`, startGenerate: async (jobId: string) => void started.push(jobId) };
   const deps: OwnerDeps = { ...base, outputAllowed: async () => true };
-  const generateDeps = { stores: memory.stores, callTool, modelId: 'test', urls, outputAllowed: async () => true };
+  const generateDeps = { stores: memory.stores, callTool, modelId: 'test', urls, outputAllowed: async () => true, moderate: async (): Promise<string[]> => [] };
 
   await submit({ businessName: 'Panadería Luna', about: 'Panadería de masa madre en Chapinero, Bogotá.', whatsapp: '+57 300 123 4567' }, '1.2.3.4', { ...base, callTool, modelId: 'test', rateLimitPerDay: 3, ipSalt: 's' });
   await runGenerateJob('job-1', generateDeps);

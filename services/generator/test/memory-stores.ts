@@ -67,6 +67,10 @@ export function memoryStores() {
     async putPage(key, page) {
       objects.set(key, page);
     },
+    listKeys: async (prefix) => [...objects.keys()].filter((key) => key.startsWith(prefix)),
+    async copyObject(from, to) {
+      objects.set(to, objects.get(from) ?? '');
+    },
     async copyPrefix(from, to) {
       for (const [key, value] of [...objects]) if (key.startsWith(from)) objects.set(to + key.slice(from.length), value);
     },

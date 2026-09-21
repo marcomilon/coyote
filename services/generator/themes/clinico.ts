@@ -15,6 +15,9 @@ export const clinico: Theme = {
   },
   css: `
 .w{width:min(72rem,100% - 2.5rem);margin-inline:auto}
+.brand{display:flex;align-items:center;gap:.6rem}.brand .mark{width:1.8rem;height:1.8rem}
+.heroimg{margin:0 0 clamp(2rem,5vw,3.5rem)}.heroimg img{border-radius:.8rem;aspect-ratio:21/9}
+.photos img{border-radius:.6rem}
 .strip{background:var(--ink);color:var(--paper);font-size:.88rem}
 .strip .w{display:flex;flex-wrap:wrap;gap:.4rem 2rem;justify-content:space-between;padding:.65rem 0}
 .hero{display:grid;grid-template-columns:1.35fr 1fr;gap:clamp(2rem,5vw,4.5rem);align-items:center;padding:clamp(2.5rem,7vw,5.5rem) 0}
@@ -44,8 +47,8 @@ section{padding:clamp(2.5rem,6vw,4.5rem) 0;border-top:1px solid color-mix(in srg
 .end nav{display:flex;gap:1.4rem;font-weight:600}
 @media (max-width:50rem){.hero,.split{grid-template-columns:1fr}.checks{grid-template-columns:1fr}}
 `,
-  body: ({ content, links, t }) => html`
-<div class="strip"><div class="w"><span>${content.businessName}</span><span>${areaLine(content)}</span></div></div>
+  body: ({ content, links, t, logo, photos }) => html`
+<div class="strip"><div class="w"><span class="brand">${logo}${content.businessName}</span><span>${areaLine(content)}</span></div></div>
 <header class="w hero">
   <div><p class="name"><span class="signature" aria-hidden="true"></span>${content.businessName}</p><h1>${content.headline}</h1><p class="sub">${content.subhead}</p></div>
   <aside class="card">
@@ -56,10 +59,12 @@ section{padding:clamp(2.5rem,6vw,4.5rem) 0;border-top:1px solid color-mix(in srg
   </aside>
 </header>
 <main>
+${photos.length ? html`<div class="w"><figure class="heroimg">${photos[0]}</figure></div>` : ''}
 <section><div class="w split"><h2>${t.services}</h2>
   <ul class="checks">${content.services.map((s) => html`<li><div><strong>${s.name}</strong>${s.detail ? html`<span>${s.detail}</span>` : ''}</div></li>`)}</ul>
 </div></section>
 <section><div class="w split"><h2>${t.about}</h2><p>${content.about}</p></div></section>
+${photos.length > 1 ? html`<section><div class="w"><div class="photos">${photos.slice(1)}</div></div></section>` : ''}
 </main>
 <section class="end"><div class="w"><a class="cta" href="${links.whatsapp}">${content.ctaText}</a>
   <nav>${links.instagram ? html`<a href="${links.instagram}">Instagram</a>` : ''}${links.facebook ? html`<a href="${links.facebook}">Facebook</a>` : ''}</nav>

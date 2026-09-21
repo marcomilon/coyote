@@ -2,6 +2,7 @@
 // Validation uses the same zod schema as the API, so the two can never disagree.
 import { ZodError } from 'zod';
 import { normalizeAnswers } from '../../../services/generator/src/core/answers';
+import { uploadImages } from './upload';
 
 type State = 'form' | 'working' | 'preview' | 'done' | 'message';
 type Message = { title: string; text: string };
@@ -10,6 +11,9 @@ interface Strings {
   publish: string;
   publishing: string;
   noMore: string;
+  uploading: string;
+  uploadFailed: string;
+  submit: string;
   createPath: string;
   mySitePath: string;
   copy: string;
@@ -172,8 +176,8 @@ form.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!apiUrl) return setErrors(['noApi']);
 
-  const data = Object.fromEntries(new FormData(form)) as Record<string, string>;
-  const raw = {
+  const data = Object.fromEntries([...new FormData(form)].filter(([, value]) => typeof value === 'string')) as Record<string, string>;
+  const raw: Record<string, string | undefined> = {
     businessName: data.businessName ?? '',
     about: data.about ?? '',
     whatsapp: data.whatsapp ?? '',
@@ -183,7 +187,7 @@ form.addEventListener('submit', async (event) => {
     lang: data.lang,
   };
   try {
-    normalizeAnswers(raw);
+    normalizeAnswers(raw as never);
   } catch (error) {
     if (error instanceof ZodError) return setErrors([...new Set(error.issues.map((issue) => issue.path.join('.')))]);
     throw error;
@@ -193,6 +197,17 @@ form.addEventListener('submit', async (event) => {
   const button = form.querySelector('button[type="submit"]') as HTMLButtonElement;
   button.disabled = true;
   try {
+    const logo = (form.elements.namedItem('logo') as HTMLInputElement).files?.[0];
+    const photos = [...((form.elements.namedItem('photos') as HTMLInputElement).files ?? [])].slice(0, 3);
+    if (logo || photos.length > 0) {
+      button.textContent = strings.uploading;
+      try {
+        raw.uploadId = await uploadImages(apiUrl, logo, photos);
+      } catch {
+        button.textContent = strings.submit;
+        return setErrors(['photos']);
+      }
+    }
     const { status, body } = await api<{ jobId?: string; fields?: string[] }>('/generate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -211,9 +226,11 @@ form.addEventListener('submit', async (event) => {
     showMessage(strings.failed);
   } finally {
     button.disabled = false;
+    button.textContent = strings.submit;
   }
 });
 
 strings.errors.noApi = strings.noApi;
+strings.errors.photos = strings.uploadFailed;
 const resumed = /^#job=([0-9a-f-]{36})$/.exec(location.hash)?.[1];
 if (resumed && apiUrl) void poll(resumed);

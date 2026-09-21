@@ -16,6 +16,9 @@ export const nocturno: Theme = {
   css: `
 .w{width:min(70rem,100% - 2.5rem);margin-inline:auto}
 .lab{font-size:.74rem;letter-spacing:.3em;text-transform:uppercase;color:var(--accent);margin:0}
+.brand{display:flex;align-items:center;gap:.9rem}.brand .mark{width:2.4rem;height:2.4rem}
+.heroimg{margin:0}.heroimg img{aspect-ratio:21/9;filter:saturate(.85)}
+.photos{gap:1.5rem}
 .hero{padding:clamp(1.2rem,3vw,2rem) 0}
 .frame{border:1px solid var(--accent);outline:1px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:.45rem;margin:.45rem;padding:clamp(2.5rem,8vw,6.5rem) clamp(1.5rem,7vw,6rem);display:grid;gap:2rem}
 .frame .top{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
@@ -42,19 +45,21 @@ section{padding:clamp(3rem,8vw,6rem) 0}
 .end nav{display:flex;gap:2rem;font-size:.78rem;letter-spacing:.22em;text-transform:uppercase}
 @media (max-width:46rem){.hero h1,.signature{margin-left:0}.list,.visit{grid-template-columns:1fr}.list li:nth-child(even){translate:none}.cta{justify-self:start}.hero .sub{margin:0}}
 `,
-  body: ({ content, links, t }) => html`
+  body: ({ content, links, t, logo, photos }) => html`
 <header class="w hero"><div class="frame">
-  <div class="top"><p class="lab">${content.businessName}</p><p class="lab">${areaLine(content)}</p></div>
+  <div class="top"><p class="lab brand">${logo}${content.businessName}</p><p class="lab">${areaLine(content)}</p></div>
   <div class="signature" aria-hidden="true"></div>
   <h1>${content.headline}</h1>
   <p class="sub">${content.subhead}</p>
   <a class="cta" href="${links.whatsapp}">${content.ctaText}</a>
 </div></header>
 <main class="w">
+${photos.length ? html`<figure class="heroimg">${photos[0]}</figure>` : ''}
 <section><div class="head"><p class="lab">${t.services}</p></div>
   <ul class="list">${content.services.map((s) => html`<li><strong>${s.name}</strong>${s.detail ? html`<span>${s.detail}</span>` : ''}</li>`)}</ul>
 </section>
 <section class="about"><div class="head"><p class="lab">${t.about}</p></div><p>${content.about}</p></section>
+${photos.length > 1 ? html`<section><div class="photos">${photos.slice(1)}</div></section>` : ''}
 ${hasVisit(content) ? html`<section><div class="head"><p class="lab">${t.visit}</p></div><div class="visit">
   <address>${placeLine(content)}${links.maps ? html`<br><a href="${links.maps}">${t.map}</a>` : ''}</address>
   ${content.hours?.length ? html`<dl>${content.hours.map((h) => html`<dt>${h.days}</dt><dd>${h.time}</dd>`)}</dl>` : ''}

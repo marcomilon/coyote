@@ -118,6 +118,14 @@ export class GeneratorApi extends Construct {
     props.sitesBucket.grantPut(publish);
     generate.grantInvoke(submit);
     generate.grantInvoke(owner);
+    const uploads = fn('Uploads', 'uploads', { memorySize: 256, environment: { ...environment, IP_HASH_SALT: ipSalt } });
+    props.rateLimitTable.grantReadWriteData(uploads);
+    props.sitesBucket.grantPut(uploads, '_uploads/*'); // the presigned POST is signed with this permission
+    props.sitesBucket.grantRead(generate, '_uploads/*');
+    generate.addToRolePolicy(new iam.PolicyStatement({ actions: ['rekognition:DetectModerationLabels'], resources: ['*'] }));
+    // A regeneration copies the images of the published version.
+    props.sitesBucket.grantRead(generate);
+
     const report = fn('Report', 'report', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, ABUSE_TOPIC_ARN: props.abuseReports.topicArn } });
     props.rateLimitTable.grantReadWriteData(report);
     props.sitesTable.grantReadWriteData(report);
@@ -162,6 +170,7 @@ export class GeneratorApi extends Construct {
     route('/jobs/{id}', apigwv2.HttpMethod.GET, status);
     route('/jobs/{id}/publish', apigwv2.HttpMethod.POST, publish);
     route('/report/{slug}', apigwv2.HttpMethod.POST, report);
+    route('/uploads', apigwv2.HttpMethod.POST, uploads);
     route('/jobs/{id}/regenerate', apigwv2.HttpMethod.POST, owner);
     route('/me', apigwv2.HttpMethod.GET, owner);
     route('/me', apigwv2.HttpMethod.DELETE, owner);

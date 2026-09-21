@@ -17,6 +17,9 @@ export const tropical: Theme = {
 .w{width:min(70rem,100% - 2.5rem);margin-inline:auto}
 .hero{position:relative;overflow:hidden;background:color-mix(in srgb,var(--accent) 22%,var(--paper));padding:1.4rem 0 clamp(5rem,11vw,9rem);clip-path:polygon(0 0,100% 0,100% calc(100% - 4vw),0 100%)}
 .signature{position:absolute;overflow:hidden;right:-8vw;top:-10vw;width:clamp(16rem,46vw,38rem);aspect-ratio:1;border-radius:50%;background:var(--accent)}
+.brand{display:flex;align-items:center;gap:.7rem}.brand .mark{width:2.6rem;height:2.6rem}
+.heroimg{margin:0}.heroimg img{border-radius:2rem;border:2px solid var(--ink);aspect-ratio:16/9}
+.photos img{border-radius:1.6rem;border:2px solid var(--ink)}
 .top{position:relative;display:flex;justify-content:space-between;gap:1rem;font-weight:600;margin-bottom:clamp(2.5rem,8vw,6rem)}
 .top b{font-family:var(--font-display);font-weight:var(--font-display-weight);font-size:1.3rem}
 .hero h1{position:relative;font-size:clamp(2.6rem,8vw,6.2rem);line-height:1;max-width:11ch}
@@ -42,18 +45,20 @@ h2{font-size:clamp(1.9rem,5vw,3.2rem);margin-bottom:1.8rem}
 .end nav{display:flex;gap:1.4rem;font-weight:600}
 @media (max-width:46rem){.visit{grid-template-columns:1fr}.signature{opacity:.85}}
 `,
-  body: ({ content, links, t }) => html`
+  body: ({ content, links, t, logo, photos }) => html`
 <header class="hero"><div class="signature" aria-hidden="true"></div><div class="w">
-  <div class="top"><b>${content.businessName}</b><span>${areaLine(content)}</span></div>
+  <div class="top"><b class="brand">${logo}${content.businessName}</b><span>${areaLine(content)}</span></div>
   <h1>${content.headline}</h1>
   <p>${content.subhead}</p>
   <a class="cta" href="${links.whatsapp}">${content.ctaText}</a>
 </div></header>
 <main>
+${photos.length ? html`<section><div class="w"><figure class="heroimg">${photos[0]}</figure></div></section>` : ''}
 <section><div class="w"><h2>${t.services}</h2>
   <ul class="chips">${content.services.map((s) => html`<li><strong>${s.name}</strong>${s.detail ? html`<span>${s.detail}</span>` : ''}</li>`)}</ul>
 </div></section>
 <section class="about"><div class="w"><h2>${t.about}</h2><p>${content.about}</p></div></section>
+${photos.length > 1 ? html`<section><div class="w"><div class="photos">${photos.slice(1)}</div></div></section>` : ''}
 ${hasVisit(content) ? html`<section><div class="w"><h2>${t.visit}</h2><div class="visit">
   <div><address>${placeLine(content)}</address>${links.maps ? html`<p><a href="${links.maps}">${t.map}</a></p>` : ''}</div>
   ${content.hours?.length ? html`<div><dl>${content.hours.map((h) => html`<dt>${h.days}</dt><dd>${h.time}</dd>`)}</dl></div>` : ''}

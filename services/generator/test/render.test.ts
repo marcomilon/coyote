@@ -47,7 +47,7 @@ describe('render', () => {
     expect(hrefs.filter((h) => h.startsWith('https://wa.me/')).every((h) => h.startsWith('https://wa.me/573001234567?text='))).toBe(true);
     expect(hrefs).toContain('https://instagram.com/panaderia.luna');
     const allowed = /^https:\/\/(wa\.me|instagram\.com|facebook\.com|maps\.google\.com|fonts\.googleapis\.com|fonts\.gstatic\.com|sites\.test|app\.test)(\/|$)/;
-    expect(hrefs.filter((h) => !allowed.test(h))).toEqual([]);
+    expect(hrefs.filter((h) => !allowed.test(h) && !h.startsWith('data:image/svg+xml,'))).toEqual([]); // the favicon is a data: URI
   });
 
   it('always has the platform footer, meta tags, and the page language', () => {

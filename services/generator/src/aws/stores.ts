@@ -211,6 +211,24 @@ export function createStores(config: StoreConfig): Stores {
       );
     },
 
+    async listKeys(prefix) {
+      const page = await s3.send(new ListObjectsV2Command({ Bucket: config.sitesBucket, Prefix: prefix, MaxKeys: 50 }));
+      return (page.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []));
+    },
+
+    async copyObject(from, to, contentType) {
+      await s3.send(
+        new CopyObjectCommand({
+          Bucket: config.sitesBucket,
+          CopySource: encodeURI(`${config.sitesBucket}/${from}`),
+          Key: to,
+          ContentType: contentType,
+          CacheControl: 'public, max-age=86400',
+          MetadataDirective: 'REPLACE',
+        }),
+      );
+    },
+
     async copyPrefix(from, to) {
       let token: string | undefined;
       do {

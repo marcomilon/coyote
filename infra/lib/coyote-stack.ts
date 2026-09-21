@@ -87,6 +87,9 @@ export class CoyoteStack extends Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       versioned: true,
+      // Browsers upload photos straight to the bucket with a presigned POST, which is the credential.
+      // Domainless mode cannot name the app origin here without a dependency cycle, so any origin may POST.
+      cors: [{ allowedMethods: [s3.HttpMethods.POST], allowedOrigins: domain ? [domain.urls.appUrl, LOCAL_DEV_ORIGIN] : ['*'], allowedHeaders: ['*'], maxAge: 3600 }],
       removalPolicy,
       autoDeleteObjects: true,
       lifecycleRules: [

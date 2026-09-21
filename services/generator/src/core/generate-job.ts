@@ -5,6 +5,7 @@ import type { Stores } from './jobs';
 import { generateSite } from './pipeline';
 import { checkHtml, PolicyRejection } from './policy';
 import { render } from './render';
+import { processUploads, type Media } from './uploads';
 import type { Urls } from './urls';
 
 export interface GenerateJobDeps {
@@ -14,6 +15,8 @@ export interface GenerateJobDeps {
   urls: Urls;
   /** Output guardrail on the visible text. Resolves to true when it may be published. */
   outputAllowed(text: string): Promise<boolean>;
+  /** Image moderation. Resolves to the labels that make an image unacceptable. */
+  moderate(key: string): Promise<string[]>;
 }
 
 export const previewKey = (jobId: string) => `_preview/${jobId}/index.html`;
@@ -42,7 +45,25 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
   let tokensOut = 0;
 
   try {
-    const { brief, content, usage } = await generateSite(job.answers, { ...deps, slug: job.seed ?? slug });
+    // Images first: moderation costs a tenth of a cent, generation costs twenty times more.
+    let media: Media = { photos: [] };
+    if (job.uploadId) {
+      const processed = await processUploads(job.uploadId, `_preview/${jobId}/`, deps);
+      if (!processed.ok) {
+        if (!job.regenerate) await stores.releaseSlug(slug, jobId);
+        await stores.updateJob(jobId, { status: 'REJECTED', rejectedBy: 'image', rejectDetail: processed.reason.slice(0, 300) });
+        return { outcome: 'REJECTED', tokensIn, tokensOut };
+      }
+      media = processed.media;
+    } else if (job.assetsFrom) {
+      await stores.copyPrefix(`${job.assetsFrom}assets/`, `_preview/${jobId}/assets/`);
+      const kept = (await stores.listKeys(`_preview/${jobId}/assets/`)).map((key) => key.slice(`_preview/${jobId}/`.length)).sort();
+      media = { logo: kept.find((k) => k.startsWith('assets/logo')), photos: kept.filter((k) => k.startsWith('assets/photo')) };
+    }
+
+    const generated = await generateSite(job.answers, { ...deps, slug: job.seed ?? slug });
+    const { brief, usage } = generated;
+    const content = { ...generated.content, media };
     const allUsage = [...job.usage, ...usage];
     tokensIn = usage.reduce((n, u) => n + u.inputTokens, 0);
     tokensOut = usage.reduce((n, u) => n + u.outputTokens, 0);

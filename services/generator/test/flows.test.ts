@@ -46,7 +46,7 @@ function setup(options: { classify?: 'allow' | 'reject'; about?: string } = {}) 
     now: () => 1_800_000_000_000,
     newId: () => `job-${++id}`,
   };
-  const generateDeps = { stores: memory.stores, callTool, modelId: 'test', urls, outputAllowed: async () => true };
+  const generateDeps = { stores: memory.stores, callTool, modelId: 'test', urls, outputAllowed: async () => true, moderate: async (): Promise<string[]> => [] };
   return { ...memory, calls, started, deps, generateDeps };
 }
 

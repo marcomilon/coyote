@@ -15,7 +15,9 @@ export const editorial: Theme = {
   },
   css: `
 .w{width:min(74rem,100% - 2.5rem);margin-inline:auto}
-.mast{display:flex;justify-content:space-between;gap:1rem;padding:1.4rem 0;border-bottom:1px solid var(--ink);font-size:.78rem;letter-spacing:.16em;text-transform:uppercase}
+.brand{display:flex;align-items:center;gap:.8rem}.brand .mark{width:2.2rem;height:2.2rem}
+.heroimg{margin:0 0 clamp(2.5rem,6vw,4.5rem)}.heroimg img{aspect-ratio:21/9}
+.mast{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.4rem 0;border-bottom:1px solid var(--ink);font-size:.78rem;letter-spacing:.16em;text-transform:uppercase}
 .hero{display:grid;grid-template-columns:repeat(12,1fr);gap:1.5rem;padding:clamp(3rem,9vw,7rem) 0 clamp(3rem,7vw,5rem)}
 .hero h1{grid-column:1/11;font-size:clamp(2.7rem,8.4vw,7rem);line-height:.98;letter-spacing:-.02em}
 .hero .side{grid-column:8/13;margin-top:1.5rem;padding-left:1.4rem;border-left:1px solid var(--ink)}
@@ -43,18 +45,20 @@ section{border-top:1px solid var(--ink);padding:clamp(2.5rem,6vw,4.5rem) 0}
 .end nav{display:flex;gap:1.5rem;font-size:.85rem;letter-spacing:.12em;text-transform:uppercase}
 @media (max-width:48rem){.hero h1,.hero .side,.signature,.about .label,.about p:not(.label){grid-column:1/-1}.hero .side{border:0;padding:0}.index{columns:1}.visit{grid-template-columns:1fr}}
 `,
-  body: ({ content, links, t }) => html`
-<header class="w mast"><span>${content.businessName}</span><span>${areaLine(content)}</span></header>
+  body: ({ content, links, t, logo, photos }) => html`
+<header class="w mast"><span class="brand">${logo}${content.businessName}</span><span>${areaLine(content)}</span></header>
 <div class="w hero">
   <h1>${content.headline}</h1>
   <div class="signature" aria-hidden="true"></div>
   <div class="side"><p>${content.subhead}</p><a class="cta" href="${links.whatsapp}">${content.ctaText}</a></div>
 </div>
 <main class="w">
+${photos.length ? html`<figure class="heroimg">${photos[0]}</figure>` : ''}
 <section><p class="label">${t.services}</p>
   <ol class="index">${content.services.map((s, i) => html`<li><i>${twoDigits(i + 1)}</i><div><strong>${s.name}</strong>${s.detail ? html`<span>${s.detail}</span>` : ''}</div></li>`)}</ol>
 </section>
 <section class="about"><p class="label">${t.about}</p><p>${content.about}</p></section>
+${photos.length > 1 ? html`<section><div class="photos">${photos.slice(1)}</div></section>` : ''}
 ${hasVisit(content) ? html`<section><p class="label">${t.visit}</p><div class="visit">
   <address>${placeLine(content)}${links.maps ? html`<br><a href="${links.maps}">${t.map}</a>` : ''}</address>
   ${content.hours?.length ? html`<table>${content.hours.map((h) => html`<tr><td>${h.days}</td><td>${h.time}</td></tr>`)}</table>` : ''}

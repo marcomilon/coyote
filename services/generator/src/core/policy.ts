@@ -138,6 +138,7 @@ const isRelative = (url: string) => /^(?![a-z][a-z0-9+.-]*:|\/\/)/i.test(url) &&
 
 function urlAllowed(url: string, kind: 'link' | 'resource', platformOrigins: string[]): boolean {
   if (url.startsWith('#') || isRelative(url)) return true;
+  if (kind === 'resource' && url.startsWith('data:image/svg+xml,')) return true; // the generated favicon
   if (kind === 'link' && /^(tel|mailto):/i.test(url)) return true;
   let parsed: URL;
   try {

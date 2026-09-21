@@ -206,3 +206,6 @@ input:focus, textarea:focus { outline: 3px solid var(--amarillo); outline-offset
 .legal h2 { font-size: 1.3rem; margin: 2.2rem 0 .7rem; }
 .legal p, .legal ul { margin: 0 0 1rem; }
 .legal li { margin-bottom: .4rem; }
+
+input[type='file'] { width: 100%; font: inherit; font-size: .9rem; padding: .6rem; border: 2px dashed var(--ink); border-radius: .4rem; background: var(--paper); }
+input[type='file']::file-selector-button { font: 400 .8rem/1 var(--display); background: var(--ink); color: var(--paper); border: 0; border-radius: .3rem; padding: .5rem .7rem; margin-right: .7rem; cursor: pointer; }

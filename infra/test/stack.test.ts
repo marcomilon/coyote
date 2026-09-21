@@ -80,7 +80,7 @@ describe('CoyoteStack, domainless', () => {
   });
 
   it('exposes the routes', () => {
-    for (const routeKey of ['POST /generate', 'GET /jobs/{id}', 'POST /jobs/{id}/publish', 'POST /jobs/{id}/regenerate', 'GET /me', 'DELETE /me', 'POST /me/content', 'POST /me/unpublish', 'POST /report/{slug}']) {
+    for (const routeKey of ['POST /generate', 'GET /jobs/{id}', 'POST /jobs/{id}/publish', 'POST /jobs/{id}/regenerate', 'GET /me', 'DELETE /me', 'POST /me/content', 'POST /me/unpublish', 'POST /report/{slug}', 'POST /uploads']) {
       template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: routeKey });
     }
   });

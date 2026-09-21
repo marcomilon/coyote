@@ -14,6 +14,9 @@ const clientStrings = {
   errors: c.errors,
   publish: c.preview.publish,
   noMore: c.preview.noMore,
+  uploading: c.photos.uploading,
+  uploadFailed: c.photos.failed,
+  submit: c.submit,
   createPath: s.paths.create,
   mySitePath: s.paths.mySite,
   publishing: c.preview.publishing,
@@ -68,6 +71,16 @@ const clientStrings = {
               <p class="error" data-error="contact.facebook" role="alert"></p>
             </div>
           </div>
+        </fieldset>
+
+        <fieldset>
+          <legend class="q"><i>+</i>{c.photos.label}</legend>
+          <p class="hint">{c.photos.hint}</p>
+          <div class="two">
+            <div><label class="sub" for="logo">{c.photos.logo}</label><input type="file" id="logo" name="logo" accept="image/*" /></div>
+            <div><label class="sub" for="photos">{c.photos.pics}</label><input type="file" id="photos" name="photos" accept="image/*" multiple /></div>
+          </div>
+          <p class="error" data-error="photos" role="alert"></p>
         </fieldset>
 
         <fieldset>

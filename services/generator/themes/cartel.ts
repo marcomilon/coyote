@@ -15,6 +15,9 @@ export const cartel: Theme = {
   },
   css: `
 .w{width:min(76rem,100% - 2rem);margin-inline:auto}
+.brand{display:flex;align-items:center;gap:.7rem}.brand .mark{width:2.4rem;height:2.4rem}
+.heroimg{margin:0;border-bottom:6px solid var(--ink)}.heroimg img{aspect-ratio:21/9}
+.photos{gap:0;border:6px solid var(--ink)}
 .hero{background:var(--accent);color:var(--on-accent);border-bottom:6px solid var(--ink);padding:1.2rem 0 clamp(2.5rem,7vw,5rem);position:relative;overflow:hidden}
 .top{display:flex;justify-content:space-between;gap:1rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:.85rem;margin-bottom:clamp(2rem,6vw,4.5rem)}
 .hero h1{font-size:clamp(3rem,11.5vw,9.5rem);line-height:.88;text-transform:uppercase;letter-spacing:-.01em;max-width:12ch}
@@ -43,9 +46,9 @@ h2{font-size:clamp(2rem,6vw,4.2rem);text-transform:uppercase;line-height:.9;marg
 .bar nav{display:flex;gap:1.5rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
 @media (max-width:48rem){.sticker{position:static;display:inline-block;margin-top:2rem}.inv .w,.visit{grid-template-columns:1fr}.visit>div+div{border-left:0;border-top:6px solid var(--ink)}}
 `,
-  body: ({ content, links, t }) => html`
+  body: ({ content, links, t, logo, photos }) => html`
 <header class="hero"><div class="w">
-  <div class="top"><span>${content.businessName}</span><span>${areaLine(content)}</span></div>
+  <div class="top"><span class="brand">${logo}${content.businessName}</span><span>${areaLine(content)}</span></div>
   <div class="signature" aria-hidden="true"></div>
   <h1>${content.headline}</h1>
   <p>${content.subhead}</p>
@@ -53,10 +56,12 @@ h2{font-size:clamp(2rem,6vw,4.2rem);text-transform:uppercase;line-height:.9;marg
   <div class="sticker" aria-hidden="true">${content.businessName}</div>
 </div></header>
 <main>
+${photos.length ? html`<figure class="heroimg">${photos[0]}</figure>` : ''}
 <section><div class="w"><h2>${t.services}</h2>
   <ol class="rows">${content.services.map((s, i) => html`<li><i>${twoDigits(i + 1)}</i><div><strong>${s.name}</strong>${s.detail ? html`<span>${s.detail}</span>` : ''}</div></li>`)}</ol>
 </div></section>
 <section class="inv"><div class="w"><h2>${t.about}</h2><p>${content.about}</p></div></section>
+${photos.length > 1 ? html`<section><div class="w"><div class="photos">${photos.slice(1)}</div></div></section>` : ''}
 ${hasVisit(content) ? html`<section><div class="w"><h2>${t.visit}</h2><div class="visit">
   <div><address>${placeLine(content)}</address>${links.maps ? html`<p><a href="${links.maps}">${t.map}</a></p>` : ''}</div>
   <div>${content.hours?.length ? html`<dl>${content.hours.map((h) => html`<dt>${h.days}</dt><dd>${h.time}</dd>`)}</dl>` : ''}</div>

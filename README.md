@@ -14,12 +14,13 @@ Design and progress live in [`PLAN.md`](PLAN.md) (MVP) and [`PLAN-PHASE2.md`](PL
 | `npm install` | Install all workspaces |
 | `npm run build` | Type-check every workspace |
 | `npm test` | Run unit tests (vitest) |
-| `npm run synth` | `cdk synth` for `dev`; needs no credentials |
-| `npm run diff:dev` | `cdk diff` against the deployed `dev` stack |
-| `npm run deploy:dev` | Deploy `dev` with `--profile coyote`; writes `infra/cdk-outputs.dev.json` |
-| `npm run dev` | Serve `web/` on http://localhost:5173 against the deployed `dev` API |
+| `npm run synth` | `cdk synth`; needs no credentials |
+| `npm run diff` | `cdk diff` against the deployed stack |
+| `./coyote.sh deploy` | Deploy the `Coyote` stack with the `coyote` profile; writes `infra/cdk-outputs.json`. `npm run deploy` is an alias |
+| `./coyote.sh help` | List the project commands |
+| `npm run dev` | Serve `web/` on http://localhost:5173 against the deployed API |
 
 ## Layout
-- `infra/` — CDK app (`Coyote-dev`, `Coyote-prod`)
+- `infra/` — CDK app, one stack (`Coyote`)
 - `services/generator/` — Lambda code, themes, local scripts
 - `web/` — our frontend (Astro from Phase 5): landing, form, "Mi sitio", legal pages

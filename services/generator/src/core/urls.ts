@@ -14,7 +14,6 @@ export type UrlConfig =
     }
   | {
       mode: 'domain';
-      envName: 'dev' | 'prod';
       domainName: string;
       sitesDomainName: string;
     };
@@ -39,13 +38,12 @@ const trimSlash = (url: string) => url.replace(/\/+$/, '');
 
 export function createUrls(config: UrlConfig): Urls {
   if (config.mode === 'domain') {
-    const dev = config.envName === 'dev';
-    const sitesHost = dev ? `dev.${config.sitesDomainName}` : config.sitesDomainName;
+    const sitesHost = config.sitesDomainName;
     const siteOrigin = (slug: string) => `https://${slug}.${sitesHost}`;
     const previewOrigin = `https://preview.${sitesHost}`;
     return withAppUrls({
-      appUrl: `https://${dev ? 'app-dev' : 'app'}.${config.domainName}`,
-      apiUrl: `https://${dev ? 'api-dev' : 'api'}.${config.domainName}`,
+      appUrl: `https://app.${config.domainName}`,
+      apiUrl: `https://api.${config.domainName}`,
       siteOrigin,
       previewOrigin,
       siteUrl: (slug) => `${siteOrigin(slug)}/`,
@@ -76,14 +74,9 @@ function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'reportUrl' | 'privacyUrl'>
 
 /** Lambdas and scripts read the mode from env vars set by the CDK stack. */
 export function urlConfigFromEnv(env: Record<string, string | undefined>): UrlConfig {
-  const { DOMAIN_NAME, SITES_DOMAIN_NAME, ENV_NAME, APP_BASE_URL, API_BASE_URL, SITES_BASE_URL } = env;
+  const { DOMAIN_NAME, SITES_DOMAIN_NAME, APP_BASE_URL, API_BASE_URL, SITES_BASE_URL } = env;
   if (DOMAIN_NAME && SITES_DOMAIN_NAME) {
-    return {
-      mode: 'domain',
-      envName: ENV_NAME === 'prod' ? 'prod' : 'dev',
-      domainName: DOMAIN_NAME,
-      sitesDomainName: SITES_DOMAIN_NAME,
-    };
+    return { mode: 'domain', domainName: DOMAIN_NAME, sitesDomainName: SITES_DOMAIN_NAME };
   }
   if (APP_BASE_URL && API_BASE_URL && SITES_BASE_URL) {
     return { mode: 'domainless', appBaseUrl: APP_BASE_URL, apiBaseUrl: API_BASE_URL, sitesBaseUrl: SITES_BASE_URL };

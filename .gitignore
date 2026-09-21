@@ -2,7 +2,7 @@ node_modules/
 cdk.out/
 out/
 *.tsbuildinfo
-infra/cdk-outputs.*.json
+infra/cdk-outputs*.json
 web/config.js
 web/public/config.js
 web/dist/

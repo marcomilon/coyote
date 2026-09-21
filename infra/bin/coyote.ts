@@ -1,20 +1,17 @@
 import { App } from 'aws-cdk-lib';
-import { CoyoteStack, type EnvName } from '../lib/coyote-stack';
+import { CoyoteStack } from '../lib/coyote-stack';
 
 const app = new App();
-
-const envName = app.node.tryGetContext('env') as string;
-if (envName !== 'dev' && envName !== 'prod') {
-  throw new Error(`context "env" must be "dev" or "prod", got "${envName}"`);
-}
 
 // Both unset = domainless mode (see PLAN.md "Domains").
 const domainName = app.node.tryGetContext('domainName') as string | undefined;
 const sitesDomainName = app.node.tryGetContext('sitesDomainName') as string | undefined;
 
-new CoyoteStack(app, `Coyote-${envName}`, {
-  env: { region: 'us-east-1' },
-  envName: envName satisfies EnvName,
+new CoyoteStack(app, 'Coyote', {
+  // Domain mode looks up hosted zones, which needs a concrete account.
+  env: { region: 'us-east-1', account: domainName ? process.env.CDK_DEFAULT_ACCOUNT : undefined },
   domainName,
   sitesDomainName,
+  hostedZoneName: app.node.tryGetContext('hostedZoneName') as string | undefined,
+  sitesHostedZoneName: app.node.tryGetContext('sitesHostedZoneName') as string | undefined,
 });

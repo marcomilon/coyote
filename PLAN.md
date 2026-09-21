@@ -8,6 +8,7 @@ A public web form asks 3 questions. A model writes the content, a renderer build
 - **Hosting**: one subdomain per site (wildcard cert + CloudFront rewrite).
 - **Auth**: none. Rate-limited.
 - **Stack**: TypeScript everywhere (CDK, Lambda, Astro frontend).
+- **One environment.** A single stack, `Coyote`, in this AWS account, which is the development sandbox: `localhost:5173` may call the API, `cdk destroy` deletes all data, and the rate limit is relaxed. No dev/prod split in code, names, or URLs. If a real production environment is ever needed, it is a **separate AWS account** running the same stack (`COYOTE_AWS_PROFILE=<prod profile> ./coyote.sh deploy`). Real users only ever go on that account; nothing in this one is meant to survive.
 - **IaC**: every AWS resource is defined in CDK. Manual one-offs are marked 👤 in the phases.
 - **Region**: us-east-1 for everything. One stack, no cross-region references. Bedrock, Route 53 Domains, CloudFront SaaS Manager, and ACM for CloudFront are native there. CloudFront edges in São Paulo, Bogotá, Santiago, Buenos Aires, and Mexico City serve the sites. Only the API round-trip (~100 ms per submission) is slower than sa-east-1.
 - **The model writes structured content, never HTML.** A deterministic renderer fills the theme. Edits ("Mi sitio", WhatsApp Flow B) patch the stored content and re-render with no model call.
@@ -25,6 +26,8 @@ Domains arrive in stages. The `cdk.json` context (`domainName`, `sitesDomainName
 2. **`consideralohecho.com`** (internal testing, when the user decides): `domainName = consideralohecho.com`, `sitesDomainName = sites.consideralohecho.com`, so sites live at `{slug}.sites.consideralohecho.com`. Sharing one registrable domain is fine only while nothing is public.
 3. **Final domains** (before public launch): separate registrable domain for sites, PSL submission.
 
+Context keys: `domainName`, `sitesDomainName`, and optionally `hostedZoneName` / `sitesHostedZoneName` when a name lives in a parent zone (stage 2: `sitesDomainName = sites.consideralohecho.com`, `sitesHostedZoneName = consideralohecho.com`).
+
 Switching stage = change the context, redeploy, run `npm run rerender-all`. To keep it that simple:
 - No domain literal in code, themes, or tests.
 - `urls.ts` (`siteUrl(slug)`, `previewUrl(jobId)`, `appUrl`, `apiUrl`) is the only code that knows the mode. CSP, CORS, and Origin checks derive from it.
@@ -33,7 +36,7 @@ Switching stage = change the context, redeploy, run `npm run rerender-all`. To k
 ## AWS profile
 The project uses the AWS CLI profile **`coyote`** (account `887799775985`, IAM user `coyote`, default region us-east-1).
 - Root npm scripts pass `--profile coyote` to `cdk`. Local scripts set `AWS_PROFILE=coyote`. Never fall back to the default profile.
-- CI uses a GitHub OIDC role, not the profile.
+- CI only builds, tests, and synths; it never touches AWS.
 - Without the profile: no `cdk deploy`, no Bedrock calls from `local-generate`. `cdk synth` still works in domainless mode (no `fromLookup`).
 
 ## Architecture
@@ -93,15 +96,15 @@ coyote/
 ```
 
 ## Local development
-`npm run dev` runs `astro dev` for `web/` on `http://localhost:5173` and calls the real API Gateway of the deployed `dev` stack. Only the frontend runs locally; Lambdas, DynamoDB, S3, Bedrock, and CloudFront are the deployed ones.
-- The browser needs no AWS credentials (the API is public HTTPS). The `coyote` profile is only needed to deploy: `npm run deploy:dev` → `cdk deploy --profile coyote -c env=dev`.
-- The API base URL is the only environment-specific value in the frontend. It is loaded at runtime from `config.js`, not baked in at build time, because CDK only knows the URL after deploying. `npm run dev` writes `web/public/config.js` from `infra/cdk-outputs.dev.json` (written by `cdk deploy --outputs-file`, gitignored). `BucketDeployment` writes the deployed value. A `?api=` query parameter overrides it.
-- `dev` stack only (CDK context `env=dev`), never `prod`:
-  - API CORS also allows `http://localhost:5173`.
+`npm run dev` runs `astro dev` for `web/` on `http://localhost:5173` and calls the real API Gateway of the deployed stack. Only the frontend runs locally; Lambdas, DynamoDB, S3, Bedrock, and CloudFront are the deployed ones.
+- The browser needs no AWS credentials (the API is public HTTPS). The `coyote` profile is only needed to deploy: `./coyote.sh deploy` → `cdk deploy Coyote --profile coyote`. `coyote.sh` in the repo root holds the project commands (`deploy` today; `unpublish`, `rerender-all`, `abuse:report` later).
+- The API base URL is the only environment-specific value in the frontend. It is loaded at runtime from `config.js`, not baked in at build time, because CDK only knows the URL after deploying. `npm run dev` writes `web/public/config.js` from `infra/cdk-outputs.json` (written by `cdk deploy --outputs-file`, gitignored). `BucketDeployment` writes the deployed value. A `?api=` query parameter overrides it.
+- Because this account is the sandbox, the stack allows local development:
+  - API CORS allows `http://localhost:5173` next to the app origin.
   - Sites CSP `frame-ancestors` also lists `http://localhost:5173`, or the preview iframe is blocked.
-  - Per-IP rate limit raised (e.g. 100/day).
-- Previews and sites open at their real `dev` URLs (domainless: `https://<sites-dist>.cloudfront.net/_preview/{jobId}/` and `/{slug}/`; with a domain: `preview.dev.<sites-domain>`, `{slug}.dev.<sites-domain>`). CSP, rewrite, and guardrails are the real ones. Each test generation costs ~$0.02.
-- The form UI (phase 5) therefore needs phases 3–4 deployed to `dev`. Before that, only static layout and copy work on `web/` is possible.
+  - Per-IP rate limit raised (e.g. 100/day) so testing does not hit 429.
+- Previews and sites open at their real URLs (domainless: `https://<sites-dist>.cloudfront.net/_preview/{jobId}/` and `/{slug}/`; with a domain: `preview.<sites-domain>`, `{slug}.<sites-domain>`). CSP, rewrite, and guardrails are the real ones. Each test generation costs ~$0.02.
+- The form UI (phase 5) therefore needs phases 3–4 deployed. Before that, only static layout and copy work on `web/` is possible.
 
 ## The 3 questions (form)
 1. **Nombre del negocio** — business name.
@@ -132,11 +135,12 @@ A language selector (es / pt) sets the site's language. Owner email is not colle
 Blocks adult, phishing, scams, hate, and illegal content. Four independent layers; a request must pass all.
 
 1. **Bedrock Guardrail, input and output**
-   - Input: `guardrailConfig` on every Converse call (`trace: "disabled"` in prod).
+   - Input: `guardrailConfig` on every Converse call (`trace: "disabled"`).
    - Output: generated text sits in a `toolUse` block, which Converse guardrails may not evaluate (verify). So `generate` calls `ApplyGuardrail` on the visible text extracted from the content JSON. Cheaper and fewer false positives than scanning HTML/CSS.
    - Standard tier. The Classic tier covers only en/fr/es; Portuguese needs Standard, which requires cross-region guardrail inference (verify).
    - Content filters: sexual and hate at HIGH. Violence, insults, misconduct start at MEDIUM and are tuned on the fixtures (HIGH rejects butchers, martial-arts gyms, tattoo studios). Prompt-attack filter on input.
    - Denied topics, each defined narrowly with es/pt/en examples: adult/escort services; all gambling (casinos, betting, lottery agencies and kiosks, bingo), licensed or not; businesses whose main activity is selling alcohol, tobacco, or vapes (bars, liquor stores, vape shops; a restaurant that also serves drinks is allowed); pawn shops and money exchange offices; illegal drugs and weapons; financial fraud, crypto "investment" schemes, pyramid/MLM; impersonation of banks, governments, delivery companies, or well-known brands; credential/payment collection; pirated content; political campaign material and proselytising content (not a church or community centre's address-and-schedule page); anything sexualising minors.
+   - The "main activity" rules (bars, liquor stores, tobacco/vape, pawn shops, money exchange) are enforced only by the pre-screen classifier. As guardrail topics they would also block a restaurant that mentions beer.
    - Word filter: small managed profanity list + custom terms (es/pt slurs, scam phrases like "verifica tu cuenta", "atualize seus dados").
    - Blocked → fixed message, job `REJECTED` with a generic reason. Never show guardrail details to the user.
    - IAM: the generator role's `bedrock:InvokeModel` has a `bedrock:GuardrailIdentifier` condition, so a call without the guardrail is denied.
@@ -241,8 +245,8 @@ No accounts, no Cognito. In the MVP, whoever has the link owns the site. The own
 - IPs stored only as salted hashes. No cookies or analytics on generated sites.
 
 ## Environments and delivery
-- **Environments**: `dev` and `prod` stacks via CDK context, separate budgets (and SES identities later). Domainless: each stack has its own CloudFront/API URLs. With domains: `app-dev.<domain>` + `api-dev.<domain>` + `*.dev.<sites-domain>` / `app.<domain>` + `api.<domain>` + `*.<sites-domain>`.
-- **CI/CD**: GitHub Actions with an OIDC role (no long-lived keys). PR → `npm test` + `cdk synth` + `cdk diff`. Merge to `main` → deploy `dev`. Manual approval → deploy `prod`.
+- **Environment**: one stack (see Decisions). With domains: `app.<domain>`, `api.<domain>`, `*.<sites-domain>`.
+- **CI**: GitHub Actions on every PR: `npm run build` + `npm test` + `cdk synth`. Deploys are manual (`./coyote.sh deploy`); automated deploys with an OIDC role can come with the production account.
 - **Runbook** in `README`: deploy, rotate SSM secrets, unpublish a site, check Bedrock quota. No prepaid vendors to top up.
 - **Flags**: hero images, critic pass, digest mode.
 
@@ -258,7 +262,8 @@ No accounts, no Cognito. In the MVP, whoever has the link owns the site. The own
   - apex → redirect to `https://app.<domain>`
   - domainless (`Host` is the `cloudfront.net` name): no host rewrite; `/{slug}` → 301 `/{slug}/`; `/{slug}/` → `/{slug}/index.html`; same for `/_preview/{jobId}/`; `/` → redirect to the app.
   - ResponseHeadersPolicy: `default-src 'none'; script-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action https://api.<domain>; frame-ancestors https://app.<domain>`. HSTS.
-  - Domainless CSP: `form-action`/`frame-ancestors` use the API and app distribution URLs. The app CSP uses `frame-src https://*.cloudfront.net` to avoid a circular reference between the two distributions.
+  - Domainless CSP: `frame-ancestors` uses the app distribution URL. Where an exact URL would make the distributions and the API depend on each other in a circle, a wildcard is used instead: sites `form-action https://*.execute-api.<region>.amazonaws.com`, app `connect-src` the same, app `frame-src https://*.cloudfront.net`. Domain mode uses exact origins everywhere.
+  - Cache: default TTL 5 min, so an owner's edit shows up without an invalidation. Missing pages (S3 answers 403) return a small 404 page from `_errors/`.
 - `BucketDeployment` of `web/dist/` (the Astro build) plus the generated `config.js` → `appBucket`.
 - DynamoDB, MVP: `jobs` (pk `jobId`, TTL 90 d; answers, safety outcomes, usage), `sites` (pk `slug`; content, brief, theme, ownerWhatsApp, tokenHash, status, createdAt), `ratelimit` (pk `ip`, TTL), `blocklist` (pk `slug`). Post-MVP: `messages`, `suppression`, `wa_*` (`PLAN-PHASE2.md`), `domains`, GSI on `sites.ownerPhone`.
 - `CfnGuardrail` + `CfnGuardrailVersion` (Standard tier; filters, denied topics, word filters as above). ID/version passed to Lambdas via env.
@@ -278,7 +283,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 
 ### Phase 1 — Scaffold
 - [x] npm workspaces, `tsconfig.base.json`, vitest, `.gitignore`, `README`
-- [x] Root scripts (`build`, `test`, `dev`, `synth`, `diff:dev`, `deploy:dev`); deploy/diff use `--profile coyote`
+- [x] Root scripts (`build`, `test`, `dev`, `synth`, `diff`, `deploy`) and `coyote.sh`; deploy/diff use `--profile coyote`
 - [x] CDK app skeleton; `cdk synth` passes without credentials
 - [ ] GitHub Actions: PR → `npm run build` + `npm test` + `cdk synth` (workflow written; ticks when it passes on a first PR)
 
@@ -303,7 +308,8 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 ### Phase 2b — Content safety core
 - [x] `policy.ts` content checks + rendered-HTML invariants + tests; wired into `pipeline.ts` (throws `PolicyRejection`) and `generate:local`
 - [x] Pre-screen classifier (`prescreen.ts`, `classify` tool); runs first in `generate:local`
-- [ ] Guardrail definition (Standard tier, filters, narrow denied topics, word lists)
+- [x] Guardrail definition (`infra/lib/guardrail.ts`: Standard tier, filters, 7 denied topics, scam word list, pinned version)
+- [ ] After the first deploy: run the prescreen fixtures through `ApplyGuardrail`, tune filter strengths and topics
 - [ ] Verify the three unconfirmed items (guardrail tiers for pt, `toolUse` evaluation, cache minimum)
 - [x] Fixture set (44 good/borderline/bad cases, `test/fixtures/prescreen-cases.ts`); `npm run prescreen:fixtures` runs them on the real model and compares with the hardcoded list. Nova 2 Lite: 44/44 correct; the model catches 21/21 bad cases, the list alone 4/21
 - [ ] Re-run the fixtures on Haiku 4.5 and tune `REJECT_MIN_CONFIDENCE` (waits for Claude access)
@@ -311,15 +317,15 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [ ] 👤 Still to confirm: church or community-centre info page = allowed; restaurant or café that also serves drinks = allowed
 
 ### Phase 3 — Infra (domainless mode)
-- [ ] `sitesBucket` + `appBucket` with lifecycle rules
-- [ ] CloudFront #2 (sites) + `cf-rewrite.js` (both modes, unit-tested) + strict CSP
-- [ ] CloudFront #1 (app) + CSP
-- [ ] DynamoDB `jobs`, `sites`, `ratelimit`, `blocklist`
-- [ ] `CfnGuardrail` + version
-- [ ] HTTP API skeleton, CORS (app origin + `localhost:5173` in dev), throttling
-- [ ] Domain-mode resources conditional; synth-tested with dummy context
-- [ ] `cdk deploy --profile coyote` (dev) succeeds; outputs file written
-- [ ] Check: hand-uploaded `test/index.html` serves at `<sites-dist>/test/` with `script-src 'none'`; app distribution runs JS
+- [x] `sitesBucket` + `appBucket` with lifecycle rules (direct S3 access returns 403)
+- [x] CloudFront #2 (sites) + `cf-rewrite.js` (both modes, unit-tested) + strict CSP
+- [x] CloudFront #1 (app) + CSP + clean-URL function
+- [x] DynamoDB `jobs`, `sites`, `ratelimit`, `blocklist`
+- [x] `CfnGuardrail` + version (Standard tier deployed; smoke test: es/pt scam, casino, escort blocked; bakery, butcher, restaurant with beer pass)
+- [x] HTTP API skeleton, CORS (app origin + `localhost:5173`), throttling. The CORS config is deployed; an API with no routes answers 404 to preflights, so the preflight itself is checked in phase 4
+- [x] Domain-mode resources conditional; synth-tested with dummy context
+- [x] `./coyote.sh deploy` succeeds; `infra/cdk-outputs.json` written
+- [x] Check: hand-uploaded `test/index.html` serves at `<sites-dist>/test/` with `script-src 'none'`; `/test` → 301 `/test/`; preview path serves; `_uploads/` and unknown sites → 404 page; root → app; app serves `config.js` with the real API URL
 
 ### Phase 4 — API + handlers + rate limit
 - [ ] `submit`: rate limit → pre-screen → atomic slug claim → job PENDING → async invoke
@@ -327,13 +333,13 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [ ] `status` (+ PENDING > 6 min ⇒ FAILED); on-failure destination releases slug
 - [ ] `uploads` presign + `sharp` processing + Rekognition moderation
 - [ ] IAM: `InvokeModel` with `GuardrailIdentifier` condition; call without guardrail is denied
-- [ ] Check with `curl`: job reaches `DONE`; 4th request/day → 429 with no Bedrock invocation
+- [ ] Check with `curl`: job reaches `DONE`; 4th request/day → 429 with no Bedrock invocation; CORS preflight allows the app and `localhost:5173`, refuses other origins
 
 ### Phase 5 — Frontend (Astro)
 - [ ] `web/` becomes an Astro workspace: layouts, es at `/` and pt at `/pt/`, one translations file; replaces the placeholder page and `scripts/dev.mjs`
 - [ ] Landing page (zero JS)
 - [ ] Form (3 questions, optional uploads step, terms acceptance); validates with the same zod schema as the API (`answers.ts`)
-- [ ] `npm run dev` = `astro dev` on :5173 → deployed dev API (writes `web/public/config.js` from `cdk-outputs.dev.json`)
+- [ ] `npm run dev` = `astro dev` on :5173 → deployed API (writes `web/public/config.js` from `cdk-outputs.json`)
 - [ ] Polling/progress state, error and REJECTED states
 - [ ] Result screen: link + copy
 - [ ] Build emits external scripts only; app CSP `script-src 'self'` verified in the browser; `web/dist/` deployed via `BucketDeployment`
@@ -350,11 +356,11 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [ ] EMF metrics from the Lambdas; alarms (publish rate, `RateLimited`, `REJECTED` rate, tokens/day, API 4xx/5xx/throttles, generate errors) → SNS `alerts` email; dashboard
 - [ ] AWS Budget + Cost Anomaly Detection
 - [ ] `npm run abuse:report` (top IP hashes, decisions, newest slugs from `jobs`)
-- [ ] CI/CD: merge → deploy `dev`; manual approval → `prod` (OIDC role)
 - [ ] `README` runbook
-- [ ] Full "Verification" section passes on `dev`
+- [ ] Full "Verification" section passes on the deployed stack
 - [ ] 👤 *(optional, when stable)* switch to `consideralohecho.com`; first real deploy of domain mode; subdomain rewrite verified
 - [ ] 👤 Choose the two final domain names: the brand domain (`<domain>`) and the separate one for user sites (`<sites-domain>`). Choosing the brand also unblocks Meta Business verification (`PLAN-PHASE2.md` step 1), which takes weeks, so decide early if WhatsApp is next
+- [ ] 👤 **Before any public launch: create the production AWS account** and its CLI profile. Add one production switch to the stack then (retain data + point-in-time recovery, no `localhost` in CORS or `frame-ancestors`, rate limit 3/IP/day) and deploy the same code there. Never launch publicly from the sandbox account: moving live sites, records, and a domain to another account later is real migration work
 - [ ] 👤 **Launch gate**: final domains set, redeploy, re-render, final `<sites-domain>` submitted to the PSL (never the testing domain)
 
 **MVP line.** Product phase 2 (`PLAN-PHASE2.md`) runs here: WhatsApp creation, contact form, leads on WhatsApp.
@@ -442,7 +448,7 @@ Every site is free at `{slug}.<sites-domain>`. A `.com` is a paid upsell after p
 ## Risks / open items
 - **`coyote` profile and Bedrock model access** not set up yet. They block phase 3 onward and the Bedrock part of phase 2. Phases 1, 2a, and the pure-function parts of 2/2b can proceed.
 - **Domains**: path-based sites mean the subdomain rewrite, wildcard cert, and reserved-subdomain rules are only unit/synth-tested until a domain is set. Final domains are undecided; the sites one must be a separate registrable domain bought before launch. A domain switch changes every site URL and magic link, so do it before real users exist. PSL acceptance takes weeks and is not blocking.
-- **To verify at build time**: Guardrails Classic vs Standard language coverage for Portuguese; whether Converse guardrails evaluate `toolUse` content (`ApplyGuardrail` is called either way); Haiku 4.5 prompt-cache minimum prefix.
+- **To verify at build time**: whether Converse guardrails evaluate `toolUse` content (`ApplyGuardrail` is called either way); Haiku 4.5 prompt-cache minimum prefix. Verified: the Standard-tier guardrail deploys with the `us.guardrail.v1:0` cross-region profile and blocks Portuguese text.
 - **Guardrail false positives** on legitimate businesses (butcher, gym, tattoo studio, church). The borderline fixtures in phase 2b are the control. The church line and the restaurant-that-serves-drinks line are product policy calls to confirm.
 - **Abuse**: anonymous generation costs money per call. The rate limit is the MVP control; add WAF + CAPTCHA if abused.
 - **Lost magic link** has no recovery until WhatsApp re-issue ships.

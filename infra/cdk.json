@@ -12,7 +12,6 @@
     ]
   },
   "context": {
-    "env": "dev",
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
     "@aws-cdk/core:newStyleStackSynthesis": true,
     "@aws-cdk/core:stackRelativeExports": true,

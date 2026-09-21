@@ -14,10 +14,10 @@
     "test": "vitest run",
     "dev": "node scripts/dev.mjs",
     "synth": "npm run synth -w infra",
-    "diff:dev": "npm run diff:dev -w infra",
-    "deploy:dev": "npm run deploy:dev -w infra",
     "generate:local": "npm run generate:local -w services/generator --",
-    "prescreen:fixtures": "npm run prescreen:fixtures -w services/generator --"
+    "prescreen:fixtures": "npm run prescreen:fixtures -w services/generator --",
+    "diff": "npm run diff -w infra",
+    "deploy": "./coyote.sh deploy"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

@@ -24,25 +24,20 @@ describe('domainless mode', () => {
 });
 
 describe('domain mode', () => {
-  it('prod uses subdomains', () => {
-    const urls = createUrls({ mode: 'domain', envName: 'prod', domainName: 'brand.test', sitesDomainName: 'sites.test' });
+  it('uses subdomains', () => {
+    const urls = createUrls({ mode: 'domain', domainName: 'brand.test', sitesDomainName: 'sites.test' });
     expect(urls.appUrl).toBe('https://app.brand.test');
     expect(urls.apiUrl).toBe('https://api.brand.test');
     expect(urls.siteUrl('luna')).toBe('https://luna.sites.test/');
     expect(urls.previewUrl('job1')).toBe('https://preview.sites.test/job1/');
-  });
-
-  it('dev is namespaced', () => {
-    const urls = createUrls({ mode: 'domain', envName: 'dev', domainName: 'brand.test', sitesDomainName: 'sites.test' });
-    expect(urls.appUrl).toBe('https://app-dev.brand.test');
-    expect(urls.siteOrigin('luna')).toBe('https://luna.dev.sites.test');
-    expect(urls.previewOrigin).toBe('https://preview.dev.sites.test');
+    expect(urls.siteOrigin('luna')).toBe('https://luna.sites.test');
+    expect(urls.previewOrigin).toBe('https://preview.sites.test');
   });
 });
 
 describe('urlConfigFromEnv', () => {
   it('prefers domain mode when both domains are set', () => {
-    expect(urlConfigFromEnv({ DOMAIN_NAME: 'brand.test', SITES_DOMAIN_NAME: 'sites.test', ENV_NAME: 'prod' }).mode).toBe('domain');
+    expect(urlConfigFromEnv({ DOMAIN_NAME: 'brand.test', SITES_DOMAIN_NAME: 'sites.test' }).mode).toBe('domain');
   });
   it('falls back to domainless', () => {
     expect(urlConfigFromEnv({ APP_BASE_URL: 'https://a.test', API_BASE_URL: 'https://b.test', SITES_BASE_URL: 'https://c.test' }).mode).toBe('domainless');

@@ -1,4 +1,4 @@
-// Serves web/ on http://localhost:5173 against the deployed dev API (see PLAN.md "Local development").
+// Serves web/ on http://localhost:5173 against the deployed API (see PLAN.md "Local development").
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -7,13 +7,13 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const webDir = join(root, 'web');
-const outputsFile = join(root, 'infra', 'cdk-outputs.dev.json');
+const outputsFile = join(root, 'infra', 'cdk-outputs.json');
 const port = Number(process.env.PORT ?? 5173);
 
 function readApiUrl() {
   if (!existsSync(outputsFile)) return null;
   const outputs = JSON.parse(readFileSync(outputsFile, 'utf8'));
-  return outputs['Coyote-dev']?.ApiUrl ?? null;
+  return outputs.Coyote?.ApiUrl ?? null;
 }
 
 const apiUrl = readApiUrl();
@@ -22,7 +22,7 @@ writeFileSync(
   `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl }, null, 2)};\n`,
 );
 if (!apiUrl) {
-  console.warn('No ApiUrl in infra/cdk-outputs.dev.json. Run "npm run deploy:dev" first; API calls will fail.');
+  console.warn('No ApiUrl in infra/cdk-outputs.json. Run "./coyote.sh deploy" first; API calls will fail.');
 }
 
 const mime = {

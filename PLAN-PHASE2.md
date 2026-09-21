@@ -111,7 +111,7 @@ Tick a box (`[x]`) only when the item is done and its check passed. 👤 = needs
 ### Step 2 — Inbound plumbing
 - [ ] Event destination → SNS `wa-events` → `wa-inbound`
 - [ ] Idempotency on message id (`wa_messages`)
-- [ ] `wa-send` module; echo bot in `dev`
+- [ ] `wa-send` module; echo bot on the test number
 - [ ] 24 h window tracking + read receipts/typing indicators verified
 
 ### Step 3 — Flow A (create a site)
@@ -147,16 +147,16 @@ Tick a box (`[x]`) only when the item is done and its check passed. 👤 = needs
 
 ### Step 8 — Hand-off
 - [ ] `PLAN.md` phase 7 (SES email fallback) plugged into the `contact` Lambda
-- [ ] Full "Verification" section passes on the dev number
+- [ ] Full "Verification" section passes on the test number
 
 ## Verification
-- Dev number, end to end: create a site in Spanish and in Portuguese by chat only, with a voice note and two photos. Preview buttons work. Published URL and magic link arrive. "Enviarme mi enlace" re-issues the link.
+- Test number, end to end: create a site in Spanish and in Portuguese by chat only, with a voice note and two photos. Preview buttons work. Published URL and magic link arrive. "Enviarme mi enlace" re-issues the link.
 - A duplicate SNS delivery of the same message id causes no duplicate step or message.
 - A contact-form submission reaches the owner on WhatsApp within 10 s. A message with newlines and URLs arrives flattened and de-linked. An email-only `contacto` shows as text; a phone shows as a `wa.me` link. BAJA stops delivery, and the message still appears in "Mi sitio".
 - A site with no delivery channel renders no form.
 - "cambia el horario a 9-6" updates the page with no generation call. An owner with two sites is asked which one. An unpatchable request gets the Mi sitio link.
 - Bad-actor fixtures (adult, phishing) via WhatsApp end `REJECTED` with nothing in S3.
-- CloudWatch shows AWS + Meta fees per message. A 100-conversation dev run stays under $5.
+- CloudWatch shows AWS + Meta fees per message. A 100-conversation test run stays under $5.
 
 ## Risks
 - **Meta verification and approvals** can take weeks; start once the brand is chosen. Verification and the display name are tied to the real business name and website, so they need the final brand domain, not `consideralohecho.com`. Deciding the brand unblocks this step.

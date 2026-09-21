@@ -36,7 +36,8 @@ const SCAM_PHRASES = [
   'actualiza tus datos', 'actualice sus datos', 'atualize seus dados', 'confirme seus dados', 'confirma tus datos',
   'cuenta suspendida', 'cuenta bloqueada', 'cuenta sera suspendida', 'conta suspensa', 'conta bloqueada',
   'acceso restringido', 'desbloquea tu cuenta', 'desbloqueie sua conta',
-  'has sido seleccionado', 'voce foi selecionado', 'reclama tu premio', 'resgate seu premio',
+  'has sido seleccionado', 'voce foi selecionado', 'reclama tu premio', 'resgate seu premio', 'para tu premio', 'ganaste un premio',
+  'has ganado', 'voce ganhou', 'seu premio',
   'inicia sesion para continuar', 'faca login para continuar',
 ];
 
@@ -58,9 +59,17 @@ function luhn(digits: string): boolean {
   return sum % 10 === 0;
 }
 
+/** A phone number written out in the copy: 8+ digits, with the usual separators. Hours and prices are shorter. */
+const PHONE_LIKE = /[+(]*\d[\d\s().-]{6,}\d/g;
+
 /** Removes URLs from one text. Rendered text is never a link, but a visible URL can still send people somewhere. */
 export function scrubText(text: string): string {
-  return text.replace(URL_LIKE, '').replace(/\s{2,}/g, ' ').replace(/\s+([.,;:])/g, '$1').trim();
+  return text
+    .replace(URL_LIKE, '')
+    // The page adds the owner's verified contact details itself. A number inside the copy is either a model
+    // slip or an injected one, so it goes.
+    .replace(PHONE_LIKE, (match) => (match.replace(/\D/g, '').length >= 8 ? '' : match))
+    .replace(/\s{2,}/g, ' ').replace(/\s+([.,;:])/g, '$1').trim();
 }
 
 /** Removes URLs from every text field the model wrote. Run before validation. */

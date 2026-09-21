@@ -30,6 +30,7 @@ describe('checkContent', () => {
     ['courier in the title', { title: 'DHL — rastrea tu paquete' }, 'brand'],
     ['scam phrase (es)', { subhead: 'Verifica tu cuenta para evitar el bloqueo.' }, 'scam-phrase'],
     ['scam phrase (pt)', { about: 'Atualize seus dados hoje mesmo.' }, 'scam-phrase'],
+    ['prize bait', { headline: 'Llama ya para tu premio' }, 'scam-phrase'],
     ['credential request', { about: 'Envíanos tu contraseña y el código de verificación por WhatsApp.' }, 'credential-request'],
     ['credential request (pt)', { about: 'Digite sua senha para continuar.' }, 'credential-request'],
     ['card number', { about: 'Paga a la tarjeta 4111 1111 1111 1111.' }, 'card-number'],
@@ -49,6 +50,9 @@ describe('scrubText', () => {
     ['Entra a www.banco-seguro.com.mx/acceso.', 'Entra a'],
     ['Pedidos en panaderialuna.com', 'Pedidos en'],
     ['Abrimos de 7 a 19. Pan desde $3.500', 'Abrimos de 7 a 19. Pan desde $3.500'],
+    ['Llama ya al +57 311 999 0000 hoy', 'Llama ya al hoy'],
+    ['Escríbenos al (55) 1234-5678.', 'Escríbenos al.'],
+    ['Desde 1998, más de 20.000 clientes y 3 sedes', 'Desde 1998, más de 20.000 clientes y 3 sedes'],
   ])('%s', (input, output) => expect(scrubText(input)).toBe(output));
 
   it('scrubs every model text field', () => {

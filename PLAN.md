@@ -359,7 +359,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Report endpoint (`POST /report/{slug}`) + `reportar` / `pt/denunciar` pages + SNS email per report. One visitor counts once per site; 3 distinct visitors quarantine it (pages moved to `_quarantine/`, status `quarantined`, the owner cannot republish it)
 - [x] `./coyote.sh unpublish <slug>` (delete + blocklist), `restore <slug>`, `rerender-all`
 - [x] EMF metrics from the Lambdas (namespace `Coyote`); 9 alarms → SNS `alerts`; dashboard `Coyote` (`infra/lib/monitoring.ts`)
-- [ ] 👤 Alert emails: `export COYOTE_ALERT_EMAIL=…`, deploy, confirm the two AWS subscription emails. Until then the alarms email nobody
+- [x] 👤 Alert emails: `export COYOTE_ALERT_EMAIL=…`, deploy, confirm the two AWS subscription emails (both confirmed). Keep the variable set on every later deploy, or the subscriptions are removed
 - [x] AWS Budget ($20/month, alerts at 80% and 100%) + Cost Anomaly Detection (≥ $5)
 - [x] `./coyote.sh abuse-report` (requests per hashed IP, rejections by layer, newest published sites)
 - [x] `README` runbook

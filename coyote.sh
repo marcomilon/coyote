@@ -13,6 +13,8 @@ Usage: ./coyote.sh <command> [args]
 
 Commands:
   deploy [cdk args]              Deploy the stack. Writes infra/cdk-outputs.json
+  destroy                        Delete the whole stack and ALL its data (sites, records, alerts). For when you
+                                 stop working on the project: the idle cost drops to zero. deploy brings it back
   abuse-report                   Requests, rejections, and new sites of the last 24 h
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
@@ -66,6 +68,37 @@ cmd_deploy() {
   npx cdk synth --quiet
   check_bundles
   npx cdk deploy Coyote --app cdk.out --profile "$PROFILE" --outputs-file cdk-outputs.json "$@"
+}
+
+cmd_destroy() {
+  local account sites
+  account="$(aws sts get-caller-identity --profile "$PROFILE" --query Account --output text)" ||
+    die "AWS profile '$PROFILE' is not working."
+  aws cloudformation describe-stacks --profile "$PROFILE" --region us-east-1 --stack-name Coyote >/dev/null 2>&1 ||
+    die "there is no Coyote stack in account $account. Nothing to destroy."
+  sites="$(aws dynamodb scan --profile "$PROFILE" --region us-east-1 --select COUNT \
+    --table-name "$(aws cloudformation describe-stacks --profile "$PROFILE" --region us-east-1 --stack-name Coyote \
+      --query "Stacks[0].Outputs[?OutputKey=='SitesTableName'].OutputValue" --output text)" \
+    --filter-expression "#s = :p" --expression-attribute-names '{"#s":"status"}' \
+    --expression-attribute-values '{":p":{"S":"published"}}' --query Count --output text 2>/dev/null || echo "?")"
+
+  cat <<WARNING
+This deletes the Coyote stack in AWS account $account (profile: $PROFILE):
+  - every generated site ($sites published now), all records, uploads, and previews
+  - the API, both CloudFront distributions, the guardrail, alarms, dashboard, and budget
+  - the alert email subscriptions (after the next deploy: ./coyote.sh subscribe-alerts <email>)
+Nothing can be recovered. A later ./coyote.sh deploy creates a fresh stack with NEW URLs.
+The CDK bootstrap resources stay (they cost nothing).
+WARNING
+  read -r -p "Type 'destroy $account' to continue: " answer
+  [[ "$answer" == "destroy $account" ]] || die "cancelled"
+
+  # Synth needs a frontend build to exist, even though nothing is uploaded.
+  [[ -d "$ROOT/web/dist" ]] || (cd "$ROOT" && npm run build -w web --silent)
+  cd "$ROOT/infra"
+  npx cdk destroy Coyote --profile "$PROFILE" --force
+  rm -f cdk-outputs.json "$ROOT/web/public/config.js"
+  echo "Done. CloudFront distributions can take a few more minutes to disappear from the console."
 }
 
 # Every SNS email carries an unsubscribe link that works without logging in. Mail scanners and link
@@ -130,6 +163,7 @@ command="${1:-help}"
 shift || true
 case "$command" in
   deploy) cmd_deploy "$@" ;;
+  destroy) cmd_destroy ;;
   abuse-report | unpublish | restore | rerender-all) cmd_admin "$command" "$@" ;;
   confirm-alerts) cmd_confirm_alerts "$@" ;;
   protect-alerts) cmd_protect_alerts ;;

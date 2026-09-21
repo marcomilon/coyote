@@ -40,7 +40,7 @@ All commands use the AWS profile `coyote` (override with `COYOTE_AWS_PROFILE`).
 | Re-render every site | `./coyote.sh rerender-all`, after changing a theme, the renderer, or the domains. |
 | Change the model | Edit `DEFAULT_MODEL_ID` in `services/generator/src/core/models.ts` (or deploy with `-c modelId=…`), then deploy. The IAM permission follows it. |
 | Check Bedrock quota or throttling | Service Quotas → Amazon Bedrock, and the `GenerationFailures` alarm. |
-| Remove everything | `cd infra && npx cdk destroy --profile coyote`. This account is a sandbox: all data is deleted. |
+| Stop paying anything while away | `./coyote.sh destroy`. Deletes the whole stack and all its data after you type `destroy <account id>`. `./coyote.sh deploy` brings back a fresh stack with new URLs; then run `subscribe-alerts` again. |
 
 ### Alarms
 `PublishRate` (>20 sites/h), `RateLimited` (>20/h), `Rejected` (>15/h, someone probing), `GenerationFailures` (>3/h), `Quarantined` (any), `TokensPerDay` (>2M), `GenerateErrors`, `Api5xx`, `Api4xx`. Plus an AWS Budget of $20/month (alerts at 80% and 100%) and Cost Anomaly Detection (≥ $5 impact).

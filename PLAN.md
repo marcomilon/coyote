@@ -97,7 +97,7 @@ coyote/
 
 ## Local development
 `npm run dev` runs `astro dev` for `web/` on `http://localhost:5173` and calls the real API Gateway of the deployed stack. Only the frontend runs locally; Lambdas, DynamoDB, S3, Bedrock, and CloudFront are the deployed ones.
-- The browser needs no AWS credentials (the API is public HTTPS). The `coyote` profile is only needed to deploy: `./coyote.sh deploy` → `cdk deploy Coyote --profile coyote`. `coyote.sh` in the repo root holds the project commands (`deploy` today; `unpublish`, `rerender-all`, `abuse:report` later).
+- The browser needs no AWS credentials (the API is public HTTPS). The `coyote` profile is only needed to deploy: `./coyote.sh deploy` → `cdk deploy Coyote --profile coyote`. `coyote.sh` in the repo root holds the project commands: `deploy`, `destroy` (deletes the stack and all data, for when the project is parked), the admin commands, and the alert-subscription commands.
 - The API base URL is the only environment-specific value in the frontend. It is loaded at runtime from `config.js`, not baked in at build time, because CDK only knows the URL after deploying. `npm run dev` writes `web/public/config.js` from `infra/cdk-outputs.json` (written by `cdk deploy --outputs-file`, gitignored). `BucketDeployment` writes the deployed value. A `?api=` query parameter overrides it.
 - Because this account is the sandbox, the stack allows local development:
   - API CORS allows `http://localhost:5173` next to the app origin.

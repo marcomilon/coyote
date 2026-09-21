@@ -17,6 +17,7 @@ npx vitest run -t "domainless"              # by test name
 npm run synth          # cdk synth; must work with no AWS credentials
 npm run diff           # cdk diff against the deployed stack (--profile coyote)
 ./coyote.sh deploy     # builds web, checks Lambda bundles, cdk deploy (--profile coyote); writes infra/cdk-outputs.json
+./coyote.sh destroy    # deletes the stack and ALL data (asks for typed confirmation). Never run it without the user asking
 ./coyote.sh abuse-report | unpublish <slug> | restore <slug> | rerender-all   # admin commands (see README runbook)
 npm run dev            # astro dev for web/ on :5173 against the DEPLOYED API. Runs in the background; stop with `npx astro dev stop` in web/
 ```

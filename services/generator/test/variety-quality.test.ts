@@ -25,7 +25,8 @@ describe('candidatesFor', () => {
     const counts = new Map<string, number>();
     for (let i = 0; i < 300; i++) for (const c of candidatesFor(`negocio-${i}`)) counts.set(c.theme.id, (counts.get(c.theme.id) ?? 0) + 1);
     expect(counts.size).toBe(Object.keys(THEMES).length);
-    for (const count of counts.values()) expect(count).toBeGreaterThan(100); // 150 expected each
+    const expected = (300 * 3) / counts.size;
+    for (const count of counts.values()) expect(count).toBeGreaterThan(expected * 0.66);
   });
 });
 

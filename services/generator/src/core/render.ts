@@ -23,8 +23,11 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 const BASE_CSS = `
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
+html,body{overflow-x:clip}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-body);line-height:1.55}
-h1,h2,h3{font-family:var(--font-display);font-weight:var(--font-display-weight);line-height:1.1;margin:0}
+h1,h2,h3{font-family:var(--font-display);font-weight:var(--font-display-weight);line-height:1.1;margin:0;overflow-wrap:anywhere;min-width:0;text-wrap:balance}
+a:focus-visible{outline:2px solid currentColor;outline-offset:3px}
+dd,td{font-variant-numeric:tabular-nums}
 img{max-width:100%;display:block}
 .mark{width:3rem;height:3rem;flex:none;object-fit:contain}
 .photos{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))}

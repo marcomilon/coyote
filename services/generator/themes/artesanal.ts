@@ -19,13 +19,13 @@ export const artesanal: Theme = {
 .w{width:min(66rem,100% - 2.5rem);margin-inline:auto}
 .wave{height:12px;background:var(--accent);-webkit-mask:${WAVE} repeat-x center/48px 12px;mask:${WAVE} repeat-x center/48px 12px}
 .hero{padding:clamp(2.5rem,7vw,5rem) 0 clamp(3rem,7vw,5rem);display:grid;grid-template-columns:auto 1fr;gap:2rem clamp(2rem,6vw,5rem);align-items:start}
-.tag{border:2px solid var(--ink);border-radius:1.2rem;padding:1.3rem 1.2rem;text-align:center;max-width:12rem;rotate:-3deg;background:color-mix(in srgb,var(--accent) 14%,var(--paper))}
+.tag{position:relative;border:2px solid var(--ink);border-radius:1.2rem;padding:1.3rem 1.2rem;text-align:center;max-width:12rem;rotate:-3deg;background:color-mix(in srgb,var(--accent) 14%,var(--paper))}
 .tag .mark{margin:0 auto .7rem;width:3.4rem;height:3.4rem}
 .heroimg{margin:0 0 1rem}.heroimg img{border-radius:2rem 2rem 2rem .4rem;aspect-ratio:16/9}
 .photos img{border-radius:1.4rem}
 .tag b{display:block;font-family:var(--font-display);font-weight:var(--font-display-weight);font-size:1.5rem;line-height:1.05}
 .tag span{display:block;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;margin-top:.6rem}
-.signature{position:relative;overflow:hidden;width:3.2rem;height:3.2rem;border-radius:50%;background:var(--accent);margin:0 auto .9rem}
+.signature{position:absolute;overflow:hidden;top:-1rem;right:-1rem;width:2.4rem;height:2.4rem;border-radius:50%;background:var(--accent);border:2px solid var(--ink)}
 .hero h1{font-size:clamp(2.4rem,6.4vw,4.8rem);line-height:1.04}
 .hero p{font-size:1.18rem;max-width:34rem;margin:1.4rem 0 2rem}
 .cta{display:inline-block;background:var(--accent);color:var(--on-accent);border-radius:999px;padding:1rem 1.8rem;font-weight:600;font-size:1.05rem;text-decoration:none;box-shadow:0 .35rem 0 color-mix(in srgb,var(--accent) 55%,var(--ink))}

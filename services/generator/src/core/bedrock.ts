@@ -1,6 +1,8 @@
-import { ApplyGuardrailCommand, BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
+import { ApplyGuardrailCommand, BedrockRuntimeClient, ConverseCommand, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import type { DocumentType } from '@smithy/types';
 import { z } from 'zod';
+import type { GenerateImage } from './images';
+import { IMAGE_MODEL_REGION } from './models';
 
 export interface Usage {
   step: string;
@@ -117,4 +119,24 @@ export async function outputAllowed(text: string, guardrail = guardrailFromEnv()
     }),
   );
   return response.action !== 'GUARDRAIL_INTERVENED';
+}
+
+let imageClient: BedrockRuntimeClient | undefined;
+
+/** Stability text-to-image through Bedrock (us-west-2). Resolves to undefined when the model filtered the request. */
+export function stabilityImage(modelId: string): GenerateImage {
+  return async (prompt, negativePrompt) => {
+    imageClient ??= new BedrockRuntimeClient({ region: IMAGE_MODEL_REGION, retryMode: 'adaptive' });
+    const response = await imageClient.send(
+      new InvokeModelCommand({
+        modelId,
+        contentType: 'application/json',
+        accept: 'application/json',
+        body: JSON.stringify({ prompt, negative_prompt: negativePrompt, aspect_ratio: '16:9', output_format: 'jpeg' }),
+      }),
+    );
+    const { images, finish_reasons } = JSON.parse(new TextDecoder().decode(response.body)) as { images?: string[]; finish_reasons?: (string | null)[] };
+    if (!images?.[0] || finish_reasons?.[0]) return undefined;
+    return Buffer.from(images[0], 'base64');
+  };
 }

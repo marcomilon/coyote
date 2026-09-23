@@ -2,6 +2,7 @@ import { THEMES } from '../../themes';
 import { GuardrailBlocked, type CallTool } from './bedrock';
 import type { SiteContent } from './content';
 import type { Stores } from './jobs';
+import { generateHero, type GenerateImage } from './images';
 import { generateSite } from './pipeline';
 import { checkHtml, PolicyRejection } from './policy';
 import { render } from './render';
@@ -17,6 +18,9 @@ export interface GenerateJobDeps {
   outputAllowed(text: string): Promise<boolean>;
   /** Image moderation. Resolves to the labels that make an image unacceptable. */
   moderate(key: string): Promise<string[]>;
+  /** Hero photo for sites with no uploaded photos. Absent when the feature is off. */
+  generateImage?: GenerateImage;
+  imageModelId?: string;
 }
 
 export const previewKey = (jobId: string) => `_preview/${jobId}/index.html`;
@@ -34,7 +38,9 @@ export function visibleText(content: SiteContent): string {
  * Runs one PENDING job to DONE (preview written), REJECTED (content policy), or FAILED (our error).
  * Rejected and failed jobs give their slug back.
  */
-export type GenerateOutcome = { outcome: 'SKIPPED' } | { outcome: 'DONE' | 'REJECTED' | 'FAILED'; tokensIn: number; tokensOut: number };
+export type GenerateOutcome =
+  | { outcome: 'SKIPPED' }
+  | { outcome: 'DONE' | 'REJECTED' | 'FAILED'; tokensIn: number; tokensOut: number; heroImages?: number };
 
 export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Promise<GenerateOutcome> {
   const { stores, urls } = deps;
@@ -63,12 +69,22 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
 
     const generated = await generateSite(job.answers, { ...deps, slug: job.seed ?? slug });
     const { brief, usage } = generated;
-    const content = { ...generated.content, media };
     const allUsage = [...job.usage, ...usage];
     tokensIn = usage.reduce((n, u) => n + u.inputTokens, 0);
     tokensOut = usage.reduce((n, u) => n + u.outputTokens, 0);
 
-    if (!(await deps.outputAllowed(visibleText(content)))) throw new GuardrailBlocked();
+    if (!(await deps.outputAllowed(visibleText(generated.content)))) throw new GuardrailBlocked();
+
+    // Only once the text has passed every check, so a rejected request costs no image.
+    // Counted per attempt: the image model bills per request, whatever moderation decides afterwards.
+    let heroImages = 0;
+    if (media.photos.length === 0 && deps.generateImage) {
+      heroImages = 1;
+      allUsage.push({ step: 'hero_image', modelId: deps.imageModelId ?? 'unknown', inputTokens: 0, outputTokens: 0 });
+      const hero = await generateHero(brief.heroScene, `_preview/${jobId}/`, { ...deps, generateImage: deps.generateImage });
+      if (hero) media = { ...media, photos: [hero] };
+    }
+    const content = { ...generated.content, media };
 
     const page = render({
       theme: THEMES[brief.theme]!,
@@ -84,7 +100,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     await stores.putPage(previewKey(jobId), page);
     // The site record changes only when the owner publishes this version.
     await stores.updateJob(jobId, { status: 'DONE', previewUrl: urls.previewUrl(jobId), usage: allUsage, result: { content, brief } });
-    return { outcome: 'DONE', tokensIn, tokensOut };
+    return { outcome: 'DONE', tokensIn, tokensOut, heroImages };
   } catch (error) {
     if (!job.regenerate) await stores.releaseSlug(slug, jobId);
     if (error instanceof PolicyRejection) {

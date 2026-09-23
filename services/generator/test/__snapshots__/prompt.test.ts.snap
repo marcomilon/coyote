@@ -20,7 +20,8 @@ Rules:
 - palette: three hex colors taken from the business itself (its products, materials, place, mood). One dominant color and one sharp accent. "paper" and "ink" must have strong contrast (readable body text). Never a purple, indigo, or blue-on-white gradient look.
 - signatureElement: one concrete, memorable visual idea for the hero (for example giant type, a diagonal split, a hand-drawn divider, a menu-board layout). One sentence.
 - headline: at most 6 words, concrete and local. Never starts with "Bienvenidos" / "Bem-vindos".
-- tone: a few words describing the voice of the copy."
+- tone: a few words describing the voice of the copy.
+- heroScene: one sentence in English describing a photograph for the top of the page: the kind of place, its materials and objects, the light, the city if given. A mood, not a claim: never a named product, a price, or a detail the answers do not support. No people, no text, signs, or logos."
 `;
 
 exports[`prompts > match the snapshots (review any change with the contact sheet) > brief user 1`] = `

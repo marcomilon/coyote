@@ -40,7 +40,7 @@ for (const theme of Object.values(THEMES)) {
   const page = render({
     theme,
     content: SiteContent.parse(SAMPLES[theme.id] ?? SAMPLES.artesanal),
-    brief: { theme: theme.id, palette: theme.meta.defaultPalette, fontPairing, tone: '', signatureElement: '', headline: '' },
+    brief: { theme: theme.id, palette: theme.meta.defaultPalette, fontPairing, tone: '', signatureElement: '', headline: '', heroScene: '' },
     siteUrl: 'https://example.invalid/site/',
     reportUrl: 'https://example.invalid/reportar',
     privacyUrl: 'https://example.invalid/privacidad',
@@ -51,7 +51,7 @@ for (const theme of Object.values(THEMES)) {
   const withPhotos = render({
     theme,
     content: SiteContent.parse({ ...(SAMPLES[theme.id] as object), media: { photos: ['assets/photo-1.svg', 'assets/photo-2.svg', 'assets/photo-3.svg'] } }),
-    brief: { theme: theme.id, palette: theme.meta.defaultPalette, fontPairing, tone: '', signatureElement: '', headline: '' },
+    brief: { theme: theme.id, palette: theme.meta.defaultPalette, fontPairing, tone: '', signatureElement: '', headline: '', heroScene: '' },
     siteUrl: 'https://example.invalid/site/',
     reportUrl: 'https://example.invalid/reportar',
     privacyUrl: 'https://example.invalid/privacidad',

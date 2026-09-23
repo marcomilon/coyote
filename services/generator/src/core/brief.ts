@@ -22,6 +22,12 @@ export function briefSchema(themes: [string, ...string[]], fontPairings: [string
       .max(160)
       .describe('The one memorable visual idea for this page'),
     headline: z.string().trim().min(1).max(80).describe('Max 6 words, never "Bienvenidos"'),
+    heroScene: z
+      .string()
+      .trim()
+      .min(1)
+      .max(300)
+      .describe('In English: a photograph for the top of the page. Place, materials, light; no people, no text'),
   });
 }
 

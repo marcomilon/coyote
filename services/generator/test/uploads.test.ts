@@ -3,6 +3,7 @@ import type { CallTool } from '../src/core/bedrock';
 import { runGenerateJob } from '../src/core/generate-job';
 import { regenerate } from '../src/core/owner';
 import { submit } from '../src/core/submit';
+import { heroPrompt } from '../src/core/images';
 import { createUploads, processUploads } from '../src/core/uploads';
 import { createUrls } from '../src/core/urls';
 import { brief, content } from './fixtures';
@@ -90,5 +91,85 @@ describe('uploads in a generation', () => {
     await runGenerateJob(jobId, t.generateDeps);
     expect(t.jobs.get(jobId)!.result!.content.media.photos).toEqual(['assets/photo-1.jpg']);
     expect(t.objects.has(`_preview/${jobId}/assets/photo-1.jpg`)).toBe(true);
+  });
+});
+
+describe('generated hero photo', () => {
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff]);
+
+  function heroSetup(options: { image?: Uint8Array; labels?: string[]; sceneAllowed?: boolean } = {}) {
+    const t = setup();
+    const prompts: string[] = [];
+    const deps = {
+      ...t.generateDeps,
+      imageModelId: 'image-test',
+      generateImage: async (prompt: string) => {
+        prompts.push(prompt);
+        return 'image' in options ? options.image : jpeg;
+      },
+      moderate: async () => options.labels ?? [],
+      outputAllowed: async (text: string) => options.sceneAllowed !== false || text !== brief.heroScene,
+    };
+    return { ...t, deps, prompts, body: { ...t.body, uploadId: undefined } };
+  }
+
+  it('fills the hero slot when nothing was uploaded, and records the attempt', async () => {
+    const t = heroSetup();
+    await submit(t.body, '1.2.3.4', t.submitDeps);
+    const result = await runGenerateJob('job-1', t.deps);
+
+    expect(result).toMatchObject({ outcome: 'DONE', heroImages: 1 });
+    expect(t.prompts).toEqual([heroPrompt(brief.heroScene)]);
+    expect(t.objects.get('_preview/job-1/assets/photo-1.jpg')).toBe('image/jpeg, 3 bytes');
+    expect(t.jobs.get('job-1')!.result!.content.media.photos).toEqual(['assets/photo-1.jpg']);
+    expect(t.jobs.get('job-1')!.usage.at(-1)).toMatchObject({ step: 'hero_image', modelId: 'image-test' });
+    expect(t.objects.get('_preview/job-1/index.html')).toContain('src="assets/photo-1.jpg"');
+  });
+
+  it('is not generated when the owner uploaded a photo', async () => {
+    const t = heroSetup();
+    t.objects.set(`_uploads/${UPLOAD}/photo-1.jpg`, 'jpg');
+    await submit({ ...t.body, uploadId: UPLOAD }, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.deps);
+    expect(t.prompts).toEqual([]);
+    expect(t.objects.get('_preview/job-1/assets/photo-1.jpg')).toBe('jpg');
+  });
+
+  it('publishes without a photo when the scene, the model, or moderation says no', async () => {
+    for (const options of [{ sceneAllowed: false }, { image: undefined }, { labels: ['Violence'] }]) {
+      const t = heroSetup(options);
+      await submit(t.body, '1.2.3.4', t.submitDeps);
+      await runGenerateJob('job-1', t.deps);
+      expect(t.jobs.get('job-1')).toMatchObject({ status: 'DONE' });
+      expect(t.jobs.get('job-1')!.result!.content.media.photos).toEqual([]);
+      expect(t.objects.has('_preview/job-1/assets/photo-1.jpg')).toBe(false);
+    }
+  });
+
+  it('publishes without a photo when the image model fails', async () => {
+    const t = heroSetup();
+    await submit(t.body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', { ...t.deps, generateImage: async () => { throw new Error('ThrottlingException'); } });
+    expect(t.jobs.get('job-1')).toMatchObject({ status: 'DONE' });
+    expect(t.jobs.get('job-1')!.result!.content.media.photos).toEqual([]);
+  });
+
+  it('costs nothing when the text is rejected', async () => {
+    const t = heroSetup();
+    await submit(t.body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', { ...t.deps, outputAllowed: async () => false });
+    expect(t.jobs.get('job-1')).toMatchObject({ status: 'REJECTED' });
+    expect(t.prompts).toEqual([]);
+  });
+
+  it('a regeneration reuses the generated photo', async () => {
+    const t = heroSetup();
+    await submit(t.body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.deps);
+    const again = await regenerate(t.jobs.get('job-1'), { ...t.base, urls, outputAllowed: async () => true });
+    const jobId = (again as { jobId: string }).jobId;
+    await runGenerateJob(jobId, t.deps);
+    expect(t.prompts).toHaveLength(1);
+    expect(t.jobs.get(jobId)!.result!.content.media.photos).toEqual(['assets/photo-1.jpg']);
   });
 });

@@ -8,6 +8,7 @@ export const brief: Brief = {
   tone: 'cálido y directo',
   signatureElement: 'Una franja gruesa color ladrillo bajo el nombre',
   headline: 'Pan de masa madre en Chapinero',
+  heroScene: 'A small sourdough bakery in Bogotá at dawn, loaves on wooden shelves, flour on the counter',
 };
 
 export const content: SiteContent = SiteContent.parse({

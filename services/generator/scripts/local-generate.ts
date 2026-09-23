@@ -1,15 +1,17 @@
 /**
  * Runs the real pipeline against Bedrock and writes out/index.html + out/site.json.
  *   npm run generate:local -- --name "Panadería Luna" --about "..." --whatsapp "+57 300 123 4567" [--address ..] [--instagram ..] [--facebook ..] [--lang es|pt]
+ * Also generates the hero photo (out/assets/photo-1.jpg, ~$0.04) unless HERO_IMAGE=off. It is not moderated here.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { THEMES } from '../themes';
 import { normalizeAnswers } from '../src/core/answers';
-import { callTool } from '../src/core/bedrock';
+import { callTool, stabilityImage } from '../src/core/bedrock';
+import { HERO_FILE, HERO_NEGATIVE, heroPrompt } from '../src/core/images';
 import { generateSite } from '../src/core/pipeline';
-import { modelId as resolveModelId } from '../src/core/models';
+import { imageModelId, modelId as resolveModelId } from '../src/core/models';
 import { checkHtml } from '../src/core/policy';
 import { isRejected, prescreen } from '../src/core/prescreen';
 import { render } from '../src/core/render';
@@ -68,8 +70,18 @@ if (isRejected(screening)) {
 
 const slug = slugify(answers.businessName);
 const generated = await generateSite(answers, { callTool, modelId, slug });
-const { brief, content } = generated;
+const { brief } = generated;
 const usage = [screening.usage, ...generated.usage];
+
+const outDir = resolve(values.out);
+mkdirSync(resolve(outDir, 'assets'), { recursive: true });
+let content = generated.content;
+const imageModel = imageModelId();
+const hero = imageModel ? await stabilityImage(imageModel)(heroPrompt(brief.heroScene), HERO_NEGATIVE) : undefined;
+if (hero) {
+  writeFileSync(resolve(outDir, 'assets', HERO_FILE), hero);
+  content = { ...content, media: { ...content.media, photos: [`assets/${HERO_FILE}`] } };
+}
 
 const urls = createUrls(process.env.SITES_BASE_URL || process.env.DOMAIN_NAME ? urlConfigFromEnv(process.env) : LOCAL_URLS);
 const page = render({
@@ -86,8 +98,6 @@ if (htmlViolations.length > 0) {
   process.exit(1);
 }
 
-const outDir = resolve(values.out);
-mkdirSync(outDir, { recursive: true });
 writeFileSync(resolve(outDir, 'index.html'), page);
 writeFileSync(resolve(outDir, 'site.json'), JSON.stringify({ slug, brief, content, usage }, null, 2));
 
@@ -97,5 +107,6 @@ const cost = modelId.includes('claude-haiku-4-5')
   ? ` ~$${((input * HAIKU_PRICE.input + output * HAIKU_PRICE.output) / 1_000_000).toFixed(4)},`
   : '';
 console.log(`${resolve(outDir, 'index.html')}`);
+console.log(`hero: ${hero ? `${imageModel}, "${brief.heroScene}"` : 'none'}`);
 console.log(`theme=${brief.theme} fonts=${brief.fontPairing} palette=${Object.values(brief.palette).join(' ')}`);
 console.log(`${modelId}: ${usage.length} calls, ${input} in / ${output} out tokens,${cost} ${((Date.now() - started) / 1000).toFixed(1)} s`);

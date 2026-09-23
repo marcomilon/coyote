@@ -19,7 +19,7 @@ import {
   aws_sns as sns,
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
-import { DEFAULT_MODEL_ID } from '../../services/generator/src/core/models';
+import { DEFAULT_IMAGE_MODEL_ID, DEFAULT_MODEL_ID } from '../../services/generator/src/core/models';
 import { createUrls } from '../../services/generator/src/core/urls';
 import { appCsp, sitesCsp } from './csp';
 import { GeneratorApi } from './generator-api';
@@ -38,6 +38,8 @@ export interface CoyoteStackProps extends StackProps {
   sitesDomainName?: string;
   /** Bedrock model or inference profile. Defaults to the one in services/generator/src/core/models.ts. */
   modelId?: string;
+  /** Text-to-image model for hero photos. Defaults to the one in models.ts. */
+  imageModelId?: string;
   /** The built frontend. Defaults to web/dist (run `npm run build -w web` first). */
   webDist?: string;
   /** Route 53 zone that holds `domainName`. Defaults to `domainName`. */
@@ -303,6 +305,7 @@ export class CoyoteStack extends Stack {
       guardrail: this.guardrail,
       abuseReports: this.abuseReports,
       modelId: props.modelId ?? DEFAULT_MODEL_ID,
+      imageModelId: props.imageModelId ?? DEFAULT_IMAGE_MODEL_ID,
       rateLimitPerDay: 100, // sandbox account; production uses 3
       urlEnv: this.urlEnv,
     });

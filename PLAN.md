@@ -10,7 +10,7 @@ A public web form asks 3 questions. A model writes the content, a renderer build
 - **Stack**: TypeScript everywhere (CDK, Lambda, Astro frontend).
 - **One environment.** A single stack, `Coyote`, in this AWS account, which is the development sandbox: `localhost:5173` may call the API, `cdk destroy` deletes all data, and the rate limit is relaxed. No dev/prod split in code, names, or URLs. If a real production environment is ever needed, it is a **separate AWS account** running the same stack (`COYOTE_AWS_PROFILE=<prod profile> ./coyote.sh deploy`). Real users only ever go on that account; nothing in this one is meant to survive.
 - **IaC**: every AWS resource is defined in CDK. Manual one-offs are marked 👤 in the phases.
-- **Region**: us-east-1 for everything. One stack, no cross-region references. Bedrock, Route 53 Domains, CloudFront SaaS Manager, and ACM for CloudFront are native there. CloudFront edges in São Paulo, Bogotá, Santiago, Buenos Aires, and Mexico City serve the sites. Only the API round-trip (~100 ms per submission) is slower than sa-east-1.
+- **Region**: us-east-1 for everything. One stack, no cross-region references. One exception: the hero-image model call goes to Bedrock in us-west-2, because us-east-1 has no text-to-image model. Bedrock, Route 53 Domains, CloudFront SaaS Manager, and ACM for CloudFront are native there. CloudFront edges in São Paulo, Bogotá, Santiago, Buenos Aires, and Mexico City serve the sites. Only the API round-trip (~100 ms per submission) is slower than sa-east-1.
 - **The model writes structured content, never HTML.** A deterministic renderer fills the theme. Edits ("Mi sitio", WhatsApp Flow B) patch the stored content and re-render with no model call.
 - **MVP sites have only the WhatsApp CTA.** The contact form and SES email are post-MVP. They are built with WhatsApp lead delivery first (`PLAN-PHASE2.md`), email second.
 - **Our frontend is Astro, built to static files.** Generated business sites are not Astro: they are rendered at request time in Lambda by `render.ts`, where no build step can run.
@@ -207,7 +207,7 @@ A model left alone produces the same page every time: purple-to-blue gradient he
 Trade-off: less surprise per site than free-form output, in exchange for a guaranteed floor. Themes can be added without touching the prompt.
 
 ## Images and logo
-MVP uses 1 and 2. 3 is behind a flag.
+MVP uses all three.
 
 1. **Logo = SVG from templates** (`services/generator/logos/`)
    - ~10 templates: monogram in circle/shield/badge, wordmark, icon + name lockup, stamp/seal, split-color initials. Parameters: `{ text, initials, icon, colors, font }`.
@@ -221,12 +221,14 @@ MVP uses 1 and 2. 3 is behind a flag.
    - Moderation: Rekognition `DetectModerationLabels` on every upload (~$0.001/image). Any explicit/violent/hate label → job `REJECTED`, uploads deleted.
    - `_uploads/` has a 1-day lifecycle rule. Themes must look good with zero photos.
 
-3. **Generated hero image** — Amazon Nova Canvas, flag `HERO_IMAGE=off`
-   - Only when no photos were uploaded. One 1024×576 image; scene prompt from the brief ("interior of a small bakery in Bogotá, warm morning light"); never text or logos. ~$0.04–0.08 per image (verify), 2–4× the text cost of a site.
-   - Available in us-east-1. Output goes through the same Rekognition check.
-   - Stock APIs (Unsplash/Pexels) rejected: licensing/attribution rules and an external dependency.
+3. **Generated hero photo** — Stability Stable Image Core on Bedrock (us-west-2), on by default; `HERO_IMAGE=off` turns it off
+   - Only when no photos were uploaded, and only the hero: one 16:9 JPEG (~2016×1152, ~0.5 MB) in the first photo slot. A gallery of generated photos would show a shop and products that do not exist.
+   - The brief's `heroScene` (English, one sentence: place, materials, light; no people, text, or logos) plus a fixed style and negative prompt. The scene passes `ApplyGuardrail`; the image passes the same Rekognition check as uploads.
+   - Generated after the text passed every check, so a rejected request costs no image. Any failure (filtered prompt, flagged image, model error) publishes the page without a photo instead of failing the job.
+   - A regeneration reuses it, like uploads. ~$0.04 per image (verify), 2× the text cost of a site.
+   - Nova Canvas reached end of life on 2026-09-30. SD3.5 Large was compared: glossier stock look with visible artifacts, twice the price. Stock APIs (Unsplash/Pexels) rejected: licensing/attribution rules and an external dependency.
 
-Infra: an `uploads` Lambda with `s3:PutObject` on `_uploads/*` (it signs the POST); `rekognition:DetectModerationLabels` for `generate`; bucket CORS for browser POSTs. Refused moderation categories: explicit and non-explicit nudity, violence, visually disturbing, hate symbols, drugs and tobacco, gambling. Alcohol and swimwear pass (restaurants and beachwear shops exist).
+Infra: an `uploads` Lambda with `s3:PutObject` on `_uploads/*` (it signs the POST); `rekognition:DetectModerationLabels` for `generate`; `bedrock:InvokeModel` on the us-west-2 image model for `generate` (image models take no guardrail, so this statement has no guardrail condition); `s3:DeleteObject` on `_preview/*` for `generate` (a flagged generated photo); bucket CORS for browser POSTs. Refused moderation categories: explicit and non-explicit nudity, violence, visually disturbing, hate symbols, drugs and tobacco, gambling. Alcohol and swimwear pass (restaurants and beachwear shops exist).
 
 ## Site ownership (magic link)
 No accounts, no Cognito. In the MVP, whoever has the link owns the site. The owner's phone (product phase 2) and verified email (phase 7) later become recovery channels.
@@ -273,7 +275,7 @@ No accounts, no Cognito. In the MVP, whoever has the link owns the site. The own
 - Lambdas: `NodejsFunction`, Node 22, esbuild. MVP: `submit` (sync, 15 s), `generate` (async, 5 min, 1 GB, on-failure destination → `job-failed` handler), `status`, `publish`, `uploads`, `me`, `report`. Post-MVP: `contact`, `ses-events`, `digest`, `domains`, `wa-*`.
 - HTTP API on `api.<domain>`: `POST /generate`, `GET /jobs/{id}`, `POST /jobs/{id}/publish`, `POST /uploads`, `/me/*`, `POST /report/{slug}`. CORS locked to `https://app.<domain>`. Throttling.
 - SNS topic `abuse-reports` with email subscription.
-- IAM: `bedrock:InvokeModel` scoped to the model/profile ARN with the `bedrock:GuardrailIdentifier` condition; `bedrock:ApplyGuardrail` on the guardrail; `s3:PutObject`/`DeleteObject` on the sites bucket; DynamoDB RW on the MVP tables; `rekognition:DetectModerationLabels`.
+- IAM: `bedrock:InvokeModel` scoped to the model/profile ARN with the `bedrock:GuardrailIdentifier` condition, plus the image model without it; `bedrock:ApplyGuardrail` on the guardrail; `s3:PutObject`/`DeleteObject` on the sites bucket; DynamoDB RW on the MVP tables; `rekognition:DetectModerationLabels`.
 - CloudWatch alarms on `generate` errors and `REJECTED` rate. AWS Budget alert (e.g. $20/month); Bedrock is the only meaningful cost.
 
 ## Implementation phases
@@ -306,6 +308,8 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Variety seed (`variety.ts`): the slug seeds 3 candidate themes, each with 3 compatible font pairings; the model picks a theme and one of that theme's pairings
 - [x] `quality.ts`: `fixBrief` repairs the brief without a model call (font not in the theme's list → the theme's first candidate; palette with ink/paper contrast < 7, accent/paper < 3, or the wrong light/dark scheme → the theme's default palette). `lintContent` (banned phrases, headline > 8 words, emoji, exclamation hype) triggers one regeneration with the problems as feedback. The fallback-model step waits for Claude
 - [x] SVG logo marks (`services/generator/logos/`): 6 templates built from the business initials, picked by a hash of the site URL, in the page's colors and display font; also used as an SVG favicon. An uploaded logo replaces the mark. All six themes place the logo and the photo slots (first photo = hero image); `themes:sheet` renders each theme with and without photos
+- [x] Generated hero photo when nothing was uploaded (`images.ts`, `heroScene` in the brief, Stable Image Core in us-west-2, `HeroImages` metric). Unit-tested; `generate:local` writes it to `out/assets/`
+- [ ] 👤 Check the Stable Image Core price on the Bedrock pricing page, and deploy
 - [ ] Later: icon-based logo templates chosen by the brief, and a 1200×630 Open Graph image (needs a rasterizer with fonts in the Lambda)
 - [ ] `scripts/contact-sheet.ts`: ~20 fixture businesses through the real model, screenshots in one grid (the offline `themes:sheet` exists; this one is for judging copy and variety, so it waits for Claude)
 

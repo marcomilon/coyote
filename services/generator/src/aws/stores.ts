@@ -211,6 +211,12 @@ export function createStores(config: StoreConfig): Stores {
       );
     },
 
+    async putAsset(key, body, contentType) {
+      await s3.send(
+        new PutObjectCommand({ Bucket: config.sitesBucket, Key: key, Body: body, ContentType: contentType, CacheControl: 'public, max-age=86400' }),
+      );
+    },
+
     async listKeys(prefix) {
       const page = await s3.send(new ListObjectsV2Command({ Bucket: config.sitesBucket, Prefix: prefix, MaxKeys: 50 }));
       return (page.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []));

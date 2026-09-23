@@ -82,6 +82,7 @@ export interface Stores {
   getJob(jobId: string): Promise<Job | undefined>;
   updateJob(jobId: string, patch: Partial<Job>): Promise<void>;
   putPage(key: string, page: string): Promise<void>;
+  putAsset(key: string, body: Uint8Array, contentType: string): Promise<void>;
   copyPrefix(from: string, to: string): Promise<void>;
   listKeys(prefix: string): Promise<string[]>;
   /** Copies one object and sets the content type it is served with. */

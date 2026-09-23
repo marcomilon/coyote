@@ -17,6 +17,7 @@ import {
 } from 'aws-cdk-lib';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Construct } from 'constructs';
+import { IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
 import type { CoyoteGuardrail } from './guardrail';
 
 export interface GeneratorApiProps {
@@ -32,6 +33,8 @@ export interface GeneratorApiProps {
   abuseReports: sns.ITopic;
   /** Bedrock inference profile or model ID. Also scopes the IAM permission. */
   modelId: string;
+  /** Text-to-image model for hero photos (Bedrock, IMAGE_MODEL_REGION). */
+  imageModelId: string;
   rateLimitPerDay: number;
   /** URL env vars from the stack (see urls.ts `urlConfigFromEnv`). */
   urlEnv: Record<string, string>;
@@ -88,6 +91,7 @@ export class GeneratorApi extends Construct {
 
     const jobFailed = fn('JobFailed', 'job-failed');
     const generate = fn('Generate', 'generate', {
+      environment: { ...environment, IMAGE_MODEL_ID: props.imageModelId },
       memorySize: 1024,
       timeout: Duration.minutes(5),
       retryAttempts: 0, // a retry would pay for the model calls twice
@@ -114,6 +118,7 @@ export class GeneratorApi extends Construct {
     }
     props.jobsTable.grantReadData(status);
     props.sitesBucket.grantPut(generate, '_preview/*');
+    props.sitesBucket.grantDelete(generate, '_preview/*'); // a generated hero photo that fails moderation
     props.sitesBucket.grantRead(publish, '_preview/*');
     props.sitesBucket.grantPut(publish);
     generate.grantInvoke(submit);
@@ -162,6 +167,13 @@ export class GeneratorApi extends Construct {
       f.addToRolePolicy(invokeModel);
       f.addToRolePolicy(applyGuardrail);
     }
+    // Image models take no guardrail. The scene text passes ApplyGuardrail first and the image passes Rekognition.
+    generate.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['bedrock:InvokeModel'],
+        resources: [`arn:${stack.partition}:bedrock:${IMAGE_MODEL_REGION}::foundation-model/${props.imageModelId}`],
+      }),
+    );
     owner.addToRolePolicy(applyGuardrail); // edits are checked by the guardrail; the owner Lambda never calls a model
 
     const route = (path: string, method: apigwv2.HttpMethod, handler: lambda.IFunction) =>

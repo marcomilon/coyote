@@ -4,7 +4,7 @@
  */
 export type MetricName =
   | 'Submitted' | 'RateLimited' | 'Rejected' | 'Generated' | 'Failed' | 'Published'
-  | 'Reported' | 'Quarantined' | 'TokensIn' | 'TokensOut';
+  | 'Reported' | 'Quarantined' | 'TokensIn' | 'TokensOut' | 'HeroImages';
 
 export function emitMetrics(metrics: Partial<Record<MetricName, number>>, log: (line: string) => void = console.log): void {
   const names = Object.keys(metrics);

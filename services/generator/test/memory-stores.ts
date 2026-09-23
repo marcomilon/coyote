@@ -67,6 +67,9 @@ export function memoryStores() {
     async putPage(key, page) {
       objects.set(key, page);
     },
+    async putAsset(key, body, contentType) {
+      objects.set(key, `${contentType}, ${body.length} bytes`);
+    },
     listKeys: async (prefix) => [...objects.keys()].filter((key) => key.startsWith(prefix)),
     async copyObject(from, to) {
       objects.set(to, objects.get(from) ?? '');

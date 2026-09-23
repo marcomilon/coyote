@@ -2,6 +2,7 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_IMAGE_MODEL_ID, IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
 import { CoyoteStack, type CoyoteStackProps } from '../lib/coyote-stack';
 
 const synth = (props: Partial<CoyoteStackProps> = {}) =>
@@ -85,15 +86,20 @@ describe('CoyoteStack, domainless', () => {
     }
   });
 
-  it('only lets Lambdas call the model with our guardrail attached', () => {
+  it('only lets Lambdas call the text model with our guardrail attached', () => {
     const statements = Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
-      (policy) => policy.Properties.PolicyDocument.Statement as { Action: string | string[]; Condition?: unknown }[],
+      (policy) => policy.Properties.PolicyDocument.Statement as { Action: string | string[]; Resource: unknown; Condition?: unknown }[],
     );
     const invoke = statements.filter((s) => [s.Action].flat().includes('bedrock:InvokeModel'));
-    expect(invoke.length).toBeGreaterThan(0);
-    for (const statement of invoke) expect(JSON.stringify(statement.Condition)).toContain('bedrock:GuardrailIdentifier');
-    expect(JSON.stringify(invoke)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0');
-    expect(JSON.stringify(invoke)).toContain('foundation-model/amazon.nova-2-lite-v1:0');
+    const [image, text] = [invoke.filter((s) => !s.Condition), invoke.filter((s) => s.Condition)];
+    expect(text.length).toBeGreaterThan(0);
+    for (const statement of text) expect(JSON.stringify(statement.Condition)).toContain('bedrock:GuardrailIdentifier');
+    expect(JSON.stringify(text)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0');
+    expect(JSON.stringify(text)).toContain('foundation-model/amazon.nova-2-lite-v1:0');
+    // Image models take no guardrail: the one unconditioned statement names only the image model.
+    expect(image).toHaveLength(1);
+    expect(JSON.stringify(image[0]!.Resource)).toContain(`${IMAGE_MODEL_REGION}::foundation-model/${DEFAULT_IMAGE_MODEL_ID}`);
+    expect(JSON.stringify(image[0]!.Resource)).not.toContain('nova');
   });
 
   it('never retries a failed generation and records the failure', () => {

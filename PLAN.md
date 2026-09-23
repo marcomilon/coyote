@@ -308,8 +308,8 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Variety seed (`variety.ts`): the slug seeds 3 candidate themes, each with 3 compatible font pairings; the model picks a theme and one of that theme's pairings
 - [x] `quality.ts`: `fixBrief` repairs the brief without a model call (font not in the theme's list → the theme's first candidate; palette with ink/paper contrast < 7, accent/paper < 3, or the wrong light/dark scheme → the theme's default palette). `lintContent` (banned phrases, headline > 8 words, emoji, exclamation hype) triggers one regeneration with the problems as feedback. The fallback-model step waits for Claude
 - [x] SVG logo marks (`services/generator/logos/`): 6 templates built from the business initials, picked by a hash of the site URL, in the page's colors and display font; also used as an SVG favicon. An uploaded logo replaces the mark. All six themes place the logo and the photo slots (first photo = hero image); `themes:sheet` renders each theme with and without photos
-- [x] Generated hero photo when nothing was uploaded (`images.ts`, `heroScene` in the brief, Stable Image Core in us-west-2, `HeroImages` metric). Unit-tested; `generate:local` writes it to `out/assets/`
-- [ ] 👤 Check the Stable Image Core price on the Bedrock pricing page, and deploy
+- [x] Generated hero photo when nothing was uploaded (`images.ts`, `heroScene` in the brief, Stable Image Core in us-west-2, `HeroImages` metric). Unit-tested; `generate:local` writes it to `out/assets/`. Checked on the deployed stack: a job with no uploads gets its photo
+- [ ] 👤 Check the Stable Image Core price on the Bedrock pricing page
 - [ ] Later: icon-based logo templates chosen by the brief, and a 1200×630 Open Graph image (needs a rasterizer with fonts in the Lambda)
 - [ ] `scripts/contact-sheet.ts`: ~20 fixture businesses through the real model, screenshots in one grid (the offline `themes:sheet` exists; this one is for judging copy and variety, so it waits for Claude)
 

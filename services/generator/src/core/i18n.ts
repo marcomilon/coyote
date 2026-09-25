@@ -1,14 +1,10 @@
 import type { Lang } from './answers';
 
+/** The few strings our code adds to a generated page. The model writes everything else. */
 const STRINGS = {
   es: {
     htmlLang: 'es',
-    services: 'Servicios',
-    about: 'Nosotros',
-    visit: 'Dónde estamos',
-    hours: 'Horario',
-    map: 'Ver en el mapa',
-    contact: 'Contacto',
+    map: 'Mapa',
     whatsappGreeting: 'Hola, vi su sitio web y quiero más información.',
     madeWith: 'Sitio creado con Coyote',
     report: 'Reportar',
@@ -16,12 +12,7 @@ const STRINGS = {
   },
   pt: {
     htmlLang: 'pt-BR',
-    services: 'Serviços',
-    about: 'Sobre nós',
-    visit: 'Onde estamos',
-    hours: 'Horário',
-    map: 'Ver no mapa',
-    contact: 'Contato',
+    map: 'Mapa',
     whatsappGreeting: 'Olá, vi o site de vocês e quero mais informações.',
     madeWith: 'Site criado com Coyote',
     report: 'Denunciar',

@@ -1,43 +1,33 @@
-// The create flow: form → POST /generate → poll GET /jobs/{id} → preview → POST /jobs/{id}/publish → link.
-// Validation uses the same zod schema as the API, so the two can never disagree.
+// The create flow: form → POST /generate → poll GET /jobs/{id} → (questions → POST /jobs/{id}/answers → poll)
+// → the draft and the magic link. Validation uses the same zod schema as the API, so the two can never disagree.
 import { ZodError } from 'zod';
 import { normalizeAnswers } from '../../../services/generator/src/core/answers';
+import { api, apiUrl, sendAnswers, waitForJob, type JobView } from './jobs';
+import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
 import { uploadImages } from './upload';
 
-type State = 'form' | 'working' | 'preview' | 'done' | 'message';
+type State = 'form' | 'working' | 'questions' | 'done' | 'message';
 type Message = { title: string; text: string };
 interface Strings {
   errors: Record<string, string>;
-  publish: string;
-  publishing: string;
-  noMore: string;
   uploading: string;
   uploadFailed: string;
   submit: string;
-  createPath: string;
   mySitePath: string;
-  copy: string;
   copied: string;
+  question: QuestionStrings & { invalid: string };
   rejected: Message;
   rateLimited: Message;
   failed: Message;
+  lostLink: Message;
   noApi: string;
 }
-interface JobView {
-  status: 'PENDING' | 'DONE' | 'PUBLISHED' | 'REJECTED' | 'FAILED';
-  previewUrl?: string;
-  siteUrl?: string;
-}
-
-const POLL_MS = 2500;
-const POLL_LIMIT_MS = 4 * 60 * 1000;
 
 const root = document.getElementById('create') as HTMLElement;
 const strings = JSON.parse(root.dataset.strings ?? '{}') as Strings;
-const form = root.querySelector('form') as HTMLFormElement;
+const form = root.querySelector('form[data-form]') as HTMLFormElement;
+const questionsForm = root.querySelector('form[data-questions]') as HTMLFormElement;
 const $ = <T extends Element>(selector: string) => root.querySelector(selector) as T;
-
-const apiUrl = (new URLSearchParams(location.search).get('api') ?? window.COYOTE_CONFIG?.apiUrl ?? '').replace(/\/+$/, '');
 
 let stepTimer: number | undefined;
 
@@ -62,7 +52,7 @@ function animateSteps() {
   let current = 0;
   stepTimer = window.setInterval(() => {
     if (current < items.length - 1) items[++current]?.classList.add('on');
-  }, 2600);
+  }, 12_000);
 }
 
 function setErrors(fields: string[]) {
@@ -77,99 +67,75 @@ function setErrors(fields: string[]) {
   form.querySelector<HTMLElement>('[aria-invalid]')?.focus();
 }
 
-async function api<T>(path: string, init?: RequestInit): Promise<{ status: number; body: T }> {
-  const response = await fetch(apiUrl + path, init);
-  return { status: response.status, body: (await response.json().catch(() => ({}))) as T };
-}
-
-function showJob(job: JobView, jobId: string) {
-  if (job.status === 'DONE' && job.previewUrl) {
-    $<HTMLIFrameElement>('iframe').src = job.previewUrl;
-    $<HTMLAnchorElement>('[data-preview-link]').href = job.previewUrl;
-    $<HTMLButtonElement>('[data-publish]').onclick = () => publish(jobId);
-    $<HTMLButtonElement>('[data-another]').onclick = () => another(jobId);
-    show('preview');
-  } else if (job.status === 'PUBLISHED' && job.siteUrl) {
-    const link = $<HTMLAnchorElement>('[data-site-link]');
-    link.href = job.siteUrl;
-    link.textContent = job.siteUrl.replace(/^https:\/\//, '');
-    $<HTMLAnchorElement>('[data-site-link-button]').href = job.siteUrl;
-    $<HTMLButtonElement>('[data-copy]').onclick = async (event) => {
-      await navigator.clipboard.writeText(job.siteUrl!);
-      const button = event.currentTarget as HTMLButtonElement;
-      button.textContent = strings.copied;
-      window.setTimeout(() => (button.textContent = strings.copy), 1800);
-    };
-    show('done');
-  } else if (job.status === 'REJECTED') {
-    showMessage(strings.rejected);
-  } else {
-    showMessage(strings.failed);
-  }
-}
-
-async function poll(jobId: string) {
-  show('working');
-  const started = Date.now();
-  while (Date.now() - started < POLL_LIMIT_MS) {
-    try {
-      const { status, body } = await api<JobView>(`/jobs/${jobId}`);
-      if (status === 404) break;
-      if (status === 200 && body.status !== 'PENDING') return showJob(body, jobId);
-    } catch {
-      // A dropped connection is normal on mobile: keep trying until the limit.
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, POLL_MS));
-  }
-  showMessage(strings.failed);
-}
-
-async function publish(jobId: string) {
-  const button = $<HTMLButtonElement>('[data-publish]');
-  button.disabled = true;
-  button.textContent = strings.publishing;
+/** The magic link is handed out once. Kept for this tab, so a reload of the result still shows it. */
+const magicKey = (jobId: string) => `coyote:magic:${jobId}`;
+function rememberMagic(jobId: string, job: JobView) {
   try {
-    const { status, body } = await api<{ siteUrl?: string; miSitioUrl?: string; ownerWhatsApp?: string }>(`/jobs/${jobId}/publish`, { method: 'POST' });
-    if (status === 200 && body.siteUrl) {
-      if (body.miSitioUrl) showMagicLink(body.miSitioUrl, body.ownerWhatsApp);
-      return showJob({ status: 'PUBLISHED', siteUrl: body.siteUrl }, jobId);
-    }
-    showMessage(strings.failed);
+    if (job.miSitioUrl) sessionStorage.setItem(magicKey(jobId), JSON.stringify({ miSitioUrl: job.miSitioUrl, ownerWhatsApp: job.ownerWhatsApp }));
+    return JSON.parse(sessionStorage.getItem(magicKey(jobId)) ?? 'null') as { miSitioUrl: string; ownerWhatsApp?: string } | null;
   } catch {
-    button.disabled = false;
-    button.textContent = strings.publish;
+    return job.miSitioUrl ? { miSitioUrl: job.miSitioUrl, ownerWhatsApp: job.ownerWhatsApp } : null;
   }
 }
 
-/** The owner's link is returned once, on the first publish. It points at this app's "Mi sitio" page. */
-function showMagicLink(miSitioUrl: string, ownerWhatsApp?: string) {
-  const link = new URL(miSitioUrl);
-  const local = `${location.origin}${strings.mySitePath}${link.hash}`;
-  $<HTMLElement>('[data-magic]').hidden = false;
-  $<HTMLAnchorElement>('[data-magic-open]').href = local;
-  $<HTMLAnchorElement>('[data-magic-whatsapp]').href = `https://wa.me/${ownerWhatsApp ?? ''}?text=${encodeURIComponent(local)}`;
-  $<HTMLButtonElement>('[data-magic-copy]').onclick = async (event) => {
-    await navigator.clipboard.writeText(local);
-    const button = event.currentTarget as HTMLButtonElement;
+function copyButton(button: HTMLButtonElement, text: string) {
+  button.onclick = async () => {
+    await navigator.clipboard.writeText(text);
     const label = button.textContent;
     button.textContent = strings.copied;
     window.setTimeout(() => (button.textContent = label), 1800);
   };
 }
 
-async function another(jobId: string) {
-  const button = $<HTMLButtonElement>('[data-another]');
-  button.disabled = true;
-  try {
-    const { status, body } = await api<{ jobId?: string }>(`/jobs/${jobId}/regenerate`, { method: 'POST' });
-    if (status === 202 && body.jobId) {
-      history.replaceState(null, '', `#job=${body.jobId}`);
-      return void poll(body.jobId);
+function showDone(jobId: string, job: JobView) {
+  const magic = rememberMagic(jobId, job);
+  if (!magic || !job.draftUrl) return showMessage(strings.lostLink);
+  // The link points at this app's own Mi sitio page (localhost in development).
+  const link = `${location.origin}${strings.mySitePath}${new URL(magic.miSitioUrl).hash}`;
+  $<HTMLIFrameElement>('[data-view="done"] iframe').src = job.draftUrl;
+  $<HTMLAnchorElement>('[data-draft-link]').href = job.draftUrl;
+  const box = $<HTMLAnchorElement>('[data-magic-link]');
+  box.href = link;
+  box.textContent = link.replace(/^https?:\/\//, '').replace(/#token=.{12}.*$/, '#token=…');
+  copyButton($<HTMLButtonElement>('[data-magic-copy]'), link);
+  $<HTMLAnchorElement>('[data-magic-whatsapp]').href = `https://wa.me/${magic.ownerWhatsApp ?? ''}?text=${encodeURIComponent(link)}`;
+  $<HTMLAnchorElement>('[data-magic-open]').href = link;
+  show('done');
+}
+
+function showQuestions(jobId: string, job: JobView) {
+  renderQuestions($<HTMLElement>('[data-question-list]'), job.questions ?? [], strings.question);
+  const submitAnswers = async (body: Parameters<typeof sendAnswers>[1]) => {
+    questionsForm.querySelectorAll('button').forEach((b) => (b.disabled = true));
+    try {
+      const { status, body: result } = await sendAnswers(jobId, body);
+      if (status === 202) return void follow(jobId);
+      if (status === 400) return markInvalid($<HTMLElement>('[data-question-list]'), result.fields ?? [], strings.question.invalid);
+      if (status === 422) return showMessage(strings.rejected);
+      if (status === 409) return void follow(jobId); // already answered (another tab): just wait
+      showMessage(strings.failed);
+    } catch {
+      showMessage(strings.failed);
+    } finally {
+      questionsForm.querySelectorAll('button').forEach((b) => (b.disabled = false));
     }
-    if (status === 429) button.textContent = strings.noMore;
-  } catch {
-    button.disabled = false;
-  }
+  };
+  questionsForm.onsubmit = (event) => {
+    event.preventDefault();
+    void submitAnswers({ answers: readAnswers($<HTMLElement>('[data-question-list]')) });
+  };
+  $<HTMLButtonElement>('[data-skip]').onclick = () => void submitAnswers({ skip: true });
+  show('questions');
+  $<HTMLElement>('[data-question-list] input, [data-question-list] textarea')?.focus({ preventScroll: true });
+}
+
+async function follow(jobId: string) {
+  show('working');
+  const job = await waitForJob(jobId);
+  if (job.status === 'NEEDS_INPUT') showQuestions(jobId, job);
+  else if (job.status === 'DONE') showDone(jobId, job);
+  else if (job.status === 'REJECTED') showMessage(strings.rejected);
+  else showMessage(strings.failed);
 }
 
 form.addEventListener('submit', async (event) => {
@@ -216,7 +182,7 @@ form.addEventListener('submit', async (event) => {
     if (status === 202 && body.jobId) {
       // The job lives in the URL so a reload picks it up again.
       history.replaceState(null, '', `#job=${body.jobId}`);
-      return void poll(body.jobId);
+      return void follow(body.jobId);
     }
     if (status === 400) return setErrors(body.fields?.length ? body.fields : ['generic']);
     if (status === 422) return showMessage(strings.rejected);
@@ -233,4 +199,4 @@ form.addEventListener('submit', async (event) => {
 strings.errors.noApi = strings.noApi;
 strings.errors.photos = strings.uploadFailed;
 const resumed = /^#job=([0-9a-f-]{36})$/.exec(location.hash)?.[1];
-if (resumed && apiUrl) void poll(resumed);
+if (resumed && apiUrl) void follow(resumed);

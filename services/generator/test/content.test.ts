@@ -1,38 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
-import { normalizeAnswers } from '../src/core/answers';
-import { applyPatch, ModelContent } from '../src/core/content';
-import { content } from './fixtures';
+import { cleanContact, normalizeAnswers } from '../src/core/answers';
+import { Contact } from '../src/core/content';
 
-describe('ModelContent', () => {
-  it('has no contact fields the model could fill', () => {
-    const schema = z.toJSONSchema(ModelContent) as { properties: Record<string, unknown> };
-    expect(Object.keys(schema.properties)).not.toEqual(expect.arrayContaining(['contact', 'whatsapp', 'address']));
+describe('Contact', () => {
+  it('validates phone and email like the WhatsApp number', () => {
+    expect(Contact.safeParse({ whatsapp: '573001234567', phone: '576015551234', email: 'hola@luna.test' }).success).toBe(true);
+    expect(Contact.safeParse({ whatsapp: '573001234567', phone: '123' }).success).toBe(false);
+    expect(Contact.safeParse({ whatsapp: '573001234567', email: 'hola' }).success).toBe(false);
+  });
+
+  it('cleans raw values the way the form does', () => {
+    expect(cleanContact('phone', '+57 (601) 555-1234')).toBe('576015551234');
+    expect(cleanContact('email', ' Hola@Luna.test ')).toBe('hola@luna.test');
+    expect(cleanContact('instagram', 'https://instagram.com/luna.pan/')).toBe('luna.pan');
+    expect(cleanContact('address', '   ')).toBeUndefined();
   });
 });
-
-describe('applyPatch', () => {
-  it('changes hours and contact without touching the rest', () => {
-    const next = applyPatch(content, {
-      hours: [{ days: 'Lunes a viernes', time: '9:00 – 18:00' }],
-      contact: { instagram: 'luna.pan' },
-    });
-    expect(next.hours).toEqual([{ days: 'Lunes a viernes', time: '9:00 – 18:00' }]);
-    expect(next.contact).toEqual({ ...content.contact, instagram: 'luna.pan' });
-    expect(next.headline).toBe(content.headline);
-    expect(content.contact.instagram).toBe('panaderia.luna'); // input not mutated
-  });
-
-  it('rejects fields an owner may not edit', () => {
-    expect(() => applyPatch(content, { signatureCss: 'body{}' })).toThrow();
-    expect(() => applyPatch(content, { title: 'x' })).toThrow();
-  });
-
-  it('rejects an invalid WhatsApp number', () => {
-    expect(() => applyPatch(content, { contact: { whatsapp: '+57 300' } })).toThrow();
-  });
-});
-
 describe('normalizeAnswers', () => {
   it('cleans the phone and social handles', () => {
     const answers = normalizeAnswers({

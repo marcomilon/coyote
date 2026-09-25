@@ -23,17 +23,21 @@ export interface Urls {
   apiUrl: string;
   /** Always ends with "/". */
   siteUrl(slug: string): string;
-  /** Always ends with "/". */
-  previewUrl(jobId: string): string;
+  /** A private draft (the magic-link owner's view). Always ends with "/". */
+  draftUrl(draftId: string): string;
   /** Origin a site's visitors send (contact-form Origin check). */
   siteOrigin(slug: string): string;
-  /** Origin of the preview iframe (app CSP `frame-src`). */
-  previewOrigin: string;
+  /** Origin of the draft iframe (app CSP `frame-src`). */
+  draftOrigin: string;
   miSitioUrl(token: string): string;
   reportUrl(slug: string): string;
   privacyUrl: string;
   /** The platform links every generated page carries, in the page's language. */
   pageLinks(slug: string, lang: 'es' | 'pt'): { reportUrl: string; privacyUrl: string };
+  /** "Cómo llegar": Google Maps search for the address. */
+  mapsUrl(address: string): string;
+  /** The keyless Google Maps embed (undocumented URL form; see PLAN-MODEL-SITES.md). */
+  mapEmbedUrl(address: string): string;
 }
 
 const trimSlash = (url: string) => url.replace(/\/+$/, '');
@@ -42,14 +46,14 @@ export function createUrls(config: UrlConfig): Urls {
   if (config.mode === 'domain') {
     const sitesHost = config.sitesDomainName;
     const siteOrigin = (slug: string) => `https://${slug}.${sitesHost}`;
-    const previewOrigin = `https://preview.${sitesHost}`;
+    const draftOrigin = `https://draft.${sitesHost}`;
     return withAppUrls({
       appUrl: `https://app.${config.domainName}`,
       apiUrl: `https://api.${config.domainName}`,
       siteOrigin,
-      previewOrigin,
+      draftOrigin,
       siteUrl: (slug) => `${siteOrigin(slug)}/`,
-      previewUrl: (jobId) => `${previewOrigin}/${jobId}/`,
+      draftUrl: (draftId) => `${draftOrigin}/${draftId}/`,
     });
   }
 
@@ -59,13 +63,13 @@ export function createUrls(config: UrlConfig): Urls {
     appUrl: trimSlash(config.appBaseUrl),
     apiUrl: trimSlash(config.apiBaseUrl),
     siteOrigin: () => sitesOrigin,
-    previewOrigin: sitesOrigin,
+    draftOrigin: sitesOrigin,
     siteUrl: (slug) => `${sitesBase}/${slug}/`,
-    previewUrl: (jobId) => `${sitesBase}/_preview/${jobId}/`,
+    draftUrl: (draftId) => `${sitesBase}/_draft/${draftId}/`,
   });
 }
 
-function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'reportUrl' | 'privacyUrl' | 'pageLinks'>): Urls {
+function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'reportUrl' | 'privacyUrl' | 'pageLinks' | 'mapsUrl' | 'mapEmbedUrl'>): Urls {
   const sitio = (slug: string) => `?sitio=${encodeURIComponent(slug)}`;
   return {
     ...base,
@@ -76,6 +80,8 @@ function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'reportUrl' | 'privacyUrl' 
     miSitioUrl: (token) => `${base.appUrl}/mi-sitio#token=${encodeURIComponent(token)}`,
     reportUrl: (slug) => `${base.appUrl}/reportar?sitio=${encodeURIComponent(slug)}`,
     privacyUrl: `${base.appUrl}/privacidad`,
+    mapsUrl: (address) => `https://maps.google.com/?q=${encodeURIComponent(address)}`,
+    mapEmbedUrl: (address) => `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=16&output=embed`,
   };
 }
 

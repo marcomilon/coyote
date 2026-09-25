@@ -1,7 +1,7 @@
 import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
 import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { CopyObjectCommand, DeleteObjectsCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { Job, SiteRecord, Stores } from '../core/jobs';
 
 export interface StoreConfig {
@@ -46,6 +46,15 @@ export function createStores(config: StoreConfig): Stores {
   const db = DynamoDBDocumentClient.from(new DynamoDBClient({}), { marshallOptions: { removeUndefinedValues: true } });
   const s3 = new S3Client({});
   const cloudfront = new CloudFrontClient({});
+
+  const getObject = async (key: string) => {
+    try {
+      return (await s3.send(new GetObjectCommand({ Bucket: config.sitesBucket, Key: key }))).Body;
+    } catch (error) {
+      if (error instanceof NoSuchKey) return undefined;
+      throw error;
+    }
+  };
 
   return {
     async hitRateLimit(key, max, ttl) {
@@ -118,10 +127,10 @@ export function createStores(config: StoreConfig): Stores {
           new DeleteCommand({
             TableName: config.sitesTable,
             Key: { slug },
-            // Never delete a published site or somebody else's claim.
-            ConditionExpression: 'jobId = :jobId AND #status <> :published',
+            // Only a bare claim of this job: never a site with a draft, or somebody else's claim.
+            ConditionExpression: 'jobId = :jobId AND #status = :claimed AND attribute_not_exists(currentDraftId)',
             ExpressionAttributeNames: { '#status': 'status' },
-            ExpressionAttributeValues: { ':jobId': jobId, ':published': 'published' },
+            ExpressionAttributeValues: { ':jobId': jobId, ':claimed': 'claimed' },
           }),
         );
       } catch (error) {
@@ -149,8 +158,8 @@ export function createStores(config: StoreConfig): Stores {
             TableName: config.jobsTable,
             Key: { jobId },
             ConditionExpression: 'attribute_exists(jobId)',
-            UpdateExpression: 'SET #a = :redacted REMOVE #r',
-            ExpressionAttributeNames: { '#a': 'answers', '#r': 'result' },
+            UpdateExpression: 'SET #a = :redacted REMOVE #n, #i, #q, #t',
+            ExpressionAttributeNames: { '#a': 'answers', '#n': 'notes', '#i': 'instruction', '#q': 'questions', '#t': 'ownerToken' },
             ExpressionAttributeValues: { ':redacted': { deleted: true } },
           }),
         );
@@ -190,13 +199,67 @@ export function createStores(config: StoreConfig): Stores {
     },
 
     async invalidateSite(slug) {
+      await this.invalidatePaths([`/${slug}`, `/${slug}/*`]);
+    },
+
+    async invalidatePaths(paths) {
       if (!config.sitesDistributionId) throw new Error('SITES_DISTRIBUTION_ID is not set for this function');
       await cloudfront.send(
         new CreateInvalidationCommand({
           DistributionId: config.sitesDistributionId,
-          InvalidationBatch: { CallerReference: `${slug}-${Date.now()}`, Paths: { Quantity: 2, Items: [`/${slug}`, `/${slug}/*`] } },
+          InvalidationBatch: { CallerReference: `${paths[0]}-${Date.now()}`, Paths: { Quantity: paths.length, Items: paths } },
         }),
       );
+    },
+
+    async transitionJob(jobId, from, patch) {
+      const expression = setExpression(patch);
+      try {
+        await db.send(
+          new UpdateCommand({
+            TableName: config.jobsTable,
+            Key: { jobId },
+            ...expression,
+            ConditionExpression: '#from = :from',
+            ExpressionAttributeNames: { ...expression.ExpressionAttributeNames, '#from': 'status' },
+            ExpressionAttributeValues: { ...expression.ExpressionAttributeValues, ':from': from },
+          }),
+        );
+        return true;
+      } catch (error) {
+        if (isConditionFailure(error)) return false;
+        throw error;
+      }
+    },
+
+    async takeOwnerToken(jobId) {
+      try {
+        const { Attributes } = await db.send(
+          new UpdateCommand({
+            TableName: config.jobsTable,
+            Key: { jobId },
+            UpdateExpression: 'REMOVE ownerToken',
+            ConditionExpression: 'attribute_exists(ownerToken)',
+            ReturnValues: 'ALL_OLD',
+          }),
+        );
+        return Attributes?.ownerToken as string | undefined;
+      } catch (error) {
+        if (isConditionFailure(error)) return undefined;
+        throw error;
+      }
+    },
+
+    async putPrivate(key, body, contentType) {
+      await s3.send(new PutObjectCommand({ Bucket: config.sitesBucket, Key: key, Body: body, ContentType: contentType }));
+    },
+
+    async getText(key) {
+      return (await getObject(key))?.transformToString('utf-8');
+    },
+
+    async getBytes(key) {
+      return (await getObject(key))?.transformToByteArray();
     },
 
     async putPage(key, page) {

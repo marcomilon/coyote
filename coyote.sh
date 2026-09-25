@@ -18,7 +18,7 @@ Commands:
   abuse-report                   Requests, rejections, and new sites of the last 24 h
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
-  rerender-all                   Re-render every published site (after theme, renderer, or domain changes)
+  refill-all                     Fill every site's current draft again (after fill.ts or domain changes; no model call)
   subscribe-alerts <email>       Email alarms, visitor reports, and cost alerts to this address (then confirm-alerts)
   protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
                                  AWS sends new confirmation emails; confirm each with confirm-alerts, never by clicking
@@ -164,7 +164,7 @@ shift || true
 case "$command" in
   deploy) cmd_deploy "$@" ;;
   destroy) cmd_destroy ;;
-  abuse-report | unpublish | restore | rerender-all) cmd_admin "$command" "$@" ;;
+  abuse-report | unpublish | restore | refill-all) cmd_admin "$command" "$@" ;;
   confirm-alerts) cmd_confirm_alerts "$@" ;;
   protect-alerts) cmd_protect_alerts ;;
   subscribe-alerts) cmd_subscribe_alerts "$@" ;;

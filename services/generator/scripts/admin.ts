@@ -3,15 +3,14 @@
  *   unpublish <slug>    take a site down for good and blocklist the slug
  *   restore <slug>      bring a quarantined site back
  *   abuse-report        who did what in the last 24 h
- *   rerender-all        re-render every published site (after a theme, renderer, or domain change)
+ *   refill-all          fill every site's current draft again (after a fill.ts or domain change); no model call
  */
 import { readFileSync } from 'node:fs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, paginateScan } from '@aws-sdk/lib-dynamodb';
-import { THEMES } from '../themes';
 import { createStores } from '../src/aws/stores';
+import { refillDraft } from '../src/core/drafts';
 import type { Job, SiteRecord } from '../src/core/jobs';
-import { render } from '../src/core/render';
 import { createUrls } from '../src/core/urls';
 
 const outputs = JSON.parse(readFileSync(new URL('../../../infra/cdk-outputs.json', import.meta.url), 'utf8')).Coyote as Record<string, string>;
@@ -79,29 +78,23 @@ switch (command) {
       const name = 'businessName' in job.answers ? job.answers.businessName : '(deleted)';
       console.log(`  ${job.rejectedBy}/${job.rejectDetail?.slice(0, 40)}  ${name}  [${job.ipHash.slice(0, 12)}…]`);
     }
-    console.log('\nNewest published sites (look at them):');
-    for (const job of jobs.filter((j) => j.status === 'PUBLISHED').sort((a, b) => b.createdAt - a.createdAt).slice(0, 20)) {
-      console.log(`  ${job.siteUrl}  [${job.ipHash.slice(0, 12)}…]`);
+    console.log('\nNewest drafts (look at them):');
+    for (const job of jobs.filter((j) => j.status === 'DONE' && j.draftUrl).sort((a, b) => b.createdAt - a.createdAt).slice(0, 20)) {
+      console.log(`  ${job.kind ?? 'create'}  ${job.slug}  ${job.draftUrl}  [${job.ipHash.slice(0, 12)}…]`);
     }
     break;
   }
-  case 'rerender-all': {
-    const sites = (await scan<SiteRecord>(config.sitesTable)).filter((site) => site.status === 'published' && site.content && site.brief);
+  case 'refill-all': {
+    const sites = (await scan<SiteRecord>(config.sitesTable)).filter((site) => site.currentDraftId);
     for (const site of sites) {
-      const theme = THEMES[site.brief!.theme];
-      if (!theme) {
-        console.warn(`${site.slug}: unknown theme ${site.brief!.theme}, skipped`);
-        continue;
-      }
-      const page = render({ theme, content: site.content!, brief: site.brief!, siteUrl: urls.siteUrl(site.slug), ...urls.pageLinks(site.slug, site.content!.lang), });
-      await stores.putPage(`${site.slug}/index.html`, page);
-      await stores.invalidateSite(site.slug);
-      console.log(`${site.slug}: re-rendered`);
+      await refillDraft(site, { stores, urls });
+      await stores.invalidatePaths([`/_draft/${site.currentDraftId}/*`]);
+      console.log(`${site.slug}: refilled ${urls.draftUrl(site.currentDraftId!)}`);
     }
     console.log(`${sites.length} site(s) done.`);
     break;
   }
   default:
-    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | rerender-all');
+    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | refill-all');
     process.exit(1);
 }

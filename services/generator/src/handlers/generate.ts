@@ -1,9 +1,9 @@
 import { DetectModerationLabelsCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
-import { callTool, outputAllowed, stabilityImage } from '../core/bedrock';
+import { callText, callTool, outputAllowed, stabilityImage } from '../core/bedrock';
 import { runGenerateJob } from '../core/generate-job';
 import { emitMetrics } from '../core/metrics';
-import { imageModelId, modelId } from '../core/models';
+import { imageModelId, modelId, prescreenModelId } from '../core/models';
 import { createUrls, urlConfigFromEnv } from '../core/urls';
 
 const stores = createStores(storeConfigFromEnv());
@@ -22,10 +22,22 @@ async function moderate(key: string): Promise<string[]> {
   return [...new Set((ModerationLabels ?? []).map((label) => label.ParentName || label.Name || '').filter((name) => REFUSED.has(name)))];
 }
 
-// Invoked asynchronously by submit with { jobId }.
+// Invoked asynchronously with { jobId } by submit, by the answers route, and by an owner's edit.
 export const handler = async (event: { jobId: string }): Promise<void> => {
-  const result = await runGenerateJob(event.jobId, { stores, callTool, modelId: modelId(), urls, outputAllowed, moderate, generateImage, imageModelId: imageModel });
+  const result = await runGenerateJob(event.jobId, {
+    stores,
+    callTool,
+    callText,
+    modelId: modelId(),
+    prescreenModelId: prescreenModelId(),
+    urls,
+    outputAllowed,
+    moderate,
+    generateImage,
+    imageModelId: imageModel,
+    now: Date.now,
+  });
   if (result.outcome === 'SKIPPED') return;
-  const name = result.outcome === 'DONE' ? 'Generated' : result.outcome === 'REJECTED' ? 'Rejected' : 'Failed';
+  const name = ({ DONE: 'Generated', NEEDS_INPUT: 'NeedsInput', REJECTED: 'Rejected', FAILED: 'Failed' } as const)[result.outcome];
   emitMetrics({ [name]: 1, TokensIn: result.tokensIn, TokensOut: result.tokensOut, HeroImages: result.heroImages ?? 0 });
 };

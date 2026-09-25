@@ -19,7 +19,7 @@ import {
   aws_sns as sns,
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
-import { DEFAULT_IMAGE_MODEL_ID, DEFAULT_MODEL_ID } from '../../services/generator/src/core/models';
+import { DEFAULT_IMAGE_MODEL_ID, DEFAULT_MODEL_ID, DEFAULT_PRESCREEN_MODEL_ID } from '../../services/generator/src/core/models';
 import { createUrls } from '../../services/generator/src/core/urls';
 import { appCsp, sitesCsp } from './csp';
 import { GeneratorApi } from './generator-api';
@@ -36,8 +36,10 @@ export interface CoyoteStackProps extends StackProps {
   domainName?: string;
   /** Registrable domain for user sites. Unset = domainless mode. */
   sitesDomainName?: string;
-  /** Bedrock model or inference profile. Defaults to the one in services/generator/src/core/models.ts. */
+  /** Bedrock model or inference profile that writes the sites. Defaults to the one in services/generator/src/core/models.ts. */
   modelId?: string;
+  /** Bedrock model or inference profile of the pre-screen classifier. Defaults to the one in models.ts. */
+  prescreenModelId?: string;
   /** Text-to-image model for hero photos. Defaults to the one in models.ts. */
   imageModelId?: string;
   /** The built frontend. Defaults to web/dist (run `npm run build -w web` first). */
@@ -96,7 +98,6 @@ export class CoyoteStack extends Stack {
       autoDeleteObjects: true,
       lifecycleRules: [
         { id: 'noncurrent-versions', noncurrentVersionExpiration: Duration.days(30) },
-        { id: 'previews', prefix: '_preview/', expiration: Duration.days(1) },
         { id: 'uploads', prefix: '_uploads/', expiration: Duration.days(1) },
         { id: 'aborted-uploads', abortIncompleteMultipartUploadAfter: Duration.days(1) },
       ],
@@ -154,7 +155,7 @@ export class CoyoteStack extends Stack {
                   domain ? domain.urls.apiUrl : `https://*.execute-api.${this.region}.amazonaws.com`,
                   `https://${this.sitesBucket.bucketRegionalDomainName}`, // presigned photo uploads
                 ],
-                frameSrc: [domain ? domain.urls.previewOrigin : 'https://*.cloudfront.net'],
+                frameSrc: [domain ? domain.urls.draftOrigin : 'https://*.cloudfront.net'],
               }),
             },
             ...commonSecurityHeaders,
@@ -216,6 +217,8 @@ export class CoyoteStack extends Stack {
             },
             ...commonSecurityHeaders,
           },
+          // Nothing is published yet: every page served here is a private draft.
+          customHeadersBehavior: { customHeaders: [{ header: 'X-Robots-Tag', value: 'noindex, nofollow', override: true }] },
         }),
       },
     });
@@ -305,6 +308,7 @@ export class CoyoteStack extends Stack {
       guardrail: this.guardrail,
       abuseReports: this.abuseReports,
       modelId: props.modelId ?? DEFAULT_MODEL_ID,
+      prescreenModelId: props.prescreenModelId ?? DEFAULT_PRESCREEN_MODEL_ID,
       imageModelId: props.imageModelId ?? DEFAULT_IMAGE_MODEL_ID,
       rateLimitPerDay: 100, // sandbox account; production uses 3
       urlEnv: this.urlEnv,
@@ -340,7 +344,7 @@ export class CoyoteStack extends Stack {
     });
     const appHost = new URL(urls.appUrl).host;
     const apiHost = new URL(urls.apiUrl).host;
-    const sitesHost = new URL(urls.previewOrigin).host.replace(/^preview\./, '');
+    const sitesHost = new URL(urls.draftOrigin).host.replace(/^draft\./, '');
 
     const zoneName = props.hostedZoneName ?? props.domainName;
     const sitesZoneName = props.sitesHostedZoneName ?? props.sitesDomainName;

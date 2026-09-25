@@ -27,7 +27,7 @@ Un sitio publicado es público: cualquiera puede ver el nombre, la descripción,
 
 ## Cómo borrar tus datos
 
-Abre **Mi sitio** con el enlace que recibiste al publicar y elige «Borrar mi sitio y mis datos». Se eliminan las páginas, el contenido y el texto de tus solicitudes. Si perdiste el enlace, por ahora no podemos verificar que el sitio es tuyo; estamos trabajando en una forma de recuperarlo.
+Abre **Mi sitio** con el enlace que recibiste al crear tu sitio y elige «Borrar mi sitio y mis datos». Se eliminan las páginas, el contenido y el texto de tus solicitudes. Si perdiste el enlace, por ahora no podemos verificar que el sitio es tuyo; estamos trabajando en una forma de recuperarlo.
 
 ## Tus derechos
 

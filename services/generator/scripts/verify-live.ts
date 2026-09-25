@@ -1,7 +1,8 @@
 /**
  * Runs the prescreen fixture set through the DEPLOYED API (the whole stack: rate limit, brand list,
- * guardrail, classifier, generation). Bad cases must get 422 at submit; good cases must reach DONE.
- *   npm run verify:live -w services/generator      (costs about 60 model calls; rejections may trigger the Rejected alarm)
+ * guardrail, classifier, generation). Bad cases must get 422 at submit; good cases must reach DONE. When the model
+ * asks questions, the check skips them ("Generar así"), so every good case also writes one page.
+ *   npm run verify:live -w services/generator      (costs about 60 model calls, 21 of them whole pages; rejections may trigger the Rejected alarm)
  */
 import { readFileSync } from 'node:fs';
 import { PRESCREEN_CASES } from '../test/fixtures/prescreen-cases';
@@ -24,9 +25,13 @@ await Promise.all(
       const body = (await response.json().catch(() => ({}))) as { jobId?: string };
       let final = response.status === 422 ? 'REJECTED' : `HTTP ${response.status}`;
       if (response.status === 202 && body.jobId) {
-        for (let i = 0; i < 40; i++) {
-          await sleep(3000);
+        for (let i = 0; i < 100; i++) {
+          await sleep(5000);
           const job = (await (await fetch(`${api}/jobs/${body.jobId}`)).json()) as { status: string };
+          if (job.status === 'NEEDS_INPUT') {
+            await fetch(`${api}/jobs/${body.jobId}/answers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ skip: true }) });
+            continue;
+          }
           if (job.status !== 'PENDING') { final = job.status; break; }
         }
       }

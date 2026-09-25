@@ -36,7 +36,7 @@ export function memoryStores() {
     },
     async releaseSlug(slug, jobId) {
       const site = sites.get(slug);
-      if (site && site.jobId === jobId && site.status !== 'published') sites.delete(slug);
+      if (site && site.jobId === jobId && site.status === 'claimed' && !site.currentDraftId) sites.delete(slug);
     },
     async saveSite(site) {
       sites.set(site.slug, { ...sites.get(site.slug), ...site } as SiteRecord);
@@ -47,7 +47,7 @@ export function memoryStores() {
     },
     async redactJob(jobId) {
       const job = jobs.get(jobId);
-      if (job) jobs.set(jobId, { ...job, answers: { deleted: true } as never, result: undefined });
+      if (job) jobs.set(jobId, { ...job, answers: { deleted: true } as never, notes: undefined, instruction: undefined, questions: undefined, ownerToken: undefined });
     },
     async deletePrefix(prefix) {
       for (const key of [...objects.keys()]) if (key.startsWith(prefix)) objects.delete(key);
@@ -64,6 +64,26 @@ export function memoryStores() {
     async invalidateSite(slug) {
       invalidated.push(slug);
     },
+    async invalidatePaths(paths) {
+      invalidated.push(...paths);
+    },
+    async transitionJob(jobId, from, patch) {
+      const job = jobs.get(jobId);
+      if (!job || job.status !== from) return false;
+      jobs.set(jobId, { ...job, ...patch });
+      return true;
+    },
+    async takeOwnerToken(jobId) {
+      const job = jobs.get(jobId);
+      if (!job?.ownerToken) return undefined;
+      jobs.set(jobId, { ...job, ownerToken: undefined });
+      return job.ownerToken;
+    },
+    async putPrivate(key, body) {
+      objects.set(key, body);
+    },
+    getText: async (key) => objects.get(key),
+    getBytes: async (key) => (objects.has(key) ? new TextEncoder().encode(objects.get(key)) : undefined),
     async putPage(key, page) {
       objects.set(key, page);
     },

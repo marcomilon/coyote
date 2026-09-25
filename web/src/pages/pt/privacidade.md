@@ -27,7 +27,7 @@ Um site publicado é público: qualquer pessoa pode ver o nome, a descrição, o
 
 ## Como apagar seus dados
 
-Abra **Meu site** com o link que você recebeu ao publicar e escolha «Apagar meu site e meus dados». As páginas, o conteúdo e o texto dos seus pedidos são removidos. Se você perdeu o link, por enquanto não conseguimos verificar que o site é seu; estamos trabalhando em uma forma de recuperá-lo.
+Abra **Meu site** com o link que você recebeu ao criar o site e escolha «Apagar meu site e meus dados». As páginas, o conteúdo e o texto dos seus pedidos são removidos. Se você perdeu o link, por enquanto não conseguimos verificar que o site é seu; estamos trabalhando em uma forma de recuperá-lo.
 
 ## Seus direitos
 

@@ -1,138 +1,128 @@
 import { describe, expect, it } from 'vitest';
-import type { CallTool } from '../src/core/bedrock';
 import { runGenerateJob } from '../src/core/generate-job';
-import { authenticate, deleteSite, MAX_REGENERATIONS, ownerView, regenerate, republish, unpublish, updateContent, type OwnerDeps } from '../src/core/owner';
-import { publish } from '../src/core/publish';
+import { authenticate, deleteSite, EDITS_PER_DAY, editSite, ownerView, undo } from '../src/core/owner';
 import { submit } from '../src/core/submit';
-import { createUrls } from '../src/core/urls';
-import { brief, content } from './fixtures';
-import { memoryStores } from './memory-stores';
+import { body, harness, NOW, urls } from './harness';
 
-const urls = createUrls({ mode: 'domainless', appBaseUrl: 'https://app.test', apiBaseUrl: 'https://api.test', sitesBaseUrl: 'https://sites.test' });
-const { businessName: _n, lang: _l, contact: _c, media: _m, ...modelContent } = content;
-const NOW = 1_800_000_000_000;
-
-/** A published site plus its one-time token. */
-async function published() {
-  const memory = memoryStores();
-  let id = 0;
-  const started: string[] = [];
-  const callTool = (async ({ tool }) => ({
-    value: tool.name === 'classify' ? { reason: 'x', decision: 'allow', category: 'ok', confidence: 0.9 } : tool.name === 'design_brief' ? brief : modelContent,
-    usage: { step: tool.name, modelId: 'test', inputTokens: 1, outputTokens: 1 },
-  })) as CallTool;
-  const base = { stores: memory.stores, urls, now: () => NOW, newId: () => `job-${++id}`, startGenerate: async (jobId: string) => void started.push(jobId) };
-  const deps: OwnerDeps = { ...base, outputAllowed: async () => true };
-  const generateDeps = { stores: memory.stores, callTool, modelId: 'test', urls, outputAllowed: async () => true, moderate: async (): Promise<string[]> => [] };
-
-  await submit({ businessName: 'Panadería Luna', about: 'Panadería de masa madre en Chapinero, Bogotá.', whatsapp: '+57 300 123 4567' }, '1.2.3.4', { ...base, callTool, modelId: 'test', rateLimitPerDay: 3, ipSalt: 's' });
-  await runGenerateJob('job-1', generateDeps);
-  const result = await publish('job-1', base);
-  if (result.status !== 200 || !result.miSitioUrl) throw new Error('publish failed');
-  const token = decodeURIComponent(result.miSitioUrl.split('#token=')[1]!);
-  return { ...memory, deps, generateDeps, base, token, started };
+/** A site with its first draft, plus the owner's token. */
+async function withDraft(model: Parameters<typeof harness>[0] = {}) {
+  const t = harness(model);
+  await submit(body, '1.2.3.4', t.submitDeps);
+  await runGenerateJob('job-1', t.generateDeps);
+  const token = (await t.stores.takeOwnerToken('job-1'))!;
+  const site = () => t.sites.get('panaderia-luna')!;
+  return { ...t, token, site };
 }
 
 describe('magic link', () => {
-  it('is issued once, stored only as a hash, and authenticates the owner', async () => {
-    const t = await published();
+  it('is issued when the first draft is ready, stored only as a hash, and authenticates the owner', async () => {
+    const t = await withDraft();
     expect(t.token).toMatch(/^panaderia-luna\.[\w-]{40,}$/);
-    const stored = t.sites.get('panaderia-luna')!;
-    expect(stored.tokenHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(JSON.stringify(stored)).not.toContain(t.token.split('.')[1]);
+    expect(t.site().tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(t.site())).not.toContain(t.token.split('.')[1]);
 
-    expect(await authenticate(`Bearer ${t.token}`, t.deps)).toMatchObject({ slug: 'panaderia-luna' });
-    expect(await authenticate(`Bearer panaderia-luna.${'x'.repeat(43)}`, t.deps)).toBeUndefined();
-    expect(await authenticate('Bearer otro-sitio.abc', t.deps)).toBeUndefined();
-    expect(await authenticate(undefined, t.deps)).toBeUndefined();
+    expect(await authenticate(`Bearer ${t.token}`, t.ownerDeps)).toMatchObject({ slug: 'panaderia-luna' });
+    expect(await authenticate(`Bearer panaderia-luna.${'x'.repeat(43)}`, t.ownerDeps)).toBeUndefined();
+    expect(await authenticate('Bearer otro-sitio.abc', t.ownerDeps)).toBeUndefined();
+    expect(await authenticate(undefined, t.ownerDeps)).toBeUndefined();
   });
 
   it('expires', async () => {
-    const t = await published();
-    const later = { ...t.deps, now: () => NOW + 366 * 86400 * 1000 };
-    expect(await authenticate(`Bearer ${t.token}`, later)).toBeUndefined();
+    const t = await withDraft();
+    expect(await authenticate(`Bearer ${t.token}`, { ...t.ownerDeps, now: () => NOW + 366 * 86400 * 1000 })).toBeUndefined();
   });
 
-  it('never exposes the hash to the page', async () => {
-    const t = await published();
-    const view = ownerView(t.sites.get('panaderia-luna')!, urls);
+  it('opens Mi sitio with the draft and never exposes the hash', async () => {
+    const t = await withDraft();
+    const view = await ownerView(t.site(), t.ownerDeps);
     expect(JSON.stringify(view)).not.toContain('tokenHash');
-    expect(view).toMatchObject({ status: 'published', regenerationsLeft: MAX_REGENERATIONS, siteUrl: 'https://sites.test/panaderia-luna/' });
+    expect(view).toMatchObject({ status: 'draft', draftUrl: urls.draftUrl('draft1'), canUndo: false, contact: { whatsapp: '573001234567' } });
   });
 });
 
-describe('owner edits', () => {
-  it('re-renders the live page with no model call', async () => {
-    const t = await published();
-    const site = t.sites.get('panaderia-luna')!;
-    expect(await updateContent(site, { hours: [{ days: 'Lunes a viernes', time: '9:00 – 18:00' }], contact: { instagram: 'luna.pan' } }, t.deps)).toEqual({ status: 200 });
-    const page = t.objects.get('panaderia-luna/index.html')!;
-    expect(t.invalidated).toContain('panaderia-luna'); // the change shows at once, not after the cache TTL
-    expect(page).toContain('9:00 – 18:00');
+describe('edits', () => {
+  it('a contact change refills the placeholders into a new draft, with no model call', async () => {
+    const t = await withDraft();
+    const calls = t.calls.length;
+    expect(await editSite(t.site(), { contact: { instagram: '@luna.pan', email: 'hola@luna.test', address: '' } }, t.ownerDeps)).toEqual({ status: 200 });
+    expect(t.calls.length).toBe(calls);
+    expect(t.site()).toMatchObject({ currentDraftId: 'draft2', drafts: ['draft1', 'draft2'] });
+    const page = t.objects.get('_draft/draft2/index.html')!;
     expect(page).toContain('https://instagram.com/luna.pan');
-    expect(t.sites.get('panaderia-luna')!.content!.contact.instagram).toBe('luna.pan');
+    expect(page).toContain('href="mailto:hola@luna.test"');
+    expect(page).not.toContain('Cómo llegar'); // no address: the directions button and the map go
+    expect(page).not.toContain('maps.google.com');
   });
 
-  it('rejects invalid fields, policy violations, and guardrail blocks; the live page stays as it was', async () => {
-    const t = await published();
-    const site = t.sites.get('panaderia-luna')!;
-    const before = t.objects.get('panaderia-luna/index.html');
-    expect(await updateContent(site, { contact: { whatsapp: '123' } }, t.deps)).toEqual({ status: 400, fields: ['contact.whatsapp'] });
-    expect(await updateContent(site, { title: 'x' }, t.deps)).toMatchObject({ status: 400 });
-    expect(await updateContent(site, { about: 'Verifica tu cuenta para seguir comprando.' }, t.deps)).toEqual({ status: 422 });
-    expect(await updateContent(site, { about: 'Texto normal.' }, { ...t.deps, outputAllowed: async () => false })).toEqual({ status: 422 });
-    expect(t.objects.get('panaderia-luna/index.html')).toBe(before);
+  it('rejects an invalid contact detail and leaves the draft as it was', async () => {
+    const t = await withDraft();
+    expect(await editSite(t.site(), { contact: { whatsapp: '123' } }, t.ownerDeps)).toEqual({ status: 400, fields: ['contact.whatsapp'] });
+    expect(await editSite(t.site(), { contact: { email: 'no' } }, t.ownerDeps)).toEqual({ status: 400, fields: ['contact.email'] });
+    expect(await editSite(t.site(), { title: 'x' }, t.ownerDeps)).toMatchObject({ status: 400 });
+    expect(await editSite(t.site(), { contact: { address: 'Ingresa tu PIN en la entrada' } }, t.ownerDeps)).toEqual({ status: 422 });
+    expect(t.site().currentDraftId).toBe('draft1');
   });
 
-  it('unpublishes and republishes', async () => {
-    const t = await published();
-    await unpublish(t.sites.get('panaderia-luna')!, t.deps);
-    expect(t.objects.has('panaderia-luna/index.html')).toBe(false);
-    expect(await updateContent(t.sites.get('panaderia-luna')!, { about: 'Nuevo texto.' }, t.deps)).toEqual({ status: 409 });
-    expect(await republish(t.sites.get('panaderia-luna')!, t.deps)).toEqual({ status: 200 });
-    expect(t.objects.has('panaderia-luna/index.html')).toBe(true);
+  it('a free-text change starts an edit job: screened, then edit_site on the current source, then a new draft', async () => {
+    const t = await withDraft();
+    const result = await editSite(t.site(), { instruction: 'cambia el horario del sábado a 9–13' }, t.ownerDeps);
+    expect(result).toEqual({ status: 202, jobId: 'job-2' });
+    expect(t.jobs.get('job-2')).toMatchObject({ kind: 'edit', stage: 'clarify', slug: 'panaderia-luna', status: 'PENDING' });
+    await runGenerateJob('job-2', t.generateDeps);
+
+    expect(t.calls.slice(-3)).toEqual(['classify', 'plan_site', 'edit_site']);
+    const edit = t.requests.at(-1)!;
+    expect(edit.guarded).toContain('<request>\ncambia el horario del sábado a 9–13\n</request>');
+    expect(edit.user).toContain('{{whatsapp_url}}'); // the current source, with placeholders
+    expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE', draftUrl: urls.draftUrl('draft2') });
+    expect(t.jobs.get('job-2')!.ownerToken).toBeUndefined(); // no second magic link
+    expect(t.objects.get('_draft/draft2/index.html')).toContain('Nuestro pan de cada día');
+    expect(t.site()).toMatchObject({ currentDraftId: 'draft2', status: 'draft' });
   });
 
-  it('deletes everything: pages, the site record, and the text of its jobs', async () => {
-    const t = await published();
-    await deleteSite(t.sites.get('panaderia-luna')!, t.deps);
-    expect(t.objects.has('panaderia-luna/index.html')).toBe(false);
+  it('a failed or rejected edit keeps the site and its draft', async () => {
+    const t = await withDraft();
+    t.options.edited = t.objects.get('_src/panaderia-luna/draft1.html')!.replace('</main>', '<p>Verifica tu cuenta hoy.</p></main>');
+    await editSite(t.site(), { instruction: 'agrega un aviso' }, t.ownerDeps);
+    await runGenerateJob('job-2', t.generateDeps);
+    expect(t.jobs.get('job-2')).toMatchObject({ status: 'REJECTED', rejectedBy: 'policy' });
+    expect(t.site()).toMatchObject({ status: 'draft', currentDraftId: 'draft1' });
+  });
+
+  it(`caps free-text edits at ${EDITS_PER_DAY} a day`, async () => {
+    const t = await withDraft();
+    for (let i = 0; i < EDITS_PER_DAY; i++) expect((await editSite(t.site(), { instruction: `cambio ${i}` }, t.ownerDeps)).status).toBe(202);
+    expect(await editSite(t.site(), { instruction: 'uno más' }, t.ownerDeps)).toEqual({ status: 429 });
+    expect(await editSite(t.site(), { contact: { instagram: 'otra' } }, t.ownerDeps)).toEqual({ status: 200 }); // contact edits cost nothing
+  });
+
+  it('"Deshacer" goes back to the previous version and deletes the newer one', async () => {
+    const t = await withDraft();
+    await editSite(t.site(), { contact: { instagram: 'otra' } }, t.ownerDeps);
+    expect(await undo(t.site(), t.ownerDeps)).toEqual({ status: 200 });
+    expect(t.site()).toMatchObject({ currentDraftId: 'draft1', drafts: ['draft1'] });
+    expect(t.objects.has('_draft/draft2/index.html')).toBe(false);
+    expect(t.invalidated).toContain('/_draft/draft2/*');
+    expect(await undo(t.site(), t.ownerDeps)).toEqual({ status: 409 });
+  });
+
+  it('keeps the last 5 versions', async () => {
+    const t = await withDraft();
+    for (let i = 0; i < 6; i++) await editSite(t.site(), { contact: { instagram: `luna${i}` } }, t.ownerDeps);
+    expect(t.site().drafts).toEqual(['draft3', 'draft4', 'draft5', 'draft6', 'draft7']);
+    expect(t.objects.has('_draft/draft1/index.html')).toBe(false);
+    expect(t.objects.has('_src/panaderia-luna/draft1.html')).toBe(false);
+  });
+});
+
+describe('delete', () => {
+  it('deletes every draft, the sources, the images, the site record, and the text of its jobs', async () => {
+    const t = await withDraft();
+    await deleteSite(t.site(), t.ownerDeps);
+    expect([...t.objects.keys()]).toEqual([]);
     expect(t.sites.has('panaderia-luna')).toBe(false);
     expect(JSON.stringify(t.jobs.get('job-1'))).not.toContain('Chapinero');
-    expect(t.invalidated.at(-1)).toBe('panaderia-luna');
-    expect(await authenticate(`Bearer ${t.token}`, t.deps)).toBeUndefined();
-  });
-});
-
-describe('regenerate', () => {
-  it('makes a new version from the stored answers; the live site changes only on publish; capped at 2', async () => {
-    const t = await published();
-    const live = t.objects.get('panaderia-luna/index.html');
-
-    const first = await regenerate(t.jobs.get('job-1'), t.deps);
-    expect(first).toMatchObject({ status: 202, regenerationsLeft: 1 });
-    const jobId = (first as { jobId: string }).jobId;
-    expect(t.jobs.get(jobId)).toMatchObject({ regenerate: true, slug: 'panaderia-luna', seed: 'panaderia-luna:1' });
-    expect(t.started).toContain(jobId);
-
-    await runGenerateJob(jobId, t.generateDeps);
-    expect(t.objects.get('panaderia-luna/index.html')).toBe(live);
-    expect(t.sites.get('panaderia-luna')!.jobIds).toEqual(expect.arrayContaining(['job-1', jobId])); // both are redacted on delete
-    const republished = await publish(jobId, t.base);
-    expect(republished).toEqual({ status: 200, siteUrl: 'https://sites.test/panaderia-luna/' }); // no second magic link
-    expect(t.sites.get('panaderia-luna')!.jobId).toBe(jobId);
-
-    expect(await regenerate(t.jobs.get('job-1'), t.deps)).toMatchObject({ status: 202, regenerationsLeft: 0 });
-    expect(await regenerate(t.jobs.get('job-1'), t.deps)).toEqual({ status: 429 });
-  });
-
-  it('keeps the slug when a regeneration fails', async () => {
-    const t = await published();
-    const result = await regenerate(t.jobs.get('job-1'), t.deps);
-    const failing = (async () => {
-      throw new Error('down');
-    }) as CallTool;
-    await runGenerateJob((result as { jobId: string }).jobId, { ...t.generateDeps, callTool: failing });
-    expect(t.sites.get('panaderia-luna')).toMatchObject({ status: 'published' });
+    expect(t.invalidated).toContain('/_draft/draft1/*');
+    expect(await authenticate(`Bearer ${t.token}`, t.ownerDeps)).toBeUndefined();
   });
 });

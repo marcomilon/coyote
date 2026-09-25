@@ -2,7 +2,7 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_IMAGE_MODEL_ID, IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
+import { DEFAULT_IMAGE_MODEL_ID, DEFAULT_MODEL_ID, IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
 import { CoyoteStack, type CoyoteStackProps } from '../lib/coyote-stack';
 
 const synth = (props: Partial<CoyoteStackProps> = {}) =>
@@ -37,16 +37,26 @@ describe('CoyoteStack, domainless', () => {
     });
     template.hasResourceProperties('AWS::S3::Bucket', {
       VersioningConfiguration: { Status: 'Enabled' },
-      LifecycleConfiguration: { Rules: Match.arrayWith([Match.objectLike({ Prefix: '_preview/', ExpirationInDays: 1 })]) },
+      LifecycleConfiguration: { Rules: Match.arrayWith([Match.objectLike({ Prefix: '_uploads/', ExpirationInDays: 1 })]) },
     });
   });
 
-  it('gives generated sites a no-script CSP that only our app may frame', () => {
+  it('never expires drafts', () => {
+    const rules = Object.values(template.findResources('AWS::S3::Bucket')).flatMap((b) => b.Properties.LifecycleConfiguration?.Rules ?? []);
+    expect(rules.filter((r: { Prefix?: string }) => r.Prefix === '_draft/' || r.Prefix === undefined).every((r: { ExpirationInDays?: number }) => r.ExpirationInDays === undefined)).toBe(true);
+  });
+
+  it('gives generated sites a CSP with scripts from our CDN list only, no network calls, and the Google map as the only frame', () => {
     const csp = cspOf(template, 'SitesHeaders');
-    expect(csp).toContain("script-src 'none'");
+    expect(csp).toContain("script-src 'unsafe-inline' https://cdn.jsdelivr.net");
+    expect(csp).not.toContain('connect-src');
     expect(csp).toContain("default-src 'none'");
     expect(csp).toContain('frame-ancestors');
+    expect(csp).toContain('frame-src https://maps.google.com https://www.google.com');
     expect(csp).toContain('http://localhost:5173'); // this account is the development sandbox
+    const policies = template.findResources('AWS::CloudFront::ResponseHeadersPolicy');
+    const [, sites] = Object.entries(policies).find(([id]) => id.startsWith('SitesHeaders'))!;
+    expect(JSON.stringify(sites.Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig)).toContain('X-Robots-Tag'); // drafts stay out of search
   });
 
   it('lets the app run its own scripts only', () => {
@@ -81,12 +91,15 @@ describe('CoyoteStack, domainless', () => {
   });
 
   it('exposes the routes', () => {
-    for (const routeKey of ['POST /generate', 'GET /jobs/{id}', 'POST /jobs/{id}/publish', 'POST /jobs/{id}/regenerate', 'GET /me', 'DELETE /me', 'POST /me/content', 'POST /me/unpublish', 'POST /report/{slug}', 'POST /uploads']) {
-      template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: routeKey });
-    }
+    const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')).map((r) => r.Properties.RouteKey).sort();
+    expect(routes).toEqual(['DELETE /me', 'GET /jobs/{id}', 'GET /me', 'POST /generate', 'POST /jobs/{id}/answers', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads']);
   });
 
-  it('only lets Lambdas call the text model with our guardrail attached', () => {
+  it('gives generation 10 minutes', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', { Timeout: 600, MemorySize: 1024 });
+  });
+
+  it('only lets Lambdas call the text models with our guardrail attached', () => {
     const statements = Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
       (policy) => policy.Properties.PolicyDocument.Statement as { Action: string | string[]; Resource: unknown; Condition?: unknown }[],
     );
@@ -94,8 +107,11 @@ describe('CoyoteStack, domainless', () => {
     const [image, text] = [invoke.filter((s) => !s.Condition), invoke.filter((s) => s.Condition)];
     expect(text.length).toBeGreaterThan(0);
     for (const statement of text) expect(JSON.stringify(statement.Condition)).toContain('bedrock:GuardrailIdentifier');
-    expect(JSON.stringify(text)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0');
+    expect(JSON.stringify(text)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0'); // the pre-screen
     expect(JSON.stringify(text)).toContain('foundation-model/amazon.nova-2-lite-v1:0');
+    const writer = text.filter((s) => JSON.stringify(s.Resource).includes(DEFAULT_MODEL_ID));
+    expect(writer).toHaveLength(1);
+    expect(writer[0]!.Action).toEqual(['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream']);
     // Image models take no guardrail: the one unconditioned statement names only the image model.
     expect(image).toHaveLength(1);
     expect(JSON.stringify(image[0]!.Resource)).toContain(`${IMAGE_MODEL_REGION}::foundation-model/${DEFAULT_IMAGE_MODEL_ID}`);
@@ -149,7 +165,7 @@ describe('CoyoteStack, domain mode', () => {
   it('uses exact origins in the CSPs and the rewrite function', () => {
     expect(cspOf(template, 'SitesHeaders')).toContain('frame-ancestors https://app.brand.test http://localhost:5173');
     expect(cspOf(template, 'SitesHeaders')).toContain('form-action https://api.brand.test');
-    expect(cspOf(template, 'AppHeaders')).toContain('frame-src https://preview.sites.test');
+    expect(cspOf(template, 'AppHeaders')).toContain('frame-src https://draft.sites.test');
     expect(JSON.stringify(template.findResources('AWS::CloudFront::Function'))).toContain("var SITES_HOST = 'sites.test'");
   });
 

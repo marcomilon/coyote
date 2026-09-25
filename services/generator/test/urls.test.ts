@@ -9,11 +9,11 @@ describe('domainless mode', () => {
     sitesBaseUrl: 'https://dsites.cloudfront.test',
   });
 
-  it('serves sites and previews by path', () => {
+  it('serves sites and drafts by path', () => {
     expect(urls.siteUrl('luna')).toBe('https://dsites.cloudfront.test/luna/');
-    expect(urls.previewUrl('job1')).toBe('https://dsites.cloudfront.test/_preview/job1/');
+    expect(urls.draftUrl('d1')).toBe('https://dsites.cloudfront.test/_draft/d1/');
     expect(urls.siteOrigin('luna')).toBe('https://dsites.cloudfront.test');
-    expect(urls.previewOrigin).toBe('https://dsites.cloudfront.test');
+    expect(urls.draftOrigin).toBe('https://dsites.cloudfront.test');
   });
 
   it('builds app links without a double slash', () => {
@@ -29,9 +29,9 @@ describe('domain mode', () => {
     expect(urls.appUrl).toBe('https://app.brand.test');
     expect(urls.apiUrl).toBe('https://api.brand.test');
     expect(urls.siteUrl('luna')).toBe('https://luna.sites.test/');
-    expect(urls.previewUrl('job1')).toBe('https://preview.sites.test/job1/');
+    expect(urls.draftUrl('d1')).toBe('https://draft.sites.test/d1/');
     expect(urls.siteOrigin('luna')).toBe('https://luna.sites.test');
-    expect(urls.previewOrigin).toBe('https://preview.sites.test');
+    expect(urls.draftOrigin).toBe('https://draft.sites.test');
   });
 });
 
@@ -52,5 +52,13 @@ describe('pageLinks', () => {
     const urls = createUrls({ mode: 'domain', domainName: 'brand.test', sitesDomainName: 'sites.test' });
     expect(urls.pageLinks('luna', 'es')).toEqual({ reportUrl: 'https://app.brand.test/reportar?sitio=luna', privacyUrl: 'https://app.brand.test/privacidad' });
     expect(urls.pageLinks('lua', 'pt')).toEqual({ reportUrl: 'https://app.brand.test/pt/denunciar?sitio=lua', privacyUrl: 'https://app.brand.test/pt/privacidade' });
+  });
+});
+
+describe('maps', () => {
+  it('builds the directions link and the keyless embed from the address', () => {
+    const urls = createUrls({ mode: 'domain', domainName: 'brand.test', sitesDomainName: 'sites.test' });
+    expect(urls.mapsUrl('Calle 60 # 9-12')).toBe('https://maps.google.com/?q=Calle%2060%20%23%209-12');
+    expect(urls.mapEmbedUrl('Calle 60 # 9-12')).toBe('https://maps.google.com/maps?q=Calle%2060%20%23%209-12&z=16&output=embed');
   });
 });

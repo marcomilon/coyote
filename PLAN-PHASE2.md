@@ -5,7 +5,7 @@ Companion to `PLAN.md`. Phase 2 code starts after MVP phases 0–6 are live. Its
 ## Why
 Competing with Wix/Squarespace/Hostinger on generation quality is a losing axis. For LatAm small businesses the advantage is low friction: they run the business on WhatsApp, won't learn an editor, and don't have USD cards. Phase 2 makes WhatsApp the main interface: create the site by chat, edit by chat, receive leads as WhatsApp messages. The MVP web form stays as a second entry point.
 
-- **Reused unchanged from the MVP**: theme library, design brief, Haiku 4.5 content generation, renderer, content patching, safety layers, slug/hosting, magic link.
+- **Reused unchanged from the MVP**: the model-written sites (clarify questions, `write_site`, `edit_site`, sanitizer, fill; `PLAN-MODEL-SITES.md`), safety layers, slug/hosting, magic link.
 - **Added**: a conversational front end, the contact form (designed in `PLAN.md`, built here), and WhatsApp as the first lead-delivery channel. SES email follows as the fallback (`PLAN.md` phase 7).
 - **URLs**: as in `PLAN.md` (sites at `{slug}.<sites-domain>`, app at `app.<domain>`, API at `api.<domain>`). All URLs in messages come from `urls.ts`, so the flows also run in domainless mode during development. Sending site links to real users requires the final domains: a `cloudfront.net/{slug}/` link looks like spam and would change later.
 
@@ -54,13 +54,13 @@ Entry: the user taps a `wa.me/<number>?text=Hola` link (site, Instagram bio, QR 
 ### B. Edit by message
 "cambia el horario a 9 a 6", "pon que también hacemos envíos", "quita la foto 2".
 - Sender phone → sites via the GSI on `sites.ownerPhone`. One site → proceed. Several → WhatsApp list message "¿Cuál sitio?"; the choice is kept in `wa_sessions` for the session.
-- Haiku tool `edit_site` → patch `{ hours?, about?, services?[], removeMedia?[], contact? }`, validated by the content schema and applied with the same `content.ts` patch function "Mi sitio" uses. Re-render, no generation.
-- Unpatchable request → "Eso lo puedes cambiar en tu página Mi sitio: <magic link>".
-- Caps: 10 edits/day per site; full regeneration stays at 2 per site.
-- Patched text passes `ApplyGuardrail` + policy + lint before publish.
+- The message is the same free-text edit "Mi sitio" sends (`PLAN-MODEL-SITES.md`): an edit job with the message as the instruction, optional clarify (the model's questions go back as WhatsApp messages or a list), then `edit_site` on the current source, the sanitizer and text checks, and a new draft. A contact change ("mi nuevo número es…") is validated like the form and only refills the placeholders.
+- The reply carries the new draft link and "Deshacer" as a quick reply.
+- Caps: the same 10 edits/day per site.
+- The new page passes the pre-screen (on the message), the sanitizer, the policy checks, and `ApplyGuardrail`, exactly as a web edit.
 
 ### C. Contact form + leads to WhatsApp
-Builds the contact form from `PLAN.md` ("Post-MVP: Contact form": theme slot, `contact` Lambda, spam controls, `messages` table) with WhatsApp delivery. Existing sites get the form on their next re-render once the owner opts in.
+Builds the contact form from `PLAN.md` ("Post-MVP: Contact form": a form slot filled by `fill.ts`, `contact` Lambda, spam controls, `messages` table) with WhatsApp delivery. Existing sites get the form on their next refill once the owner opts in.
 
 Submission → if the owner opted in (`wa_optins`), send utility template `nuevo_mensaje`:
 > Nuevo mensaje desde tu sitio {{business}}: {{name}} — {{message_excerpt}}. Contacto: {{contact}}
@@ -132,7 +132,7 @@ Tick a box (`[x]`) only when the item is done and its check passed. 👤 = needs
 - [ ] BAJA/STOP handling; digest rule
 
 ### Step 5 — Flow B (edit by message)
-- [ ] `edit_site` tool on the shared `content.ts` patch function
+- [ ] WhatsApp messages → the same edit jobs as "Mi sitio" (`POST /me/edit` logic), questions and "Deshacer" as WhatsApp replies
 - [ ] Multi-site disambiguation (list message)
 - [ ] Caps (10 edits/day) + safety checks on patched text
 

@@ -1,4 +1,5 @@
 import { createStores, storeConfigFromEnv } from '../aws/stores';
+import { releaseNewSite } from '../core/generate-job';
 
 const stores = createStores(storeConfigFromEnv());
 
@@ -13,6 +14,6 @@ export const handler = async (event: FailureEvent): Promise<void> => {
   if (!jobId) return;
   const job = await stores.getJob(jobId);
   if (!job || job.status !== 'PENDING') return;
-  if (job.slug) await stores.releaseSlug(job.slug, jobId);
+  await releaseNewSite(job, { stores });
   await stores.updateJob(jobId, { status: 'FAILED', error: (event.responsePayload?.errorMessage ?? 'generate crashed').slice(0, 500) });
 };

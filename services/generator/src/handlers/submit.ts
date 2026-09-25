@@ -3,31 +3,44 @@ import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { callTool } from '../core/bedrock';
+import { submitAnswers } from '../core/clarify';
 import { emitMetrics } from '../core/metrics';
-import { modelId } from '../core/models';
+import { prescreenModelId } from '../core/models';
 import { submit } from '../core/submit';
 import { json, parseBody } from './http';
 
 const stores = createStores(storeConfigFromEnv());
 const lambda = new LambdaClient({});
+const startGenerate = async (jobId: string) => {
+  await lambda.send(new InvokeCommand({ FunctionName: process.env.GENERATE_FUNCTION_NAME, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ jobId })) }));
+};
 
-// POST /generate
+// POST /generate · POST /jobs/{id}/answers (the owner's answers to the model's questions; the job ID is the credential)
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
-  const result = await submit(parseBody(event.body, event.isBase64Encoded), event.requestContext.http.sourceIp, {
+  const body = parseBody(event.body, event.isBase64Encoded);
+
+  if (event.routeKey === 'POST /jobs/{id}/answers') {
+    const result = await submitAnswers(event.pathParameters?.id ?? '', body, { stores, callTool, prescreenModelId: prescreenModelId(), startGenerate, now: Date.now });
+    if (result.status === 422) emitMetrics({ Rejected: 1 });
+    switch (result.status) {
+      case 202:
+        return json(202, { status: 'PENDING' });
+      case 400:
+        return json(400, { error: 'invalid', fields: result.fields });
+      case 422:
+        return json(422, { error: 'rejected' }); // never say why
+      default:
+        return json(result.status, { error: result.status === 404 ? 'not_found' : 'not_waiting' });
+    }
+  }
+
+  const result = await submit(body, event.requestContext.http.sourceIp, {
     stores,
     callTool,
-    modelId: modelId(),
+    modelId: prescreenModelId(),
     rateLimitPerDay: Number(process.env.RATE_LIMIT_PER_DAY ?? 3),
     ipSalt: process.env.IP_HASH_SALT ?? '',
-    startGenerate: async (jobId) => {
-      await lambda.send(
-        new InvokeCommand({
-          FunctionName: process.env.GENERATE_FUNCTION_NAME,
-          InvocationType: 'Event',
-          Payload: Buffer.from(JSON.stringify({ jobId })),
-        }),
-      );
-    },
+    startGenerate,
     now: Date.now,
     newId: randomUUID,
   });

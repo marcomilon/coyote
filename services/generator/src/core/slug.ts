@@ -11,6 +11,7 @@ const RESERVED = new Set([
   'app',
   'mail',
   'preview',
+  'draft',
   'admin',
   'static',
   'assets',

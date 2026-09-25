@@ -12,7 +12,7 @@ export interface HeroDeps {
   outputAllowed(text: string): Promise<boolean>;
 }
 
-export const HERO_FILE = 'photo-1.jpg';
+export const HERO_FILE = 'hero.jpg';
 
 const STYLE = 'documentary photography, natural colors, soft natural light, shallow depth of field';
 export const HERO_NEGATIVE = 'text, letters, words, signage, logos, watermark, people, faces, hands, cartoon, illustration, 3d render';
@@ -32,7 +32,7 @@ export async function generateHero(scene: string, targetPrefix: string, deps: He
     const key = `${targetPrefix}assets/${HERO_FILE}`;
     await deps.stores.putAsset(key, bytes, 'image/jpeg');
     if ((await deps.moderate(key)).length > 0) {
-      await deps.stores.deletePrefix(key); // publishing copies the whole preview folder
+      await deps.stores.deletePrefix(key);
       return undefined;
     }
     return `assets/${HERO_FILE}`;

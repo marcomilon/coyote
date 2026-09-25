@@ -1,6 +1,6 @@
 # Coyote
 
-AI website generator for LatAm small businesses. Three questions in, a published single-page site out.
+AI website generator for LatAm small businesses. Three questions in, a single-page site out, designed and written by Claude.
 
 Design and progress live in [`PLAN.md`](PLAN.md) (MVP) and [`PLAN-PHASE2.md`](PLAN-PHASE2.md) (WhatsApp).
 
@@ -22,7 +22,7 @@ Design and progress live in [`PLAN.md`](PLAN.md) (MVP) and [`PLAN-PHASE2.md`](PL
 
 ## Layout
 - `infra/` — CDK app, one stack (`Coyote`)
-- `services/generator/` — Lambda code, themes, local scripts
+- `services/generator/` — Lambda code, the design guide (`prompts/`), local scripts
 - `web/` — our frontend (Astro from Phase 5): landing, form, "Mi sitio", legal pages
 
 ## Runbook
@@ -34,13 +34,13 @@ All commands use the AWS profile `coyote` (override with `COYOTE_AWS_PROFILE`).
 | Deploy | `./coyote.sh deploy`. It builds the frontend, checks that every Lambda bundle loads, then runs `cdk deploy`. |
 | Get alert emails | `./coyote.sh subscribe-alerts you@example.com`. AWS sends one confirmation email per topic. **Do not click** "Confirm subscription": copy its link address and run `./coyote.sh confirm-alerts '<link>'`. Confirming through the API disables the no-login unsubscribe link, which mail scanners otherwise follow, silently removing the subscription. `./coyote.sh protect-alerts` fixes subscriptions that were confirmed by clicking. |
 | See what is happening | CloudWatch dashboard **Coyote** (requests, rejections, tokens, API errors). |
-| Investigate an alarm | `./coyote.sh abuse-report`: requests per visitor (hashed IP), rejections with the layer that stopped them, and the newest published sites. Open the new sites and look at them. |
+| Investigate an alarm | `./coyote.sh abuse-report`: requests per visitor (hashed IP), rejections with the layer that stopped them, and the newest drafts. Open them and look at them. |
 | Take a site down for good | `./coyote.sh unpublish <slug>`. Deletes the pages and blocklists the slug. |
 | Bring back a quarantined site | `./coyote.sh restore <slug>`. Three distinct visitors reporting a site quarantine it automatically; each report emails the admin. |
-| Re-render every site | `./coyote.sh rerender-all`, after changing a theme, the renderer, or the domains. |
-| Change the model | Edit `DEFAULT_MODEL_ID` in `services/generator/src/core/models.ts` (or deploy with `-c modelId=…`), then deploy. The IAM permission follows it. |
+| Refill every site | `./coyote.sh refill-all`, after changing `fill.ts` (placeholders, the map embed, the footer) or the domains. Fills each site's current draft again from its stored source, with no model call. |
+| Change the model | Edit `DEFAULT_MODEL_ID` (site writer) or `DEFAULT_PRESCREEN_MODEL_ID` in `services/generator/src/core/models.ts` (or deploy with `-c modelId=…` / `-c prescreenModelId=…`), then deploy. The IAM permissions follow them. |
 | Check Bedrock quota or throttling | Service Quotas → Amazon Bedrock, and the `GenerationFailures` alarm. |
 | Stop paying anything while away | `./coyote.sh destroy`. Deletes the whole stack and all its data after you type `destroy <account id>`. `./coyote.sh deploy` brings back a fresh stack with new URLs; then run `subscribe-alerts` again. |
 
 ### Alarms
-`PublishRate` (>20 sites/h), `RateLimited` (>20/h), `Rejected` (>15/h, someone probing), `GenerationFailures` (>3/h), `Quarantined` (any), `TokensPerDay` (>2M), `GenerateErrors`, `Api5xx`, `Api4xx`. Plus an AWS Budget of $20/month (alerts at 80% and 100%) and Cost Anomaly Detection (≥ $5 impact).
+`DraftRate` (>20 generated sites/h), `RateLimited` (>20/h), `Rejected` (>15/h, someone probing), `GenerationFailures` (>3/h), `Quarantined` (any), `TokensPerDay` (>2M), `GenerateErrors`, `Api5xx`, `Api4xx`. Plus an AWS Budget of $20/month (alerts at 80% and 100%) and Cost Anomaly Detection (≥ $5 impact).

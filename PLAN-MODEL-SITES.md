@@ -5,7 +5,7 @@ The fixed themes (about 70 lines each) look outdated. Claude writes much better 
 
 The project isn't live yet, so **nothing is published in this plan**. There is no public `{slug}/` page, no publish step and no review. Publishing, admin review and the go-live email come in a later plan.
 
-This reverses the rule "the model writes content JSON, never HTML". Safety rests on three things:
+This reverses the rule "the model writes content JSON, never HTML". **The user decided to also allow JavaScript, CDN libraries, and outside images** on the pages, for design quality. Safety rests on:
 1. Contact details and links come from **placeholders that our code fills**.
 2. A strict **HTML/CSS sanitizer**.
 3. The existing guardrail, pre-screen and policy checks, run on the text pulled out of the page.
@@ -15,12 +15,13 @@ This reverses the rule "the model writes content JSON, never HTML". Safety rests
 2. The **clarify** step in the `generate` Lambda makes one forced tool call, `plan_site`. It returns either `{ ready: true }` or `{ questions: Question[] }`. When there are questions, the job becomes `NEEDS_INPUT`.
 3. The web app renders the questions as a form built by our own code. The owner answers them, or skips with "Generar así". Either way the app calls `POST /jobs/{id}/answers`.
 4. The answers are checked (lengths, input guardrail, pre-screen). Then the **write** step makes one forced tool call, `write_site`, which returns `{ html, heroScene? }`. After that: sanitize → check the text → hero image → fill the placeholders → save the draft.
-5. The job becomes `DONE` and returns the **magic URL** `/mi-sitio#token=…`. This reuses the existing owner token (`core/token.ts`), now issued when generation ends instead of at publish (`handlers/publish.ts:25-47`). The create page shows the result and the link, with "Guarda este enlace".
+5. The job becomes `DONE` and returns the **magic URL** `/mi-sitio#token=…`. This reuses the existing owner token (`core/token.ts`), now issued when the first draft is ready. The first `GET /jobs/{id}` after `DONE` takes it off the job, so it is shown once. The create page shows the result and the link, with "Guarda este enlace".
 6. Only one round of questions is allowed: after the answers, the model has to build.
 
 ### Drafts (private, visible only through the magic URL)
 - Each version of the site is written to `_draft/{draftId}/`, where `draftId` is a random 128-bit ID. The site record stores `currentDraftId` and keeps the last few versions.
-- `cf-rewrite.js` serves `_draft/` (in both domain modes) with a `noindex` header and never serves `{slug}/` for now.
+- `cf-rewrite.js` serves `_draft/` (domainless: `/_draft/{draftId}/`; domain mode: `draft.<sites-domain>/{draftId}/`) and never serves `{slug}/` for now. The sites distribution sends `X-Robots-Tag: noindex, nofollow` on everything, since every page is a draft.
+- Storage: the filled page and a copy of its images in `_draft/{draftId}/`; the unfilled source and `site.json` in `_src/{slug}/` (never served); the moderated uploads and the hero photo in `_media/{slug}/` (never served).
 - `_draft/` has no expiry. `_preview/` stops being used.
 - Mi sitio calls `GET /me`, which returns the `draftUrl`, and shows it in an iframe at phone and desktop widths. `frame-ancestors` already allows the app.
 
@@ -38,7 +39,7 @@ Question = {
 ```
 - **What the model may ask:** anything that improves the site: services and prices, what makes the business different, hours, the style they like, delivery or home visits, and the business's **public contact details** (address, phone, WhatsApp, email, Instagram, Facebook). It must not ask for personal data that isn't meant for customers (ID numbers, home address of the owner, payment details).
 - **Contact questions use the contact types**, never `text`. Our form renders them as proper inputs (`type="tel"`, `type="email"`, address field), and the answers are validated like the original form fields (`Contact` schema in `content.ts`, extended with `phone` and `email`) and saved into the site's **contact details, not into the model's answers**. They reach the page only through placeholders, so a contact detail in the page always equals what the owner typed. A contact answer written into a `text` question is caught by the existing phone/URL scrub and ignored.
-- **Checks on the questions:** labels and options go through `outputAllowed` and `checkContent`. The frontend always escapes them (`textContent`).
+- **Checks on the questions:** labels and options go through `outputAllowed` and `checkContent`. A contact question for a detail the owner already gave is dropped. The model is told never to ask for photos or files. The frontend always escapes them (`textContent`).
 - **Answers:** 500 characters max each. They are stored with the site and passed inside the guarded `<answers>` block (`answersBlock`, `prompt.ts:96`).
 - **Edits:** they use the same mechanism. If a change request is unclear, the model can ask first.
 
@@ -68,10 +69,10 @@ Question = {
 
   It is kept stable and first in the prompt so Bedrock prompt caching covers it. Any change to it is judged on the screenshot sheet (step 1).
 - **Images:** uploaded photos and the logo go to Claude as image blocks, so it designs around them. In the page they appear only as `{{photo:1..3}}` and `{{logo}}`. When there are no photos and `heroScene` is set, `generateHero` (`core/images.ts`) fills `{{hero}}`. If that fails, the element with `{{hero}}` is removed.
-- **Placeholders:** `{{whatsapp_url}}`, `{{whatsapp_display}}`, `{{phone_url}}` (`tel:`), `{{phone_display}}`, `{{email_url}}` (`mailto:`), `{{email_display}}`, `{{maps_url}}`, `{{map}}`, `{{address}}`, `{{instagram_url}}`, `{{facebook_url}}`, `{{photo:N}}`, `{{logo}}`, `{{hero}}`. The new `core/fill.ts` fills them:
+- **Placeholders** (`core/placeholders.ts`): `{{whatsapp_url}}`, `{{whatsapp_display}}`, `{{phone_url}}` (`tel:`), `{{phone_display}}`, `{{email_url}}` (`mailto:`), `{{email_display}}`, `{{maps_url}}`, `{{map}}`, `{{address}}`, `{{instagram_url}}`, `{{facebook_url}}`, `{{photo:N}}`, `{{logo}}`, `{{hero}}`. The new `core/fill.ts` fills them:
   - it escapes every value
   - it builds the Maps URL with the logic at `render.ts:43-48`, going through `urls.ts`
-  - a placeholder with no value (no email, no address…) removes the element that carries it, so the model can design every contact option and the page shows only the ones the owner has
+  - a placeholder with no value (no email, no address…) removes the element that carries it, so the model can design every contact option and the page shows only the ones the owner has. `data-needs="phone_url email_url"` on a wrapper removes the whole group (a label with its link)
   - it appends the platform footer (`render.ts:93`)
 - **Google map (`{{map}}`):** the model places `<div data-slot="map"></div>` where the map goes and styles the box (size, corners, border). Our code, never the model, fills it with a keyless Google Maps embed of the owner's address, so the map always points to that address:
   ```html
@@ -82,21 +83,22 @@ Question = {
   - no API key. This URL form is not documented by Google and could change. If it stops working, we switch the iframe in `fill.ts` (to the keyed Embed API, or no map) and run `refill-all`; the "Cómo llegar" button stays either way
   - no address → the map element is removed
   - the sanitizer still rejects every `<iframe>` the model writes; the map iframe is added after sanitizing, in `fill.ts`, and `checkHtml` allows exactly that iframe shape
-  - the sites CSP gets `frame-src https://maps.google.com https://www.google.com` (`infra/lib/csp.ts`; Google may redirect between the two). Scripts stay blocked in our page; the map runs inside Google's own frame.
+  - the sites CSP gets `frame-src https://maps.google.com https://www.google.com` (`infra/lib/csp.ts`; Google may redirect between the two). The map runs inside Google's own frame.
 - **Stored per site:** the unfilled HTML (the "source") and `site.json` (answers, question answers, contact, media, lang). Filling the source again makes the page with no model call. That covers contact edits and a domain switch (`refill-all` replaces `rerender-all`).
 
 ### Sanitizer and checks (`core/sanitize.ts`, extending `policy.ts`)
 The document is rebuilt from an allowlist (parsed with htmlparser2):
 
 **HTML**
-- **Allowed:** layout and text tags, plus inline SVG (no `foreignObject`, no `<a>`/`<use>` inside SVG, no animation that sets attributes).
-- **Forbidden:** `script`, `iframe`, `object`, `embed`, `form`, `input`, `button`, `base`, `meta` (except charset and viewport), and `on*` attributes.
-- `<link>` only as a stylesheet on `fonts.googleapis.com`.
-- `href` may only be a placeholder or `#anchor`. `src` may only be a placeholder or `data:image/svg+xml`.
+- **Allowed:** layout and text tags, inline SVG (no `foreignObject`, no `<a>`/`<use>` inside SVG, no animation that sets attributes), `<script>` (inline, or `src` from the CDN list in `core/cdn.ts`: jsDelivr, cdnjs, unpkg, the Tailwind CDN), and `on*` attributes.
+- **Forbidden:** `iframe`, `object`, `embed`, `form`, `input`, `button`, `base`, `meta` (except charset, viewport, description).
+- `<link>` only as a stylesheet or preconnect on the CDN list (Google Fonts included).
+- `href` may only be a placeholder or `#anchor`. `src`/`srcset` of images: a placeholder, `data:image/svg+xml`, or any `https:` URL.
+- The prompt requires every visible word to be in the HTML (scripts add behavior only), so the text checks still see the page text. What a script does at run time is not checked. The sites CSP keeps `default-src 'none'`, so scripts cannot `fetch` or send XHR; images from any `https:` host can still carry data out (a tracking-pixel risk accepted with this decision).
 
 **CSS** in `<style>` and `style=` is parsed with css-tree (the same approach as `sanitizeSignatureCss`, `core/css.ts`):
 - no `@import` and no `@font-face`
-- `url()` only with `data:image/svg+xml` or a placeholder
+- `url()` only with `data:image/svg+xml`, a placeholder, or an `https:` URL
 - size limits
 
 **Text**
@@ -110,9 +112,9 @@ The document is rebuilt from an allowlist (parsed with htmlparser2):
 **On failure:** one retry with feedback, then REJECTED or FAILED as today.
 
 ### Edits in the magic URL (free text)
-- Mi sitio gets a "¿Qué quieres cambiar?" textarea and the contact fields. It calls `POST /me/edit { instruction?, contact? }`, which starts an async job:
-  - An instruction runs the optional clarify step, then `edit_site` (current source + instruction → new source). The result goes through the same sanitizer and checks, and becomes a new draft.
-  - A contact-only change just refills the placeholders.
+- Mi sitio gets a "¿Qué quieres cambiar?" textarea and the contact fields. It calls `POST /me/edit { instruction?, contact? }`:
+  - An instruction starts an async edit job: the pre-screen on the request, the optional clarify step, then `edit_site` (current source + instruction → new source). The result goes through the same sanitizer and checks, and becomes a new draft.
+  - A contact change just refills the placeholders, at once (200, no job). A changed address also passes the text checks and the output guardrail.
 - Mi sitio polls the job, shows the questions form if the model asks, then reloads the iframe with the new draft. It also offers "Deshacer", which goes back to the previous version.
 - `updateContent` and the structured-patch UI (`core/owner.ts:58`, `ContentPatch`) are removed.
 - Rate limit: 10 edits per day per site.
@@ -129,11 +131,11 @@ The document is rebuilt from an allowlist (parsed with htmlparser2):
 ### Infra
 - Generate Lambda timeout: 10 minutes.
 - Routes:
-  - added: `POST /jobs/{id}/answers`, `POST /me/edit`
-  - removed: `POST /jobs/{id}/publish`, `POST /me/unpublish`, `POST /me/republish`
+  - added: `POST /jobs/{id}/answers` (on the `submit` Lambda, which already has the pre-screen), `POST /me/edit`, `POST /me/undo`
+  - removed: `POST /jobs/{id}/publish`, `POST /jobs/{id}/regenerate`, `POST /me/content`, `POST /me/regenerate`, `POST /me/unpublish`, `POST /me/republish`
 - `cf-rewrite.js` changes: serve `_draft/`, stop serving `{slug}/`. Update its tests.
 - S3: no lifecycle expiry on `_draft/`.
-- IAM for the model follows `modelId` (`generator-api.ts:146-177`). The sites CSP adds `frame-src https://maps.google.com https://www.google.com` for the map (stack test updated).
+- IAM for the models follows `modelId` (with `InvokeModelWithResponseStream`, `generate` only) and `prescreenModelId`. The sites CSP adds `frame-src https://maps.google.com https://www.google.com` for the map (stack test updated).
 
 ### Docs
 - **PLAN.md:** rewrite Decisions `:14`, Generation `:116`, Content safety `:136`, Design quality `:178`, Site ownership `:233` and Preview `:241`. Add "Phase 5c — Model-written sites" to the tracker, with a 👤 item for the later publishing, review and email plan.

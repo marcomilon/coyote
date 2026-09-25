@@ -27,12 +27,14 @@ export interface GeneratorApiProps {
   rateLimitTable: dynamodb.ITableV2;
   blocklistTable: dynamodb.ITableV2;
   sitesBucket: s3.IBucket;
-  /** Owner actions and publishing invalidate the cached site. */
+  /** Owner actions invalidate cached drafts. */
   sitesDistribution: cloudfront.IDistribution;
   guardrail: CoyoteGuardrail;
   abuseReports: sns.ITopic;
-  /** Bedrock inference profile or model ID. Also scopes the IAM permission. */
+  /** Bedrock inference profile or model ID that writes the sites. Also scopes the IAM permission. */
   modelId: string;
+  /** Bedrock inference profile or model ID of the pre-screen classifier. */
+  prescreenModelId: string;
   /** Text-to-image model for hero photos (Bedrock, IMAGE_MODEL_REGION). */
   imageModelId: string;
   rateLimitPerDay: number;
@@ -43,7 +45,7 @@ export interface GeneratorApiProps {
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const handlers = `${root}services/generator/src/handlers`;
 
-/** The Lambdas behind the HTTP API: submit → (async) generate → status → publish. */
+/** The Lambdas behind the HTTP API: submit → (async) generate → status (→ answers → generate) → owner. */
 export class GeneratorApi extends Construct {
   readonly generate: lambda.IFunction;
 
@@ -58,6 +60,7 @@ export class GeneratorApi extends Construct {
       BLOCKLIST_TABLE: props.blocklistTable.tableName,
       SITES_BUCKET: props.sitesBucket.bucketName,
       BEDROCK_MODEL_ID: props.modelId,
+      PRESCREEN_MODEL_ID: props.prescreenModelId,
       GUARDRAIL_ID: props.guardrail.guardrailId,
       GUARDRAIL_VERSION: props.guardrail.version,
       ...props.urlEnv,
@@ -93,7 +96,20 @@ export class GeneratorApi extends Construct {
     const generate = fn('Generate', 'generate', {
       environment: { ...environment, IMAGE_MODEL_ID: props.imageModelId },
       memorySize: 1024,
-      timeout: Duration.minutes(5),
+      // A whole page from the model takes a minute or two, and a rejected page is written twice.
+      timeout: Duration.minutes(10),
+      bundling: {
+        externalModules: [],
+        minify: true,
+        sourceMap: false,
+        esbuildArgs: { '--alias:css-tree': 'css-tree/dist/csstree.esm' },
+        // The design guide is read at run time (prompt.ts), from next to the handler.
+        commandHooks: {
+          beforeBundling: () => [],
+          beforeInstall: () => [],
+          afterBundling: (inputDir: string, outputDir: string) => [`cp "${inputDir}/services/generator/prompts/design-guide.md" "${outputDir}/"`],
+        },
+      },
       retryAttempts: 0, // a retry would pay for the model calls twice
       onFailure: new destinations.LambdaDestination(jobFailed),
     });
@@ -103,24 +119,26 @@ export class GeneratorApi extends Construct {
     const submit = fn('Submit', 'submit', {
       environment: { ...environment, GENERATE_FUNCTION_NAME: generate.functionName, RATE_LIMIT_PER_DAY: String(props.rateLimitPerDay), IP_HASH_SALT: ipSalt },
     });
+    // Takes the magic link off a finished job, so it needs write access to jobs.
     const status = fn('Status', 'status', { memorySize: 256 });
     const withInvalidation = { ...environment, SITES_DISTRIBUTION_ID: props.sitesDistribution.distributionId };
-    const publish = fn('Publish', 'publish', { environment: withInvalidation });
-    // Everything an owner does after publishing, plus "another version" before publishing.
+    // Mi sitio: the draft, contact edits, free-text edits (started here, run by generate), undo, delete.
     const owner = fn('Owner', 'owner', { environment: { ...withInvalidation, GENERATE_FUNCTION_NAME: generate.functionName } });
 
     // Data access, least privilege per function.
     props.rateLimitTable.grantReadWriteData(submit);
     props.blocklistTable.grantReadData(submit);
-    for (const f of [submit, generate, jobFailed, publish, owner]) {
-      props.jobsTable.grantReadWriteData(f);
-      props.sitesTable.grantReadWriteData(f);
+    for (const f of [submit, generate, jobFailed, owner, status]) props.jobsTable.grantReadWriteData(f);
+    for (const f of [submit, generate, jobFailed, owner]) props.sitesTable.grantReadWriteData(f);
+    // _media/<slug>/: moderated images. _src/<slug>/: sources and site records. _draft/<id>/: served drafts.
+    for (const prefix of ['_media/*', '_src/*', '_draft/*']) {
+      props.sitesBucket.grantReadWrite(generate, prefix);
+      props.sitesBucket.grantDelete(generate, prefix); // old drafts, and a hero photo that fails moderation
+      props.sitesBucket.grantReadWrite(owner, prefix);
+      props.sitesBucket.grantDelete(owner, prefix);
     }
-    props.jobsTable.grantReadData(status);
-    props.sitesBucket.grantPut(generate, '_preview/*');
-    props.sitesBucket.grantDelete(generate, '_preview/*'); // a generated hero photo that fails moderation
-    props.sitesBucket.grantRead(publish, '_preview/*');
-    props.sitesBucket.grantPut(publish);
+    props.sitesBucket.grantReadWrite(jobFailed, '_media/*'); // frees the images of a new site that never got a draft
+    props.sitesBucket.grantDelete(jobFailed, '_media/*');
     generate.grantInvoke(submit);
     generate.grantInvoke(owner);
     const uploads = fn('Uploads', 'uploads', { memorySize: 256, environment: { ...environment, IP_HASH_SALT: ipSalt } });
@@ -128,8 +146,6 @@ export class GeneratorApi extends Construct {
     props.sitesBucket.grantPut(uploads, '_uploads/*'); // the presigned POST is signed with this permission
     props.sitesBucket.grantRead(generate, '_uploads/*');
     generate.addToRolePolicy(new iam.PolicyStatement({ actions: ['rekognition:DetectModerationLabels'], resources: ['*'] }));
-    // A regeneration copies the images of the published version.
-    props.sitesBucket.grantRead(generate);
 
     const report = fn('Report', 'report', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, ABUSE_TOPIC_ARN: props.abuseReports.topicArn } });
     props.rateLimitTable.grantReadWriteData(report);
@@ -137,23 +153,20 @@ export class GeneratorApi extends Construct {
     props.sitesBucket.grantReadWrite(report);
     props.sitesBucket.grantDelete(report);
     props.abuseReports.grantPublish(report);
-    for (const f of [publish, owner, report]) props.sitesDistribution.grantCreateInvalidation(f);
+    for (const f of [owner, report]) props.sitesDistribution.grantCreateInvalidation(f);
     props.rateLimitTable.grantReadWriteData(owner);
-    props.sitesBucket.grantPut(owner);
-    props.sitesBucket.grantRead(owner);
-    props.sitesBucket.grantDelete(owner);
 
-    // Bedrock: model calls are only allowed with our guardrail attached.
-    const foundationModel = props.modelId.replace(/^(us|eu|apac|global)\./, '');
-    const invokeModel = new iam.PolicyStatement({
-      actions: ['bedrock:InvokeModel'],
-      resources: [
-        `arn:${stack.partition}:bedrock:${stack.region}:${stack.account}:inference-profile/${props.modelId}`,
-        `arn:${stack.partition}:bedrock:*::foundation-model/${foundationModel}`,
-      ],
-      conditions: {
-        StringLike: { 'bedrock:GuardrailIdentifier': [props.guardrail.guardrailArn, `${props.guardrail.guardrailArn}:*`] },
-      },
+    // Bedrock: model calls are only allowed with our guardrail attached. The writer streams its pages.
+    const modelResources = (modelId: string) => [
+      `arn:${stack.partition}:bedrock:${stack.region}:${stack.account}:inference-profile/${modelId}`,
+      `arn:${stack.partition}:bedrock:*::foundation-model/${modelId.replace(/^(us|eu|apac|global)\./, '')}`,
+    ];
+    const guarded = { StringLike: { 'bedrock:GuardrailIdentifier': [props.guardrail.guardrailArn, `${props.guardrail.guardrailArn}:*`] } };
+    const invokePrescreen = new iam.PolicyStatement({ actions: ['bedrock:InvokeModel'], resources: modelResources(props.prescreenModelId), conditions: guarded });
+    const invokeWriter = new iam.PolicyStatement({
+      actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
+      resources: modelResources(props.modelId),
+      conditions: guarded,
     });
     const applyGuardrail = new iam.PolicyStatement({
       actions: ['bedrock:ApplyGuardrail'],
@@ -164,9 +177,10 @@ export class GeneratorApi extends Construct {
       ],
     });
     for (const f of [submit, generate]) {
-      f.addToRolePolicy(invokeModel);
+      f.addToRolePolicy(invokePrescreen);
       f.addToRolePolicy(applyGuardrail);
     }
+    generate.addToRolePolicy(invokeWriter);
     // Image models take no guardrail. The scene text passes ApplyGuardrail first and the image passes Rekognition.
     generate.addToRolePolicy(
       new iam.PolicyStatement({
@@ -174,18 +188,17 @@ export class GeneratorApi extends Construct {
         resources: [`arn:${stack.partition}:bedrock:${IMAGE_MODEL_REGION}::foundation-model/${props.imageModelId}`],
       }),
     );
-    owner.addToRolePolicy(applyGuardrail); // edits are checked by the guardrail; the owner Lambda never calls a model
+    owner.addToRolePolicy(applyGuardrail); // an edited address is checked by the guardrail; the owner Lambda never calls a model
 
     const route = (path: string, method: apigwv2.HttpMethod, handler: lambda.IFunction) =>
       props.api.addRoutes({ path, methods: [method], integration: new HttpLambdaIntegration(`${handler.node.id}Integration`, handler) });
     route('/generate', apigwv2.HttpMethod.POST, submit);
     route('/jobs/{id}', apigwv2.HttpMethod.GET, status);
-    route('/jobs/{id}/publish', apigwv2.HttpMethod.POST, publish);
+    route('/jobs/{id}/answers', apigwv2.HttpMethod.POST, submit);
     route('/report/{slug}', apigwv2.HttpMethod.POST, report);
     route('/uploads', apigwv2.HttpMethod.POST, uploads);
-    route('/jobs/{id}/regenerate', apigwv2.HttpMethod.POST, owner);
     route('/me', apigwv2.HttpMethod.GET, owner);
     route('/me', apigwv2.HttpMethod.DELETE, owner);
-    for (const action of ['content', 'regenerate', 'unpublish', 'republish']) route(`/me/${action}`, apigwv2.HttpMethod.POST, owner);
+    for (const action of ['edit', 'undo']) route(`/me/${action}`, apigwv2.HttpMethod.POST, owner);
   }
 }

@@ -12,27 +12,23 @@ const other = t(s.otherLang.code);
 // The script is language-agnostic: it reads the strings it needs from here.
 const clientStrings = {
   errors: c.errors,
-  publish: c.preview.publish,
-  noMore: c.preview.noMore,
   uploading: c.photos.uploading,
   uploadFailed: c.photos.failed,
   submit: c.submit,
-  createPath: s.paths.create,
   mySitePath: s.paths.mySite,
-  publishing: c.preview.publishing,
-  copy: c.done.copy,
   copied: c.done.copied,
+  question: s.questions,
   rejected: c.rejected,
   rateLimited: c.rateLimited,
   failed: c.failed,
+  lostLink: c.lostLink,
   noApi: c.noApi,
-};
----
+};---
 
 <Layout lang={lang} title={c.title} description={c.description} alternate={other.paths.create} withConfig>
   <div class="create wrap" id="create" data-state="form" data-strings={JSON.stringify(clientStrings)}>
     <section data-view="form">
-      <form class="ticket" novalidate>
+      <form class="ticket" data-form novalidate>
         <header>
           <h1>{c.heading}</h1>
           <p>{c.sub}</p>
@@ -106,39 +102,40 @@ const clientStrings = {
       <p class="hint">{c.working.note}</p>
     </section>
 
-    <section data-view="preview" class="storefront">
-      <div class="bar">
-        <h2>{c.preview.title}</h2>
-        <div>
-          <a class="btn small ghost" data-preview-link target="_blank" rel="noopener">{c.preview.open}</a>
-          <button class="btn small ghost" type="button" data-another>{c.preview.another}</button>
-          <button class="btn small" type="button" data-publish>{c.preview.publish}</button>
+    <section data-view="questions">
+      <form class="ticket" data-questions novalidate>
+        <header>
+          <h2>{s.questions.title}</h2>
+          <p>{s.questions.intro}</p>
+        </header>
+        <div data-question-list></div>
+        <div class="submit-row">
+          <button class="btn" type="submit">{s.questions.submit}</button>
+          <button class="btn ghost" type="button" data-skip>{s.questions.skip}</button>
         </div>
-      </div>
-      <div class="frame"><iframe title={c.preview.title} sandbox="" referrerpolicy="no-referrer"></iframe></div>
+      </form>
     </section>
 
-    <section data-view="done" class="panel">
-      <p class="script">Coyote</p>
-      <h2>{c.done.title}</h2>
-      <div class="linkbox">
-        <a data-site-link target="_blank" rel="noopener"></a>
-        <button class="btn small blue" type="button" data-copy>{c.done.copy}</button>
+    <section data-view="done" class="storefront">
+      <div class="bar">
+        <div class="title">
+          <p class="script">Coyote</p>
+          <h2>{c.done.title}</h2>
+          <p>{c.done.text}</p>
+        </div>
+        <a class="btn small ghost" data-draft-link target="_blank" rel="noopener">{c.done.open}</a>
       </div>
-      <p>{c.done.share}</p>
-      <div class="magic" data-magic hidden>
+      <div class="magic">
         <h3>{c.magic.title}</h3>
         <p>{c.magic.text}</p>
+        <div class="linkbox"><a data-magic-link></a></div>
         <div class="actions">
           <button class="btn small blue" type="button" data-magic-copy>{c.magic.copy}</button>
           <a class="btn small ghost" data-magic-whatsapp target="_blank" rel="noopener">{c.magic.whatsapp}</a>
-          <a class="btn small ghost" data-magic-open>{c.magic.open}</a>
+          <a class="btn small" data-magic-open>{c.magic.open}</a>
         </div>
       </div>
-      <div class="actions">
-        <a class="btn" data-site-link-button target="_blank" rel="noopener">{c.done.visit}</a>
-        <a class="btn ghost" href={s.paths.create}>{c.done.again}</a>
-      </div>
+      <div class="frame"><iframe title={c.done.title} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></div>
     </section>
 
     <section data-view="message" class="panel" aria-live="assertive">

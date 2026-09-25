@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { emitMetrics } from '../src/core/metrics';
-import { republish } from '../src/core/owner';
 import { QUARANTINE_AFTER, reportSite } from '../src/core/report';
 import { memoryStores } from './memory-stores';
 
@@ -32,8 +31,6 @@ describe('reportSite', () => {
     expect(t.invalidated).toContain('sitio-malo');
     expect(t.sent).toHaveLength(3);
     expect(t.sent[2]).toContain('quarantined');
-    // The owner cannot put a quarantined site back online.
-    expect(await republish({ ...t.sites.get('sitio-malo')!, content: {} as never, brief: {} as never }, { stores: t.stores } as never)).toEqual({ status: 409 });
   });
 
   it('ignores unknown and unpublished sites, and caps reports per visitor per day', async () => {

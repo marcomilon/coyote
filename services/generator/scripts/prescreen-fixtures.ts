@@ -1,12 +1,12 @@
 /**
  * Runs every prescreen fixture through the real model and compares with the hardcoded brand list.
- *   npm run prescreen:fixtures            (model from src/core/models.ts; override with BEDROCK_MODEL_ID)
+ *   npm run prescreen:fixtures            (model from src/core/models.ts; override with PRESCREEN_MODEL_ID)
  * Exits 1 if any decision differs from the expected one.
  */
 import { normalizeAnswers } from '../src/core/answers';
 import { callTool } from '../src/core/bedrock';
 import { findBrand } from '../src/core/brands';
-import { modelId as resolveModelId } from '../src/core/models';
+import { prescreenModelId as resolveModelId } from '../src/core/models';
 import { isRejected, prescreen } from '../src/core/prescreen';
 import { PRESCREEN_CASES, type PrescreenCase } from '../test/fixtures/prescreen-cases';
 

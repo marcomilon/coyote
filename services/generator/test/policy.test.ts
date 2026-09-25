@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { checkContent, checkHtml, scrubModelContent, scrubText } from '../src/core/policy';
-import { render } from '../src/core/render';
-import { editorial as plain } from '../themes/editorial';
-import { brief, content } from './fixtures';
+import { renderDraft } from '../src/core/drafts';
+import { checkHtml, checkTexts, contactInText, scrubText, type Violation } from '../src/core/policy';
+import { sanitizePage } from '../src/core/sanitize';
+import { MODEL_PAGE } from './fixtures';
+import { urls } from './harness';
+
+/** The fields a page is checked with: the business name and the headlines count for brands. */
+const content = {
+  businessName: 'Panadería Luna',
+  title: 'Panadería Luna — pan de masa madre en Chapinero, Bogotá',
+  headline: 'Pan de masa madre, cada mañana en Chapinero',
+  subhead: 'Horneamos desde las 5 a. m. con harinas colombianas.',
+  about: 'Somos una panadería de barrio en Chapinero.',
+  address: 'Calle 60 # 9-12',
+};
+const checkContent = (c: typeof content): Violation[] =>
+  checkTexts(Object.values(c), { businessName: c.businessName, headlines: [c.title, c.headline] });
 
 const codes = (violations: { code: string }[]) => violations.map((v) => v.code);
 
@@ -39,8 +52,7 @@ describe('checkContent', () => {
   });
 
   it('checks user-provided fields too', () => {
-    const tampered = { ...content, contact: { ...content.contact, address: 'Ingresa tu PIN en la entrada' } };
-    expect(codes(checkContent(tampered))).toContain('credential-request');
+    expect(codes(checkContent({ ...content, address: 'Ingresa tu PIN en la entrada' }))).toContain('credential-request');
   });
 });
 
@@ -55,49 +67,50 @@ describe('scrubText', () => {
     ['Desde 1998, más de 20.000 clientes y 3 sedes', 'Desde 1998, más de 20.000 clientes y 3 sedes'],
   ])('%s', (input, output) => expect(scrubText(input)).toBe(output));
 
-  it('scrubs every model text field', () => {
-    const { businessName: _n, lang: _l, contact: _c, media: _m, ...model } = content;
-    const scrubbed = scrubModelContent({ ...model, about: 'Compra en tienda.test.com hoy', services: [{ name: 'Pan', detail: 'Ver www.x.com' }] });
-    expect(scrubbed.about).toBe('Compra en hoy');
-    expect(scrubbed.services[0]?.detail).toBe('Ver');
-  });
+});
+
+describe('contactInText', () => {
+  it.each([
+    ['Llama al +57 311 999 0000', true],
+    ['Escríbenos a hola@luna.co', true],
+    ['Visita www.luna.com.co', true],
+    ['Abrimos de 9:00 a 18:00', false],
+    ['Hogaza a $18.000.000 para eventos', false],
+    ['Más de 20.000 clientes desde 1998', false],
+  ])('%s', (text, found) => expect(contactInText(text).length > 0).toBe(found));
 });
 
 describe('checkHtml', () => {
   const options = { platformOrigins: ['https://app.test', 'https://sites.test'] };
-  const page = render({
-    theme: plain,
-    brief,
-    content: { ...content, contact: { ...content.contact, facebook: 'panaderialuna' } },
-    siteUrl: 'https://sites.test/panaderia-luna/',
-    reportUrl: 'https://app.test/reportar?sitio=panaderia-luna',
-    privacyUrl: 'https://app.test/privacidad',
-  });
+  const page = renderDraft(sanitizePage(MODEL_PAGE).html, {
+    answers: { businessName: 'Panadería Luna', about: 'Pan de masa madre.', lang: 'es', contact: { whatsapp: '573001234567', address: 'Calle 60 # 9-12', facebook: 'panaderialuna' } },
+    notes: [],
+    media: { photos: [] },
+  }, 'panaderia-luna', urls);
   const withBody = (markup: string) => page.replace('</body>', `${markup}</body>`);
 
-  it('passes a rendered page', () => {
+  it('passes a filled page', () => {
     expect(checkHtml(page, options)).toEqual([]);
   });
 
   it.each([
-    ['script', '<script>alert(1)</script>', 'forbidden-element'],
     ['iframe', '<iframe src="https://evil.test"></iframe>', 'forbidden-element'],
     ['object', '<object data="x.swf"></object>', 'forbidden-element'],
     ['base', '<base href="https://evil.test/">', 'forbidden-element'],
     ['meta refresh', '<meta http-equiv="Refresh" content="0;url=https://evil.test">', 'forbidden-element'],
-    ['event handler', '<img src="assets/a.webp" onerror="alert(1)">', 'forbidden-attribute'],
+    ['script from another host', '<script src="https://evil.test/x.js"></script>', 'forbidden-url'],
     ['javascript: link', '<a href="javascript:alert(1)">x</a>', 'forbidden-url'],
     ['link to another site', '<a href="https://evil.test/login">x</a>', 'forbidden-url'],
     ['http link', '<a href="http://wa.me/573001234567">x</a>', 'forbidden-url'],
     ['protocol-relative link', '<a href="//evil.test">x</a>', 'forbidden-url'],
-    ['remote image', '<img src="https://evil.test/pixel.gif">', 'forbidden-url'],
+    ['http image', '<img src="http://evil.test/pixel.gif">', 'forbidden-url'],
     ['absolute-path image', '<img src="/other-site/assets/a.webp">', 'forbidden-url'],
     ['remote stylesheet', '<link rel="stylesheet" href="https://evil.test/x.css">', 'forbidden-url'],
     ['prefetch link', '<link rel="prefetch" href="assets/x">', 'forbidden-element'],
     ['any form in the MVP', '<form method="post" action="https://api.test/contact/x" data-coyote-contact></form>', 'forbidden-form'],
     ['password field', '<input type="password">', 'forbidden-form'],
     ['stray input', '<input type="text" name="tarjeta">', 'forbidden-form'],
-    ['remote url in a style attribute', '<div style="background:url(https://evil.test/x.png)"></div>', 'forbidden-css'],
+    ['http url in a style attribute', '<div style="background:url(http://evil.test/x.png)"></div>', 'forbidden-css'],
     ['@import in a style element', '<style>@import "https://evil.test/x.css";</style>', 'forbidden-css'],
   ])('rejects %s', (_, markup, code) => {
     expect(codes(checkHtml(withBody(markup), options))).toContain(code);

@@ -53,6 +53,13 @@ Question = {
   - add no forms, scripts or external URLs
 
   `BANNED_PHRASES` stays.
+- **Design guide** (`services/generator/prompts/design-guide.md`, versioned in the repo): the system prompt for `write_site` and `edit_site` includes it. Bedrock has no Agent Skills, code execution or Files API, so this guide plays the role a skill would. It covers:
+  - typography (distinctive display + body pairings, type scale), layout and spacing, color and contrast
+  - mobile first (390px), and what makes a page look generic or outdated
+  - good practice for small-business sites: the four jobs, a WhatsApp button always in reach, "Cómo llegar", hours with today's day easy to find
+  - what suits each business type (salon, dentist, mini market, trades, food)
+
+  It is kept stable and first in the prompt so Bedrock prompt caching covers it. Any change to it is judged on the screenshot sheet (step 1).
 - **Images:** uploaded photos and the logo go to Claude as image blocks, so it designs around them. In the page they appear only as `{{photo:1..3}}` and `{{logo}}`. When there are no photos and `heroScene` is set, `generateHero` (`core/images.ts`) fills `{{hero}}`. If that fails, the element with `{{hero}}` is removed.
 - **Placeholders:** `{{whatsapp_url}}`, `{{whatsapp_display}}`, `{{maps_url}}`, `{{address}}`, `{{instagram_url}}`, `{{facebook_url}}`, `{{photo:N}}`, `{{logo}}`, `{{hero}}`. The new `core/fill.ts` fills them:
   - it escapes every value
@@ -116,7 +123,7 @@ The document is rebuilt from an allowlist (parsed with htmlparser2):
 
 ## Steps
 0. 👤 **Bedrock access for Claude:** the Anthropic use-case form (PLAN.md Phase 0). Everything else is blocked on it.
-1. **Offline bake-off:** `site-writer` + sanitizer + fill run through `scripts/local-generate.ts` on 10 fixed businesses (salon, dentist, mini market, hardware store, bakery…), with canned answers to the questions. Run each on both Haiku 4.5 and Sonnet 5, and build a screenshot sheet at mobile and desktop widths (extending `themes:sheet`). **👤 The user picks the model and judges the quality.** Iterate on the prompt until the sites are good.
+1. **Offline bake-off:** write the design guide first. Then `site-writer` (with the guide in its system prompt) + sanitizer + fill run through `scripts/local-generate.ts` on 10 fixed businesses (salon, dentist, mini market, hardware store, bakery…), with canned answers to the questions. Run each on both Haiku 4.5 and Sonnet 5, and build a screenshot sheet at mobile and desktop widths (extending `themes:sheet`). **👤 The user picks the model and judges the quality.** Iterate on the prompt and the design guide until the sites are good.
 2. **Sanitizer tests** with hostile fixtures: hidden text, a fake login, a smuggled `wa.me` link, `url()` exfiltration, SVG tricks, meta refresh, injected questions. Then `npm test`.
 3. **Pipeline:** clarify → `NEEDS_INPUT` → answers → write → sanitize → fill → draft + magic URL. Update `flows.test.ts` and `pipeline.test.ts`.
 4. **Web:** the questions form, the magic-URL page, and the es/pt copy.

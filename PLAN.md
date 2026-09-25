@@ -26,6 +26,8 @@ Domains arrive in stages. The `cdk.json` context (`domainName`, `sitesDomainName
 2. **`consideralohecho.com`** (internal testing, when the user decides): `domainName = consideralohecho.com`, `sitesDomainName = sites.consideralohecho.com`, so sites live at `{slug}.sites.consideralohecho.com`. Sharing one registrable domain is fine only while nothing is public.
 3. **Final domains** (before public launch): separate registrable domain for sites, PSL submission.
 
+`consideralohecho.com` itself serves only the project landing page (`landing/index.html`, a static file hosted outside the stack). It does not change the stack's domain mode.
+
 Context keys: `domainName`, `sitesDomainName`, and optionally `hostedZoneName` / `sitesHostedZoneName` when a name lives in a parent zone (stage 2: `sitesDomainName = sites.consideralohecho.com`, `sitesHostedZoneName = consideralohecho.com`).
 
 Switching stage = change the context, redeploy, run `npm run rerender-all`. To keep it that simple:

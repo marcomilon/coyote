@@ -30,12 +30,14 @@ Question = {
   id: string,                    // [a-z0-9_]{1,30}
   label: string,                 // ≤120 chars, owner's language
   help?: string,                 // ≤160
-  type: 'text' | 'textarea' | 'choice' | 'multi' | 'yesno',
+  type: 'text' | 'textarea' | 'choice' | 'multi' | 'yesno'
+      | 'address' | 'phone' | 'whatsapp' | 'email' | 'instagram' | 'facebook',
   options?: string[],            // 2–6, ≤40 chars each, for choice/multi
 }
 // max 4 questions; all optional for the owner
 ```
-- **What the model may ask:** only things that change the site, such as services and prices, what makes the business different, hours, the style they like, and delivery or home visits. It must never ask for phone numbers, links, addresses or personal identifiers.
+- **What the model may ask:** anything that improves the site: services and prices, what makes the business different, hours, the style they like, delivery or home visits, and the business's **public contact details** (address, phone, WhatsApp, email, Instagram, Facebook). It must not ask for personal data that isn't meant for customers (ID numbers, home address of the owner, payment details).
+- **Contact questions use the contact types**, never `text`. Our form renders them as proper inputs (`type="tel"`, `type="email"`, address field), and the answers are validated like the original form fields (`Contact` schema in `content.ts`, extended with `phone` and `email`) and saved into the site's **contact details, not into the model's answers**. They reach the page only through placeholders, so a contact detail in the page always equals what the owner typed. A contact answer written into a `text` question is caught by the existing phone/URL scrub and ignored.
 - **Checks on the questions:** labels and options go through `outputAllowed` and `checkContent`. The frontend always escapes them (`textContent`).
 - **Answers:** 500 characters max each. They are stored with the site and passed inside the guarded `<answers>` block (`answersBlock`, `prompt.ts:96`).
 - **Edits:** they use the same mechanism. If a change request is unclear, the model can ask first.
@@ -66,10 +68,21 @@ Question = {
 
   It is kept stable and first in the prompt so Bedrock prompt caching covers it. Any change to it is judged on the screenshot sheet (step 1).
 - **Images:** uploaded photos and the logo go to Claude as image blocks, so it designs around them. In the page they appear only as `{{photo:1..3}}` and `{{logo}}`. When there are no photos and `heroScene` is set, `generateHero` (`core/images.ts`) fills `{{hero}}`. If that fails, the element with `{{hero}}` is removed.
-- **Placeholders:** `{{whatsapp_url}}`, `{{whatsapp_display}}`, `{{maps_url}}`, `{{address}}`, `{{instagram_url}}`, `{{facebook_url}}`, `{{photo:N}}`, `{{logo}}`, `{{hero}}`. The new `core/fill.ts` fills them:
+- **Placeholders:** `{{whatsapp_url}}`, `{{whatsapp_display}}`, `{{phone_url}}` (`tel:`), `{{phone_display}}`, `{{email_url}}` (`mailto:`), `{{email_display}}`, `{{maps_url}}`, `{{map}}`, `{{address}}`, `{{instagram_url}}`, `{{facebook_url}}`, `{{photo:N}}`, `{{logo}}`, `{{hero}}`. The new `core/fill.ts` fills them:
   - it escapes every value
   - it builds the Maps URL with the logic at `render.ts:43-48`, going through `urls.ts`
+  - a placeholder with no value (no email, no address…) removes the element that carries it, so the model can design every contact option and the page shows only the ones the owner has
   - it appends the platform footer (`render.ts:93`)
+- **Google map (`{{map}}`):** the model places `<div data-slot="map"></div>` where the map goes and styles the box (size, corners, border). Our code, never the model, fills it with a keyless Google Maps embed of the owner's address, so the map always points to that address:
+  ```html
+  <iframe title="Mapa: {businessName}, {address}" loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade"
+    src="https://maps.google.com/maps?q={encoded address}&z=16&output=embed"></iframe>
+  ```
+  - no API key. This URL form is not documented by Google and could change. If it stops working, we switch the iframe in `fill.ts` (to the keyed Embed API, or no map) and run `refill-all`; the "Cómo llegar" button stays either way
+  - no address → the map element is removed
+  - the sanitizer still rejects every `<iframe>` the model writes; the map iframe is added after sanitizing, in `fill.ts`, and `checkHtml` allows exactly that iframe shape
+  - the sites CSP gets `frame-src https://maps.google.com https://www.google.com` (`infra/lib/csp.ts`; Google may redirect between the two). Scripts stay blocked in our page; the map runs inside Google's own frame.
 - **Stored per site:** the unfilled HTML (the "source") and `site.json` (answers, question answers, contact, media, lang). Filling the source again makes the page with no model call. That covers contact edits and a domain switch (`refill-all` replaces `rerender-all`).
 
 ### Sanitizer and checks (`core/sanitize.ts`, extending `policy.ts`)
@@ -120,7 +133,7 @@ The document is rebuilt from an allowlist (parsed with htmlparser2):
   - removed: `POST /jobs/{id}/publish`, `POST /me/unpublish`, `POST /me/republish`
 - `cf-rewrite.js` changes: serve `_draft/`, stop serving `{slug}/`. Update its tests.
 - S3: no lifecycle expiry on `_draft/`.
-- IAM for the model follows `modelId` (`generator-api.ts:146-177`). The sites CSP is unchanged.
+- IAM for the model follows `modelId` (`generator-api.ts:146-177`). The sites CSP adds `frame-src https://maps.google.com https://www.google.com` for the map (stack test updated).
 
 ### Docs
 - **PLAN.md:** rewrite Decisions `:14`, Generation `:116`, Content safety `:136`, Design quality `:178`, Site ownership `:233` and Preview `:241`. Add "Phase 5c — Model-written sites" to the tracker, with a 👤 item for the later publishing, review and email plan.

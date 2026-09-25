@@ -285,7 +285,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 
 ### Phase 0 — Admin (only what blocks building)
 - [x] 👤 Create the `coyote` AWS CLI profile; `aws sts get-caller-identity --profile coyote` works
-- [ ] 👤 Bedrock access for Claude (Haiku 4.5, Sonnet 5). Deferred by the user until the pipeline is stable; Nova is used meanwhile. Needs the Anthropic use case form in the Bedrock console (Model catalog → any Claude model), then ~15 min. Profile IDs: `us.anthropic.claude-haiku-4-5-20251001-v1:0`, `us.anthropic.claude-sonnet-5`
+- [ ] 👤 Bedrock access for Claude (Opus 5.5 is the default for model-written sites, see `PLAN-MODEL-SITES.md`; Haiku 4.5 and Sonnet 5 too). Use case form submitted; Nova is used until access is granted. Needs the Anthropic use case form in the Bedrock console (Model catalog → any Claude model), then ~15 min. Profile IDs: `us.anthropic.claude-haiku-4-5-20251001-v1:0`, `us.anthropic.claude-sonnet-5`
 - [x] `cdk bootstrap --profile coyote` for the account/us-east-1
 
 ### Phase 1 — Scaffold

@@ -1,7 +1,7 @@
 # Model-written sites (design first)
 
 ## Context
-The fixed themes (about 70 lines each) look outdated. Claude writes much better landing pages when left free, and good design is the core of the product. The new approach: **Claude (Sonnet 5 or Haiku 4.5) writes each site's full HTML and CSS.** When it lacks information, it **asks the business owner follow-up questions, shown as a form**, before it builds the site. The owner gets a **magic URL** where they can see the result and ask for changes in free text.
+The fixed themes (about 70 lines each) look outdated. Claude writes much better landing pages when left free, and good design is the core of the product. The new approach: **Claude Opus 5.5 (the default model) writes each site's full HTML and CSS.** When it lacks information, it **asks the business owner follow-up questions, shown as a form**, before it builds the site. The owner gets a **magic URL** where they can see the result and ask for changes in free text.
 
 The project isn't live yet, so **nothing is published in this plan**. There is no public `{slug}/` page, no publish step and no review. Publishing, admin review and the go-live email come in a later plan.
 
@@ -41,7 +41,12 @@ Question = {
 - **Edits:** they use the same mechanism. If a change request is unclear, the model can ask first.
 
 ### Writing the site
-- **New `core/site-writer.ts`** makes the `plan_site`, `write_site` and `edit_site` calls through `callTool` (`core/bedrock.ts:63`) and `callWithRetry` (`pipeline.ts:83`). The write and edit calls get maxTokens ≈ 16k.
+- **Model: Claude Opus 5.5** is the default in `core/models.ts` (the Bedrock inference profile ID is confirmed in the console when access is granted; `BEDROCK_MODEL_ID` still overrides it). The pre-screen classifier stays on a cheaper model through its own `PRESCREEN_MODEL_ID`, since it runs on every request, including the ones it rejects.
+- **Opus 5.5 API differences**, handled in `callTool` (`core/bedrock.ts:63`):
+  - **It rejects a forced tool choice** (`toolChoice: { tool }`, `bedrock.ts:83-86`) with a 400. `callTool` switches to `toolChoice: auto`, the prompt names the tool to call, and the zod validation stays. A response with no tool call counts as `ModelOutputError` and goes through the existing retry.
+  - **Thinking can't be turned off.** Its effort level defaults to `medium`, so we set effort explicitly per call (`additionalModelRequestFields`): `low` for `plan_site`, and `medium` or `high` for `write_site`/`edit_site`, chosen during the bake-off.
+  - The whole page comes back in one response, so `write_site`/`edit_site` stream the response (`ConverseStream`) with maxTokens ≈ 32k, to stay clear of request timeouts.
+- **New `core/site-writer.ts`** makes the `plan_site`, `write_site` and `edit_site` calls through `callTool` and `callWithRetry` (`pipeline.ts:83`).
 - **Timeouts:** the generate Lambda gets 10 minutes; the stuck-job cutoff in `jobs.ts:97` goes to 12 minutes.
 - **Prompts** (`prompt.ts`). The model is told to:
   - write a modern, mobile-first page that makes the kind and character of the business clear
@@ -125,7 +130,7 @@ The document is rebuilt from an allowlist (parsed with htmlparser2):
 
 ## Steps
 0. 👤 **Bedrock access for Claude:** the Anthropic use-case form (PLAN.md Phase 0). Everything else is blocked on it.
-1. **Offline bake-off:** write the design guide first. Then `site-writer` (with the guide in its system prompt) + sanitizer + fill run through `scripts/local-generate.ts` on 10 fixed businesses (salon, dentist, mini market, hardware store, bakery…), with canned answers to the questions. Run each on both Haiku 4.5 and Sonnet 5, and build a screenshot sheet at mobile and desktop widths (extending `themes:sheet`). Each site is also reviewed against the full `web-interface-guidelines` checklist, with its problems listed next to its screenshots. **👤 The user picks the model and judges the quality.** Iterate on the prompt and the design guide until the sites are good.
+1. **Offline bake-off:** write the design guide first. Then `site-writer` (with the guide in its system prompt) + sanitizer + fill run through `scripts/local-generate.ts` on 10 fixed businesses (salon, dentist, mini market, hardware store, bakery…), with canned answers to the questions. Run each on Opus 5.5 (the default) and on Sonnet 5 as a cheaper reference, and compare cost per site, time per site and quality. Build a screenshot sheet at mobile and desktop widths (extending `themes:sheet`). Each site is also reviewed against the full `web-interface-guidelines` checklist, with its problems listed next to its screenshots. **👤 The user judges the quality, and confirms Opus 5.5 once they have seen its cost next to Sonnet 5's.** Iterate on the prompt and the design guide until the sites are good.
 2. **Sanitizer tests** with hostile fixtures: hidden text, a fake login, a smuggled `wa.me` link, `url()` exfiltration, SVG tricks, meta refresh, injected questions. Then `npm test`.
 3. **Pipeline:** clarify → `NEEDS_INPUT` → answers → write → sanitize → fill → draft + magic URL. Update `flows.test.ts` and `pipeline.test.ts`.
 4. **Web:** the questions form, the magic-URL page, and the es/pt copy.

@@ -19,11 +19,11 @@ No usamos cookies ni herramientas de analítica, ni en esta aplicación ni en lo
 
 ## Quién procesa tus datos
 
-Todo se aloja en Amazon Web Services. Los textos se generan con modelos de inteligencia artificial a través de Amazon Bedrock; a esos modelos nunca les enviamos tu número de teléfono.
+Todo se aloja en Amazon Web Services. El diseño y los textos se generan con modelos de inteligencia artificial de Anthropic (Claude) y de Amazon Bedrock, que reciben tus respuestas y tus fotos para crear el sitio y no las usan para entrenar sus modelos. A esos modelos nunca les enviamos tu número de teléfono.
 
 ## Los sitios que creamos
 
-Un sitio publicado es público: cualquiera puede ver el nombre, la descripción, el WhatsApp, la dirección y las redes que pusiste. Los visitantes de esos sitios no son rastreados.
+Un sitio publicado es público: cualquiera puede ver el nombre, la descripción, el WhatsApp, la dirección y las redes que pusiste. Los visitantes de esos sitios no son rastreados. Los sitios cargan tipografías y librerías desde servicios públicos (Google Fonts, Tailwind, jsDelivr, cdnjs, unpkg), que reciben la dirección IP del visitante como cualquier servidor web.
 
 ## Cómo borrar tus datos
 

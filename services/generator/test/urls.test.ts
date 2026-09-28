@@ -55,10 +55,3 @@ describe('pageLinks', () => {
   });
 });
 
-describe('maps', () => {
-  it('builds the directions link and the keyless embed from the address', () => {
-    const urls = createUrls({ mode: 'domain', domainName: 'brand.test', sitesDomainName: 'sites.test' });
-    expect(urls.mapsUrl('Calle 60 # 9-12')).toBe('https://maps.google.com/?q=Calle%2060%20%23%209-12');
-    expect(urls.mapEmbedUrl('Calle 60 # 9-12')).toBe('https://maps.google.com/maps?q=Calle%2060%20%23%209-12&z=16&output=embed');
-  });
-});

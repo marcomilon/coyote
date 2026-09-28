@@ -99,7 +99,7 @@ const clientStrings = {
       <h2>{c.working.title}</h2>
       <div class="paint" aria-hidden="true"></div>
       <ol class="worksteps">{c.working.steps.map((step) => <li>{step}</li>)}</ol>
-      <p class="hint">{c.working.note}</p>
+      <p class="hint">{c.working.note} <span class="elapsed" data-elapsed aria-hidden="true"></span></p>
     </section>
 
     <section data-view="questions">

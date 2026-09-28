@@ -4,7 +4,7 @@ import { submitAnswers } from '../src/core/clarify';
 import { runGenerateJob } from '../src/core/generate-job';
 import { publicJob, PENDING_TIMEOUT_MS } from '../src/core/jobs';
 import { submit } from '../src/core/submit';
-import { MODEL_PAGE, QUESTIONS } from './fixtures';
+import { QUESTIONS } from './fixtures';
 import { body, harness } from './harness';
 
 describe('submit', () => {
@@ -75,22 +75,25 @@ describe('submit', () => {
 });
 
 describe('runGenerateJob: a detailed request goes straight to the draft', () => {
-  it('writes the filled draft, keeps the source, issues the magic link, and marks the job DONE', async () => {
+  it('writes the page with the page writer, keeps its record, issues the magic link, and marks the job DONE', async () => {
     const t = harness();
     await submit(body, '1.2.3.4', t.submitDeps);
     expect(await runGenerateJob('job-1', t.generateDeps)).toMatchObject({ outcome: 'DONE' });
 
-    expect(t.calls).toEqual(['classify', 'plan_site', 'write_site']);
+    expect(t.calls).toEqual(['classify', 'plan_site']);
+    expect(t.writer.requests).toHaveLength(1);
     const job = t.jobs.get('job-1')!;
     expect(job).toMatchObject({ status: 'DONE', draftUrl: 'https://sites.test/_draft/draft1/' });
     expect(job.ownerToken).toMatch(/^panaderia-luna\./);
-    expect(job.usage.map((u) => u.step)).toEqual(['classify', 'plan_site', 'write_site']);
+    expect(job.usage.map((u) => u.step)).toEqual(['classify', 'plan_site', 'write_page']);
 
     const page = t.objects.get('_draft/draft1/index.html')!;
-    expect(page).toContain('href="https://wa.me/573001234567?text=');
-    expect(page).toContain('https://maps.google.com/maps?q=Calle%2060%20%23%209-12&amp;z=16&amp;output=embed');
-    expect(page).not.toContain('{{');
-    expect(t.objects.get('_src/panaderia-luna/draft1.html')).toContain('{{whatsapp_url}}');
+    expect(page).toContain('href="https://wa.me/573001234567"'); // the stand-in number swapped back
+    expect(page).toContain('Sitio creado con Coyote');
+    const doc = JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!);
+    expect(doc).toMatchObject({ answers: { contact: { whatsapp: '573001234567' } }, media: { photos: [] } });
+    expect(doc.page).toContain('<h1>Panadería Luna</h1>');
+    expect(doc.content).toBeUndefined();
     expect(t.sites.get('panaderia-luna')).toMatchObject({ status: 'draft', currentDraftId: 'draft1', drafts: ['draft1'], ownerWhatsApp: '573001234567' });
     expect(t.sites.get('panaderia-luna')!.tokenHash).toMatch(/^[0-9a-f]{64}$/);
     // Nothing is published: no {slug}/ page.
@@ -132,14 +135,14 @@ describe('questions', () => {
     expect(t.started).toEqual(['job-1', 'job-1']);
 
     await runGenerateJob('job-1', t.generateDeps);
-    expect(t.calls).toEqual(['classify', 'plan_site', 'classify', 'write_site']); // answers are screened; only one round of questions
-    const write = t.requests.at(-1)!;
-    expect(write.guarded).toContain('Hogazas de masa madre a $18.000');
-    expect(write.guarded).toContain('→ Clásico');
-    expect(write.guarded).not.toContain('555'); // the contact answer never reaches the model
-    const page = t.objects.get('_draft/draft1/index.html')!;
-    expect(page).toContain('href="tel:+576015551234"'); // it reaches the page through the placeholder
-    expect(page).toContain('Teléfono:');
+    expect(t.calls).toEqual(['classify', 'plan_site', 'classify']); // answers are screened; only one round of questions
+    const write = t.writer.requests.at(-1)!;
+    expect(write.notes.map((n) => n.answer).join(' ')).toContain('Hogazas de masa madre a $18.000');
+    expect(write.notes.map((n) => n.answer)).toContain('Clásico');
+    expect(JSON.stringify(write)).not.toContain('5551234'); // the phone number reaches the model only as a stand-in
+    expect(write.answers.contact.phone).toMatch(/^57/);
+    // The real number is in the site's contact details.
+    expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!).answers.contact.phone).toBe('576015551234');
   });
 
   it('"Generar así" skips the questions with no extra model call', async () => {
@@ -148,9 +151,9 @@ describe('questions', () => {
     await runGenerateJob('job-1', t.generateDeps);
     expect(await submitAnswers('job-1', { skip: true }, t.answersDeps)).toEqual({ status: 202 });
     await runGenerateJob('job-1', t.generateDeps);
-    expect(t.calls).toEqual(['classify', 'plan_site', 'write_site']);
+    expect(t.calls).toEqual(['classify', 'plan_site']);
+    expect(t.writer.requests).toHaveLength(1);
     expect(t.jobs.get('job-1')!.status).toBe('DONE');
-    expect(t.objects.get('_draft/draft1/index.html')).not.toContain('Teléfono:'); // data-needs removed the group
   });
 
   it('validates answers like the form, and accepts them only once', async () => {
@@ -192,23 +195,12 @@ describe('questions', () => {
 describe('runGenerateJob: failures', () => {
   it('rejects a page that breaks the content policy, and frees the slug', async () => {
     const t = harness();
-    t.options.page = withMarkup('<p>Verifica tu cuenta para seguir comprando.</p>');
+    t.writer.options.page = (r) => `<!doctype html><html><head><title>x</title></head><body><h1>${r.answers.businessName}</h1><p>Verifica tu cuenta bancaria ingresando tu clave para seguir comprando.</p><p>${'x '.repeat(300)}</p></body></html>`;
     await submit(body, '1.2.3.4', t.submitDeps);
     await runGenerateJob('job-1', t.generateDeps);
     expect(t.jobs.get('job-1')).toMatchObject({ status: 'REJECTED', rejectedBy: 'policy' });
     expect(t.sites.size).toBe(0);
     expect([...t.objects.keys()].filter((k) => k.startsWith('_draft/'))).toEqual([]);
-  });
-
-  it('retries a page the sanitizer refuses once, with the problems as feedback, then rejects it', async () => {
-    const t = harness();
-    t.options.page = withMarkup('<form action="https://evil.test"><input name="clave"></form>');
-    await submit(body, '1.2.3.4', t.submitDeps);
-    await runGenerateJob('job-1', t.generateDeps);
-    expect(t.calls.filter((c) => c === 'write_site')).toHaveLength(2);
-    expect(t.requests.at(-1)!.user).toContain('<form> is not allowed');
-    expect(t.jobs.get('job-1')).toMatchObject({ status: 'REJECTED', rejectedBy: 'policy' });
-    expect(t.jobs.get('job-1')!.usage.filter((u) => u.step === 'write_site')).toHaveLength(2); // both attempts are paid for
   });
 
   it('rejects when the output guardrail blocks the text', async () => {
@@ -243,6 +235,3 @@ describe('status', () => {
   });
 });
 
-function withMarkup(markup: string): string {
-  return MODEL_PAGE.replace('</main>', `${markup}</main>`);
-}

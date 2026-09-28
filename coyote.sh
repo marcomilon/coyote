@@ -18,7 +18,7 @@ Commands:
   abuse-report                   Requests, rejections, and new sites of the last 24 h
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
-  refill-all                     Fill every site's current draft again (after fill.ts or domain changes; no model call)
+  refill-all                     Re-render every site's current draft (after theme, renderer, or domain changes; no model call)
   subscribe-alerts <email>       Email alarms, visitor reports, and cost alerts to this address (then confirm-alerts)
   protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
                                  AWS sends new confirmation emails; confirm each with confirm-alerts, never by clicking

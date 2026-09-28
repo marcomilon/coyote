@@ -3,7 +3,7 @@ import type { GenerateJobDeps } from '../src/core/generate-job';
 import type { OwnerDeps } from '../src/core/owner';
 import type { SubmitDeps } from '../src/core/submit';
 import { createUrls } from '../src/core/urls';
-import { fakeModel } from './fixtures';
+import { fakeModel, fakeWriter } from './fixtures';
 import { memoryStores } from './memory-stores';
 
 export const NOW = 1_800_000_000_000;
@@ -14,6 +14,7 @@ export const body = { businessName: 'Panadería Luna', about: 'Panadería de mas
 export function harness(model: Parameters<typeof fakeModel>[0] = {}) {
   const memory = memoryStores();
   const fake = fakeModel(model);
+  const writer = fakeWriter();
   const started: string[] = [];
   let id = 0;
   let draft = 0;
@@ -28,14 +29,14 @@ export function harness(model: Parameters<typeof fakeModel>[0] = {}) {
   const generateDeps: GenerateJobDeps = {
     ...base,
     callTool: fake.callTool,
-    callText: fake.callText,
     modelId: 'writer',
     prescreenModelId: 'prescreen',
     urls,
     outputAllowed: async () => true,
     moderate: async () => [],
+    writePage: writer.writePage,
   };
   const answersDeps: AnswersDeps = { ...base, callTool: fake.callTool, prescreenModelId: 'prescreen' };
   const ownerDeps: OwnerDeps = { ...base, urls, outputAllowed: async () => true };
-  return { ...memory, ...fake, started, submitDeps, generateDeps, answersDeps, ownerDeps };
+  return { ...memory, ...fake, writer, started, submitDeps, generateDeps, answersDeps, ownerDeps };
 }

@@ -3,8 +3,8 @@
  * BEDROCK_MODEL_ID and PRESCREEN_MODEL_ID override them (the CDK stack sets both on the Lambdas).
  */
 
-/** Writes the sites (plan_site, write_site, edit_site). Confirm the inference profile ID in the Bedrock console. */
-export const DEFAULT_MODEL_ID = 'us.anthropic.claude-opus-5-5';
+/** Writes the copy (design_brief, publish_content, plan_site, edit_content). The themes carry the design. */
+export const DEFAULT_MODEL_ID = 'us.anthropic.claude-haiku-4-5-20251001-v1:0';
 
 /** The pre-screen runs on every request, including the ones it rejects, so it stays on a cheaper model. */
 export const DEFAULT_PRESCREEN_MODEL_ID = 'us.amazon.nova-2-lite-v1:0';

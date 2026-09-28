@@ -41,17 +41,30 @@ describe('magic link', () => {
 });
 
 describe('edits', () => {
-  it('a contact change refills the placeholders into a new draft, with no model call', async () => {
+  it('a contact change swaps the new details into a new draft with no model call', async () => {
     const t = await withDraft();
     const calls = t.calls.length;
-    expect(await editSite(t.site(), { contact: { instagram: '@luna.pan', email: 'hola@luna.test', address: '' } }, t.ownerDeps)).toEqual({ status: 200 });
+    const writes = t.writer.requests.length;
+    expect(await editSite(t.site(), { contact: { whatsapp: '+57 311 999 8877', email: 'hola@luna.test', address: '' } }, t.ownerDeps)).toEqual({ status: 200 });
     expect(t.calls.length).toBe(calls);
+    expect(t.writer.requests.length).toBe(writes);
     expect(t.site()).toMatchObject({ currentDraftId: 'draft2', drafts: ['draft1', 'draft2'] });
     const page = t.objects.get('_draft/draft2/index.html')!;
-    expect(page).toContain('https://instagram.com/luna.pan');
-    expect(page).toContain('href="mailto:hola@luna.test"');
-    expect(page).not.toContain('Cómo llegar'); // no address: the directions button and the map go
-    expect(page).not.toContain('maps.google.com');
+    expect(page).toContain('https://wa.me/573119998877');
+    expect(page).not.toContain('573001234567');
+    expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!).answers.contact).toMatchObject({ whatsapp: '573119998877', email: 'hola@luna.test' });
+  });
+
+  it('refuses a contact removal the page text still shows (that needs an edit request)', async () => {
+    const t = await withDraft();
+    t.writer.options.page = undefined;
+    // A page that prints the email in its text:
+    const doc = JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!);
+    doc.answers.contact.email = 'hola@luna.test';
+    doc.page = doc.page.replace('</main>', '<p>hola@luna.test</p></main>');
+    t.objects.set('_src/panaderia-luna/draft1.json', JSON.stringify(doc));
+    expect(await editSite(t.site(), { contact: { email: '' } }, t.ownerDeps)).toEqual({ status: 422 });
+    expect(t.site().currentDraftId).toBe('draft1');
   });
 
   it('rejects an invalid contact detail and leaves the draft as it was', async () => {
@@ -63,29 +76,34 @@ describe('edits', () => {
     expect(t.site().currentDraftId).toBe('draft1');
   });
 
-  it('a free-text change starts an edit job: screened, then edit_site on the current source, then a new draft', async () => {
+  it('a free-text change starts an edit job: screened, then the page writer changes the current page, then a new draft', async () => {
     const t = await withDraft();
     const result = await editSite(t.site(), { instruction: 'cambia el horario del sábado a 9–13' }, t.ownerDeps);
     expect(result).toEqual({ status: 202, jobId: 'job-2' });
     expect(t.jobs.get('job-2')).toMatchObject({ kind: 'edit', stage: 'clarify', slug: 'panaderia-luna', status: 'PENDING' });
     await runGenerateJob('job-2', t.generateDeps);
 
-    expect(t.calls.slice(-3)).toEqual(['classify', 'plan_site', 'edit_site']);
-    const edit = t.requests.at(-1)!;
-    expect(edit.guarded).toContain('<request>\ncambia el horario del sábado a 9–13\n</request>');
-    expect(edit.user).toContain('{{whatsapp_url}}'); // the current source, with placeholders
+    expect(t.calls.slice(-2)).toEqual(['classify', 'plan_site']);
+    const edit = t.writer.requests.at(-1)!;
+    expect(edit.instruction).toBe('cambia el horario del sábado a 9–13');
+    expect(edit.current).toContain('<h1>Panadería Luna</h1>'); // the current page, as written
+    expect(edit.current).not.toContain('573001234567'); // with the stand-in number
+    expect(t.jobs.get('job-2')!.usage.at(-1)!.step).toBe('edit_page');
     expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE', draftUrl: urls.draftUrl('draft2') });
     expect(t.jobs.get('job-2')!.ownerToken).toBeUndefined(); // no second magic link
-    expect(t.objects.get('_draft/draft2/index.html')).toContain('Nuestro pan de cada día');
+    expect(t.objects.get('_draft/draft2/index.html')).toContain('<p>cambia el horario del sábado a 9–13</p>');
     expect(t.site()).toMatchObject({ currentDraftId: 'draft2', status: 'draft' });
   });
 
   it('a failed or rejected edit keeps the site and its draft', async () => {
     const t = await withDraft();
-    t.options.edited = t.objects.get('_src/panaderia-luna/draft1.html')!.replace('</main>', '<p>Verifica tu cuenta hoy.</p></main>');
-    await editSite(t.site(), { instruction: 'agrega un aviso' }, t.ownerDeps);
+    await editSite(t.site(), { instruction: 'Verifica tu cuenta bancaria ingresando tu clave' }, t.ownerDeps);
     await runGenerateJob('job-2', t.generateDeps);
     expect(t.jobs.get('job-2')).toMatchObject({ status: 'REJECTED', rejectedBy: 'policy' });
+    t.writer.options.fail = new Error('overloaded');
+    await editSite(t.site(), { instruction: 'agrega tortas' }, t.ownerDeps);
+    await runGenerateJob('job-3', t.generateDeps);
+    expect(t.jobs.get('job-3')).toMatchObject({ status: 'FAILED' });
     expect(t.site()).toMatchObject({ status: 'draft', currentDraftId: 'draft1' });
   });
 
@@ -111,7 +129,7 @@ describe('edits', () => {
     for (let i = 0; i < 6; i++) await editSite(t.site(), { contact: { instagram: `luna${i}` } }, t.ownerDeps);
     expect(t.site().drafts).toEqual(['draft3', 'draft4', 'draft5', 'draft6', 'draft7']);
     expect(t.objects.has('_draft/draft1/index.html')).toBe(false);
-    expect(t.objects.has('_src/panaderia-luna/draft1.html')).toBe(false);
+    expect(t.objects.has('_src/panaderia-luna/draft1.json')).toBe(false);
   });
 });
 

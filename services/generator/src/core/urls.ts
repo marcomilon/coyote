@@ -34,10 +34,6 @@ export interface Urls {
   privacyUrl: string;
   /** The platform links every generated page carries, in the page's language. */
   pageLinks(slug: string, lang: 'es' | 'pt'): { reportUrl: string; privacyUrl: string };
-  /** "Cómo llegar": Google Maps search for the address. */
-  mapsUrl(address: string): string;
-  /** The keyless Google Maps embed (undocumented URL form; see PLAN-MODEL-SITES.md). */
-  mapEmbedUrl(address: string): string;
 }
 
 const trimSlash = (url: string) => url.replace(/\/+$/, '');
@@ -69,7 +65,7 @@ export function createUrls(config: UrlConfig): Urls {
   });
 }
 
-function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'reportUrl' | 'privacyUrl' | 'pageLinks' | 'mapsUrl' | 'mapEmbedUrl'>): Urls {
+function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'reportUrl' | 'privacyUrl' | 'pageLinks'>): Urls {
   const sitio = (slug: string) => `?sitio=${encodeURIComponent(slug)}`;
   return {
     ...base,
@@ -80,8 +76,6 @@ function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'reportUrl' | 'privacyUrl' 
     miSitioUrl: (token) => `${base.appUrl}/mi-sitio#token=${encodeURIComponent(token)}`,
     reportUrl: (slug) => `${base.appUrl}/reportar?sitio=${encodeURIComponent(slug)}`,
     privacyUrl: `${base.appUrl}/privacidad`,
-    mapsUrl: (address) => `https://maps.google.com/?q=${encodeURIComponent(address)}`,
-    mapEmbedUrl: (address) => `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=16&output=embed`,
   };
 }
 

@@ -83,9 +83,8 @@ export function guardrailFromEnv(env: Record<string, string | undefined> = proce
 
 export type CallTool = <S extends z.ZodType>(request: ToolRequest<S>) => Promise<ToolResult<z.infer<S>>>;
 
-/** A request whose answer is plain text. `step` names it in the usage records. */
-export type TextRequest = Omit<ToolRequest<z.ZodType>, 'tool'> & { step: string };
-export type CallText = (request: TextRequest) => Promise<{ text: string; usage: Usage }>;
+/** A Converse request, with the step name used in the usage records. */
+type TextRequest = Omit<ToolRequest<z.ZodType>, 'tool'> & { step: string };
 
 let client: BedrockRuntimeClient | undefined;
 const bedrock = () => (client ??= new BedrockRuntimeClient({ region: 'us-east-1', retryMode: 'adaptive' }));
@@ -106,7 +105,7 @@ interface Converse {
   usage: Usage;
 }
 
-/** One Converse (or ConverseStream) request. With a tool, the model may call it; without, it replies in text. */
+/** One Converse (or ConverseStream) request with a tool the model may call. */
 async function converse(request: TextRequest, tool?: ToolRequest<z.ZodType>['tool']): Promise<Converse> {
   const { modelId, system, guarded, user, maxTokens, effort, stream, images } = request;
   const step = tool?.name ?? request.step;
@@ -203,17 +202,6 @@ export const callTool: CallTool = async (request) => {
   const parsed = tool.schema.safeParse(toolInput);
   if (!parsed.success) throw new ModelOutputError(z.prettifyError(parsed.error), usage);
   return { value: parsed.data, usage };
-};
-
-/**
- * A plain text reply. Used for the page itself: models write better HTML as ordinary text than as a JSON
- * string inside a tool call. Parsing the reply is the caller's job.
- */
-export const callText: CallText = async (request) => {
-  const { stopReason, text, usage } = await converse(request);
-  if (stopReason === 'guardrail_intervened') throw new GuardrailBlocked(usage);
-  if (stopReason === 'max_tokens') throw new ModelOutputError('the output was cut off at the token limit. Make it shorter.', usage);
-  return { text, usage };
 };
 
 /** One retry, with the validation errors as feedback. */

@@ -3,7 +3,7 @@
  *   unpublish <slug>    take a site down for good and blocklist the slug
  *   restore <slug>      bring a quarantined site back
  *   abuse-report        who did what in the last 24 h
- *   refill-all          fill every site's current draft again (after a fill.ts or domain change); no model call
+ *   refill-all          re-render every site's current draft (after a theme, renderer, or domain change); no model call
  */
 import { readFileSync } from 'node:fs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';

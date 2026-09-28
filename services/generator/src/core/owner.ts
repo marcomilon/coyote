@@ -3,13 +3,14 @@ import { cleanContact, type ContactField } from './answers';
 import { Contact } from './content';
 import { deleteDraft, draftPrefix, loadDraft, mediaPrefix, saveDraft, sourcePrefix } from './drafts';
 import { JOB_TTL_SECONDS, type Job, type SiteRecord, type Stores } from './jobs';
+import { checkPage, replaceContact } from './page-check';
 import { checkTexts } from './policy';
 import { parseToken, secretMatches } from './token';
 import type { Urls } from './urls';
 
 const OWNER_REQUESTS_PER_DAY = 60;
-/** Free-text edits call the model, so they have their own cap. */
-export const EDITS_PER_DAY = 10;
+/** Free-text edits call the model (about $0.50 each for a written page), so they have their own cap. */
+export const EDITS_PER_DAY = 5;
 
 export interface OwnerDeps {
   stores: Stores;
@@ -37,7 +38,7 @@ export async function authenticate(header: string | undefined, { stores, now }: 
 
 /** What "Mi sitio" shows. Never the token hash. */
 export async function ownerView(site: SiteRecord, { stores, urls }: Pick<OwnerDeps, 'stores' | 'urls'>) {
-  const doc = site.currentDraftId ? (await loadDraft(site.slug, site.currentDraftId, stores)).doc : undefined;
+  const doc = site.currentDraftId ? await loadDraft(site.slug, site.currentDraftId, stores) : undefined;
   return {
     slug: site.slug,
     status: site.status,
@@ -72,18 +73,22 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   let current = await loadDraft(site.slug, site.currentDraftId, stores);
 
   if (contact) {
-    const merged: Record<string, string | undefined> = { ...current.doc.answers.contact };
+    const merged: Record<string, string | undefined> = { ...current.answers.contact };
     for (const [field, value] of Object.entries(contact) as [ContactField, string | undefined][]) {
       if (value !== undefined) merged[field] = cleanContact(field, value);
     }
     const checked = Contact.safeParse(merged);
     if (!checked.success) return { status: 400, fields: [...new Set(checked.error.issues.map((i) => `contact.${i.path.join('.')}`))] };
     const address = checked.data.address;
-    if (address && address !== current.doc.answers.contact.address && (checkTexts([address]).length > 0 || !(await deps.outputAllowed(address)))) return { status: 422 };
-    const doc = { ...current.doc, answers: { ...current.doc.answers, contact: checked.data } };
-    await saveDraft(site, current.source, doc, deps);
+    if (address && address !== current.answers.contact.address && (checkTexts([address]).length > 0 || !(await deps.outputAllowed(address)))) return { status: 422 };
+    // No model call: the new details are swapped into the page (a themed draft renders them).
+    const page = current.page === undefined ? undefined : replaceContact(current.page, current.answers.contact, checked.data);
+    const doc = { ...current, answers: { ...current.answers, contact: checked.data }, content: current.content && { ...current.content, contact: checked.data }, page };
+    // A detail removed from the page can still be in its text; that change needs an edit request.
+    if (page !== undefined && checkPage(page, { contact: checked.data, businessName: doc.answers.businessName, lang: doc.answers.lang, reportUrl: '', privacyUrl: '' }).violations.length > 0) return { status: 422 };
+    await saveDraft(site, doc, deps);
     site = (await stores.getSite(site.slug)) ?? site;
-    current = { ...current, doc };
+    current = doc;
   }
 
   if (!instruction) return { status: 200 };
@@ -98,7 +103,7 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
     startedAt: now,
     ttl: Math.floor(now / 1000) + JOB_TTL_SECONDS,
     ipHash: source?.ipHash ?? 'owner',
-    answers: current.doc.answers,
+    answers: current.answers,
     instruction,
     slug: site.slug,
     usage: [],

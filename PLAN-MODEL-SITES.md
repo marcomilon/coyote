@@ -1,5 +1,7 @@
 # Model-written sites (design first)
 
+> **Status: replaced.** Built and tested on Haiku 4.5 (commit `b085099` on `feature/model-sites`); the pages did not look good enough. Model-written pages came back in a different form: Opus 5.5 through Anthropic's API, with the frontend-design skill as the system prompt, no rules in the prompt, and checks on the finished page, with the themed page as the fallback (`PLAN.md` "Page writer"). The placeholders and the sanitizer below are not used. Kept from this plan: the follow-up questions, private drafts with the magic link, Mi sitio (free-text edits now go through `edit_content` on the content JSON), no publishing yet, and `refill-all`. The rest of this document describes the parked design.
+
 ## Context
 The fixed themes (about 70 lines each) look outdated. Claude writes much better landing pages when left free, and good design is the core of the product. The new approach: **Claude Opus 5.5 (the default model) writes each site's full HTML and CSS.** When it lacks information, it **asks the business owner follow-up questions, shown as a form**, before it builds the site. The owner gets a **magic URL** where they can see the result and ask for changes in free text.
 

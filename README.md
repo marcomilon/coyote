@@ -1,6 +1,6 @@
 # Coyote
 
-AI website generator for LatAm small businesses. Three questions in, a single-page site out, designed and written by Claude.
+AI website generator for LatAm small businesses. Three questions in (plus a few follow-ups when needed), a single-page site out.
 
 Design and progress live in [`PLAN.md`](PLAN.md) (MVP) and [`PLAN-PHASE2.md`](PLAN-PHASE2.md) (WhatsApp).
 
@@ -22,7 +22,7 @@ Design and progress live in [`PLAN.md`](PLAN.md) (MVP) and [`PLAN-PHASE2.md`](PL
 
 ## Layout
 - `infra/` — CDK app, one stack (`Coyote`)
-- `services/generator/` — Lambda code, the design guide (`prompts/`), local scripts
+- `services/generator/` — Lambda code, themes, local scripts
 - `web/` — our frontend (Astro from Phase 5): landing, form, "Mi sitio", legal pages
 
 ## Runbook
@@ -37,8 +37,8 @@ All commands use the AWS profile `coyote` (override with `COYOTE_AWS_PROFILE`).
 | Investigate an alarm | `./coyote.sh abuse-report`: requests per visitor (hashed IP), rejections with the layer that stopped them, and the newest drafts. Open them and look at them. |
 | Take a site down for good | `./coyote.sh unpublish <slug>`. Deletes the pages and blocklists the slug. |
 | Bring back a quarantined site | `./coyote.sh restore <slug>`. Three distinct visitors reporting a site quarantine it automatically; each report emails the admin. |
-| Refill every site | `./coyote.sh refill-all`, after changing `fill.ts` (placeholders, the map embed, the footer) or the domains. Fills each site's current draft again from its stored source, with no model call. |
-| Change the model | Edit `DEFAULT_MODEL_ID` (site writer) or `DEFAULT_PRESCREEN_MODEL_ID` in `services/generator/src/core/models.ts` (or deploy with `-c modelId=…` / `-c prescreenModelId=…`), then deploy. The IAM permissions follow them. |
+| Re-render every site | `./coyote.sh refill-all`, after changing a theme, the renderer, or the domains. Renders each site's current draft again from its stored record, with no model call. |
+| Change the model | Edit `DEFAULT_MODEL_ID` (content writer) or `DEFAULT_PRESCREEN_MODEL_ID` in `services/generator/src/core/models.ts` (or deploy with `-c modelId=…` / `-c prescreenModelId=…`), then deploy. The IAM permissions follow them. |
 | Check Bedrock quota or throttling | Service Quotas → Amazon Bedrock, and the `GenerationFailures` alarm. |
 | Stop paying anything while away | `./coyote.sh destroy`. Deletes the whole stack and all its data after you type `destroy <account id>`. `./coyote.sh deploy` brings back a fresh stack with new URLs; then run `subscribe-alerts` again. |
 

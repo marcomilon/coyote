@@ -45,14 +45,29 @@ function showMessage(message: Message) {
   show('message');
 }
 
-/** The real steps are invisible from here, so the list simply advances while we wait. */
+/**
+ * The real steps are invisible from here, so the list advances on the usual timing (the page itself is the
+ * long step, 2–4 minutes). The current step keeps pulsing and the elapsed time keeps counting until the page
+ * is ready, so the wait never looks frozen.
+ */
+const STEP_STARTS_MS = [0, 8_000, 25_000, 50_000];
+
 function animateSteps() {
   const items = [...root.querySelectorAll('.worksteps li')];
-  items.forEach((item, i) => item.classList.toggle('on', i === 0));
-  let current = 0;
-  stepTimer = window.setInterval(() => {
-    if (current < items.length - 1) items[++current]?.classList.add('on');
-  }, 12_000);
+  const elapsed = $<HTMLElement>('[data-elapsed]');
+  const started = Date.now();
+  const tick = () => {
+    const ms = Date.now() - started;
+    const current = Math.min(items.length - 1, STEP_STARTS_MS.filter((start) => ms >= start).length - 1);
+    items.forEach((item, i) => {
+      item.classList.toggle('done', i < current);
+      item.classList.toggle('on', i === current);
+    });
+    const seconds = Math.floor(ms / 1000);
+    elapsed.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  };
+  tick();
+  stepTimer = window.setInterval(tick, 1000);
 }
 
 function setErrors(fields: string[]) {

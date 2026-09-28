@@ -1,19 +1,20 @@
-import { FONT_ORIGINS, SCRIPT_ORIGINS, STYLE_ORIGINS } from '../../services/generator/src/core/cdn';
-
 /** Content-Security-Policy strings. Inputs may be CloudFormation tokens, so this only joins strings. */
 
 /**
- * Generated sites. Scripts are allowed (inline, and from the CDNs in cdn.ts), and images from any https: host.
- * `default-src 'none'` keeps `fetch`/XHR blocked, so a script cannot send data anywhere. The page may only be
- * framed by our app (Mi sitio shows the draft); the one frame it may hold is fill.ts's keyless Google map.
+ * Generated sites: pages the page writer wrote run their own inline scripts and libraries from a few CDNs
+ * (page-check.ts lists them and removes any other). Scripts cannot fetch or send anything (no connect-src),
+ * images load only from the site itself. The page may only be framed by our app (Mi sitio shows the draft).
  */
-export function sitesCsp(options: { formAction: string; frameAncestors: string[] }): string {
+export function sitesCsp(options: { formAction: string; frameAncestors: string[]; scriptHosts: string[]; styleHosts: string[]; fontHosts: string[] }): string {
+  const https = (hosts: string[]) => hosts.map((h) => `https://${h}`).join(' ');
   return [
     "default-src 'none'",
-    `script-src 'unsafe-inline' ${SCRIPT_ORIGINS.join(' ')}`,
-    `style-src 'unsafe-inline' ${STYLE_ORIGINS.join(' ')}`,
-    `font-src ${FONT_ORIGINS.join(' ')}`,
-    "img-src 'self' data: https:",
+    // 'unsafe-eval': some libraries (Alpine) compile expressions; with no network access it adds nothing to inline scripts.
+    `script-src 'unsafe-inline' 'unsafe-eval' ${https(options.scriptHosts)}`,
+    `style-src 'unsafe-inline' ${https(options.styleHosts)}`,
+    `font-src data: ${https(options.fontHosts)}`,
+    "img-src 'self' data: blob:",
+    // The renderer's Google map of the address (Google may redirect between the two hosts).
     'frame-src https://maps.google.com https://www.google.com',
     `form-action ${options.formAction}`,
     `frame-ancestors ${options.frameAncestors.join(' ')}`,

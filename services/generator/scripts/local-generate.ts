@@ -1,24 +1,28 @@
 /**
- * Runs the real site writer against Bedrock, offline (no stack needed): pre-screen → plan_site → canned
- * answers to any questions → write_site → sanitizer → fill. Writes one folder per site and model under
- * out/sites/, then the sheet (out/sites/index.html) with every page at phone and desktop width, its cost,
- * time, questions, and lint.
+ * Runs the real pipeline against Bedrock, offline (no stack needed): pre-screen → plan_site → canned answers
+ * to any questions → design brief → content → theme. Writes one folder per site and model under out/sites/,
+ * then the sheet (out/sites/index.html) with every page at phone and desktop width, its cost, time, questions,
+ * and theme.
  *   npm run generate:local                                     the 10 bake-off businesses on the default model
- *   npm run generate:local -- --models us.anthropic.claude-opus-5-5,us.anthropic.claude-sonnet-5
+ *   npm run generate:local -- --models us.anthropic.claude-haiku-4-5-20251001-v1:0,us.amazon.nova-2-lite-v1:0
  *   npm run generate:local -- --only panaderia,dentista --hero  also generate hero photos (~$0.04 each)
+ *   npm run generate:local -- --only minimarket --theme mostrador   force one theme (to review a new theme)
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { normalizeAnswers } from '../src/core/answers';
-import { callText, callTool, stabilityImage, type Usage } from '../src/core/bedrock';
+import { callTool, stabilityImage, type Usage } from '../src/core/bedrock';
 import { renderDraft, type SiteDoc } from '../src/core/drafts';
 import { HERO_FILE, HERO_NEGATIVE, heroPrompt } from '../src/core/images';
 import { imageModelId, modelId as defaultModelId, prescreenModelId } from '../src/core/models';
 import { isRejected, prescreen } from '../src/core/prescreen';
 import { applyAnswers, CONTACT_TYPES, type Question } from '../src/core/questions';
-import { sanitizePage } from '../src/core/sanitize';
-import { planSite, writeSite } from '../src/core/site-writer';
+import { generateSite } from '../src/core/pipeline';
+import { FONT_PAIRINGS, type FontPairingId } from '../src/core/fonts';
+import { fixBrief } from '../src/core/quality';
+import { THEMES } from '../themes';
+import { planSite } from '../src/core/site-writer';
 import { slugify } from '../src/core/slug';
 import { createUrls } from '../src/core/urls';
 import { BUSINESSES, type Business } from './bakeoff-businesses';
@@ -40,6 +44,7 @@ const { values } = parseArgs({
     models: { type: 'string' },
     only: { type: 'string' },
     hero: { type: 'boolean', default: false },
+    theme: { type: 'string' },
     out: { type: 'string', default: 'out/sites' },
   },
 });
@@ -95,35 +100,42 @@ async function run(business: Business, modelId: string): Promise<SiteReport> {
     usage.push(screening.usage);
     if (isRejected(screening)) throw new Error(`rejected by the pre-screen: ${screening.category}`);
 
-    const deps = { callTool, callText, modelId, outputAllowed: async () => true };
-    const input = { answers, notes: [] as SiteDoc['notes'], media: { photos: [] } as SiteDoc['media'], images: [] };
-    const plan = await planSite(input, deps);
+    const deps = { callTool, modelId, outputAllowed: async () => true };
+    let notes: SiteDoc['notes'] = [];
+    const plan = await planSite({ answers, notes, images: [], photos: 0 }, deps);
     usage.push(...plan.usage);
     report.questions = plan.questions;
     if (plan.questions.length > 0) {
       const applied = applyAnswers(plan.questions, cannedAnswers(plan.questions, business));
       if (!applied.ok) throw new Error(`canned answers rejected: ${applied.fields.join(', ')}`);
       answers = { ...answers, contact: { ...answers.contact, ...applied.contact } };
-      Object.assign(input, { answers, notes: applied.notes });
-      report.notes = applied.notes;
+      notes = applied.notes;
+      report.notes = notes;
     }
 
-    const written = await writeSite(input, deps, usage);
-    let media = input.media;
+    const generated = await generateSite(answers, { callTool, modelId, slug, notes });
+    usage.push(...generated.usage);
+    let media = generated.content.media;
     const imageModel = imageModelId();
-    if (values.hero && imageModel && written.heroScene && written.source.includes('{{hero}}')) {
-      const bytes = await stabilityImage(imageModel)(heroPrompt(written.heroScene), HERO_NEGATIVE);
+    if (values.hero && imageModel && generated.brief.heroScene) {
+      const bytes = await stabilityImage(imageModel)(heroPrompt(generated.brief.heroScene), HERO_NEGATIVE);
       if (bytes) {
         writeFileSync(resolve(dir, 'assets', HERO_FILE), bytes);
-        media = { ...media, hero: `assets/${HERO_FILE}` };
+        media = { ...media, photos: [`assets/${HERO_FILE}`] };
       }
     }
-    const doc: SiteDoc = { answers, notes: input.notes, media };
-    writeFileSync(resolve(dir, 'source.html'), written.source);
-    writeFileSync(resolve(dir, 'index.html'), renderDraft(written.source, doc, slug, urls));
-    writeFileSync(resolve(dir, 'site.json'), JSON.stringify({ doc, heroScene: written.heroScene, questions: plan.questions }, null, 2));
-    report.lint = sanitizePage(written.source).lint;
-    report.heroScene = written.heroScene;
+    let brief = generated.brief;
+    if (values.theme) {
+      const theme = THEMES[values.theme];
+      if (!theme) throw new Error(`unknown theme ${values.theme}`);
+      const fits = (Object.keys(FONT_PAIRINGS) as FontPairingId[]).filter((id) => theme.meta.fontStyles.includes(FONT_PAIRINGS[id].style));
+      brief = fixBrief({ ...brief, theme: theme.id }, [{ theme, fontPairings: fits.includes(brief.fontPairing as FontPairingId) ? [brief.fontPairing as FontPairingId] : fits }]);
+    }
+    const doc: SiteDoc = { answers, content: { ...generated.content, media }, brief, notes };
+    writeFileSync(resolve(dir, 'index.html'), renderDraft(doc, slug, urls));
+    writeFileSync(resolve(dir, 'site.json'), JSON.stringify({ ...doc, questions: plan.questions }, null, 2));
+    report.theme = `${brief.theme} · ${brief.fontPairing}`;
+    report.heroScene = generated.brief.heroScene;
   } catch (error) {
     report.error = String(error).slice(0, 500);
   }

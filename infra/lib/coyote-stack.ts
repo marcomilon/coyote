@@ -19,8 +19,9 @@ import {
   aws_sns as sns,
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
-import { DEFAULT_IMAGE_MODEL_ID, DEFAULT_MODEL_ID, DEFAULT_PRESCREEN_MODEL_ID } from '../../services/generator/src/core/models';
+import { DEFAULT_MODEL_ID, DEFAULT_PRESCREEN_MODEL_ID } from '../../services/generator/src/core/models';
 import { createUrls } from '../../services/generator/src/core/urls';
+import { PAGE_FONT_HOSTS, PAGE_SCRIPT_HOSTS, PAGE_STYLE_HOSTS } from '../../services/generator/src/core/page-check';
 import { appCsp, sitesCsp } from './csp';
 import { GeneratorApi } from './generator-api';
 import { CoyoteGuardrail } from './guardrail';
@@ -40,8 +41,6 @@ export interface CoyoteStackProps extends StackProps {
   modelId?: string;
   /** Bedrock model or inference profile of the pre-screen classifier. Defaults to the one in models.ts. */
   prescreenModelId?: string;
-  /** Text-to-image model for hero photos. Defaults to the one in models.ts. */
-  imageModelId?: string;
   /** The built frontend. Defaults to web/dist (run `npm run build -w web` first). */
   webDist?: string;
   /** Route 53 zone that holds `domainName`. Defaults to `domainName`. */
@@ -213,6 +212,9 @@ export class CoyoteStack extends Stack {
                 // Used by the post-MVP contact form. Wildcard in domainless mode, as above.
                 formAction: domain ? domain.urls.apiUrl : `https://*.execute-api.${this.region}.amazonaws.com`,
                 frameAncestors: [appUrl, LOCAL_DEV_ORIGIN],
+                scriptHosts: PAGE_SCRIPT_HOSTS,
+                styleHosts: PAGE_STYLE_HOSTS,
+                fontHosts: PAGE_FONT_HOSTS,
               }),
             },
             ...commonSecurityHeaders,
@@ -309,7 +311,6 @@ export class CoyoteStack extends Stack {
       abuseReports: this.abuseReports,
       modelId: props.modelId ?? DEFAULT_MODEL_ID,
       prescreenModelId: props.prescreenModelId ?? DEFAULT_PRESCREEN_MODEL_ID,
-      imageModelId: props.imageModelId ?? DEFAULT_IMAGE_MODEL_ID,
       rateLimitPerDay: 100, // sandbox account; production uses 3
       urlEnv: this.urlEnv,
     });

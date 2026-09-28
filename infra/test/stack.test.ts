@@ -2,8 +2,9 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_IMAGE_MODEL_ID, DEFAULT_MODEL_ID, IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
+import { DEFAULT_MODEL_ID } from '../../services/generator/src/core/models';
 import { CoyoteStack, type CoyoteStackProps } from '../lib/coyote-stack';
+import { PAGE_SCRIPT_HOSTS } from '../../services/generator/src/core/page-check';
 
 const synth = (props: Partial<CoyoteStackProps> = {}) =>
   Template.fromStack(
@@ -46,17 +47,25 @@ describe('CoyoteStack, domainless', () => {
     expect(rules.filter((r: { Prefix?: string }) => r.Prefix === '_draft/' || r.Prefix === undefined).every((r: { ExpirationInDays?: number }) => r.ExpirationInDays === undefined)).toBe(true);
   });
 
-  it('gives generated sites a CSP with scripts from our CDN list only, no network calls, and the Google map as the only frame', () => {
+  it('gives generated sites a CSP with inline scripts and the listed CDNs, no network access, and that only our app may frame', () => {
     const csp = cspOf(template, 'SitesHeaders');
-    expect(csp).toContain("script-src 'unsafe-inline' https://cdn.jsdelivr.net");
-    expect(csp).not.toContain('connect-src');
+    expect(/script-src ([^;]*);/.exec(csp)![1]).toBe(`'unsafe-inline' 'unsafe-eval' ${PAGE_SCRIPT_HOSTS.map((h) => `https://${h}`).join(' ')}`);
+    expect(csp).not.toContain('connect-src'); // default-src 'none': scripts cannot fetch or send anything
+    expect(csp).toContain("img-src 'self' data: blob:");
+    expect(csp).toContain('frame-src https://maps.google.com https://www.google.com');
     expect(csp).toContain("default-src 'none'");
     expect(csp).toContain('frame-ancestors');
-    expect(csp).toContain('frame-src https://maps.google.com https://www.google.com');
     expect(csp).toContain('http://localhost:5173'); // this account is the development sandbox
     const policies = template.findResources('AWS::CloudFront::ResponseHeadersPolicy');
     const [, sites] = Object.entries(policies).find(([id]) => id.startsWith('SitesHeaders'))!;
     expect(JSON.stringify(sites.Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig)).toContain('X-Robots-Tag'); // drafts stay out of search
+  });
+
+  it('lets only the generate Lambda read the Anthropic API key, and gives it time for the page writer', () => {
+    const readers = Object.values(template.findResources('AWS::IAM::Policy')).filter((p) => JSON.stringify(p).includes('secretsmanager:GetSecretValue'));
+    expect(readers).toHaveLength(1);
+    expect(JSON.stringify(readers[0])).toContain('coyote/anthropic-api-key');
+    template.hasResourceProperties('AWS::Lambda::Function', { Timeout: 600, Environment: { Variables: Match.objectLike({ ANTHROPIC_SECRET_NAME: 'coyote/anthropic-api-key' }) } });
   });
 
   it('lets the app run its own scripts only', () => {
@@ -95,27 +104,20 @@ describe('CoyoteStack, domainless', () => {
     expect(routes).toEqual(['DELETE /me', 'GET /jobs/{id}', 'GET /me', 'POST /generate', 'POST /jobs/{id}/answers', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads']);
   });
 
-  it('gives generation 10 minutes', () => {
-    template.hasResourceProperties('AWS::Lambda::Function', { Timeout: 600, MemorySize: 1024 });
-  });
-
   it('only lets Lambdas call the text models with our guardrail attached', () => {
     const statements = Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
       (policy) => policy.Properties.PolicyDocument.Statement as { Action: string | string[]; Resource: unknown; Condition?: unknown }[],
     );
     const invoke = statements.filter((s) => [s.Action].flat().includes('bedrock:InvokeModel'));
-    const [image, text] = [invoke.filter((s) => !s.Condition), invoke.filter((s) => s.Condition)];
+    const [unguarded, text] = [invoke.filter((s) => !s.Condition), invoke.filter((s) => s.Condition)];
     expect(text.length).toBeGreaterThan(0);
     for (const statement of text) expect(JSON.stringify(statement.Condition)).toContain('bedrock:GuardrailIdentifier');
     expect(JSON.stringify(text)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0'); // the pre-screen
     expect(JSON.stringify(text)).toContain('foundation-model/amazon.nova-2-lite-v1:0');
     const writer = text.filter((s) => JSON.stringify(s.Resource).includes(DEFAULT_MODEL_ID));
     expect(writer).toHaveLength(1);
-    expect(writer[0]!.Action).toEqual(['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream']);
-    // Image models take no guardrail: the one unconditioned statement names only the image model.
-    expect(image).toHaveLength(1);
-    expect(JSON.stringify(image[0]!.Resource)).toContain(`${IMAGE_MODEL_REGION}::foundation-model/${DEFAULT_IMAGE_MODEL_ID}`);
-    expect(JSON.stringify(image[0]!.Resource)).not.toContain('nova');
+    expect(writer[0]!.Action).toBe('bedrock:InvokeModel');
+    expect(unguarded).toEqual([]); // no image model any more: every model call carries the guardrail
   });
 
   it('never retries a failed generation and records the failure', () => {

@@ -1,6 +1,6 @@
 /**
- * The screenshot sheet for the bake-off: every generated page in out/sites/ at phone (390 px) and desktop
- * (1280 px) width, with its model, cost, time, questions, and lint problems next to it.
+ * The screenshot sheet: every generated page in out/sites/ at phone (390 px) and desktop (1280 px) width,
+ * with its model, theme, cost, time, and questions next to it.
  *   npm run sites:sheet            then open services/generator/out/sites/index.html
  * generate:local writes it too.
  */
@@ -18,6 +18,7 @@ export interface SiteReport {
   questions: Question[];
   notes?: Note[];
   lint: string[];
+  theme?: string;
   heroScene?: string;
   seconds: number;
   cost?: number;
@@ -50,7 +51,7 @@ export function writeSheet(outDir: string): string {
   const cell = (r: SiteReport | undefined) => {
     if (!r) return '<td></td>';
     const src = esc(relative(outDir, resolve(r.dir, 'index.html')));
-    const meta = `<p class="meta">${esc(r.modelId)} · ${r.cost !== undefined ? `$${r.cost.toFixed(3)}` : '?'} · ${r.seconds.toFixed(0)} s</p>`;
+    const meta = `<p class="meta">${esc(r.modelId)} · ${r.cost !== undefined ? `$${r.cost.toFixed(3)}` : '?'} · ${r.seconds.toFixed(0)} s${r.theme ? ` · ${esc(r.theme)}` : ''}</p>`;
     const questions = r.questions.length ? `<details><summary>${r.questions.length} question(s)</summary><ul>${r.questions.map((q) => `<li>${esc(q.label)} <i>(${q.type})</i></li>`).join('')}</ul></details>` : '<p class="meta">no questions</p>';
     const lint = r.lint.length ? `<ul class="lint">${r.lint.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : '<p class="meta">lint: clean</p>';
     if (r.error) return `<td>${meta}<p class="error">${esc(r.error)}</p>${questions}</td>`;

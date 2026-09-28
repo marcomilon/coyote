@@ -111,7 +111,7 @@ export interface Stores {
 }
 
 export const JOB_TTL_SECONDS = 90 * 24 * 60 * 60;
-/** A job still PENDING after this long is reported as FAILED. The generate Lambda times out at 10 minutes. */
+/** A job still PENDING after this long is reported as FAILED. The generate Lambda times out at 5 minutes. */
 export const PENDING_TIMEOUT_MS = 12 * 60 * 1000;
 
 /** What the browser may see. Never the answers, the IP hash, or why something was rejected. */

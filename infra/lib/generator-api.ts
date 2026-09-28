@@ -13,11 +13,14 @@ import {
   aws_lambda_nodejs as nodejs,
   aws_logs as logs,
   aws_s3 as s3,
+  aws_secretsmanager as secretsmanager,
   aws_sns as sns,
 } from 'aws-cdk-lib';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Construct } from 'constructs';
-import { IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
+
+/** The Anthropic API key for the page writer, created by hand (👤) so it never passes through CDK. */
+export const ANTHROPIC_SECRET_NAME = 'coyote/anthropic-api-key';
 import type { CoyoteGuardrail } from './guardrail';
 
 export interface GeneratorApiProps {
@@ -35,8 +38,6 @@ export interface GeneratorApiProps {
   modelId: string;
   /** Bedrock inference profile or model ID of the pre-screen classifier. */
   prescreenModelId: string;
-  /** Text-to-image model for hero photos (Bedrock, IMAGE_MODEL_REGION). */
-  imageModelId: string;
   rateLimitPerDay: number;
   /** URL env vars from the stack (see urls.ts `urlConfigFromEnv`). */
   urlEnv: Record<string, string>;
@@ -94,22 +95,9 @@ export class GeneratorApi extends Construct {
 
     const jobFailed = fn('JobFailed', 'job-failed');
     const generate = fn('Generate', 'generate', {
-      environment: { ...environment, IMAGE_MODEL_ID: props.imageModelId },
+      environment: { ...environment, ANTHROPIC_SECRET_NAME },
       memorySize: 1024,
-      // A whole page from the model takes a minute or two, and a rejected page is written twice.
-      timeout: Duration.minutes(10),
-      bundling: {
-        externalModules: [],
-        minify: true,
-        sourceMap: false,
-        esbuildArgs: { '--alias:css-tree': 'css-tree/dist/csstree.esm' },
-        // The design guide is read at run time (prompt.ts), from next to the handler.
-        commandHooks: {
-          beforeBundling: () => [],
-          beforeInstall: () => [],
-          afterBundling: (inputDir: string, outputDir: string) => [`cp "${inputDir}/services/generator/prompts/design-guide.md" "${outputDir}/"`],
-        },
-      },
+      timeout: Duration.minutes(10), // the page writer takes 3–4 minutes
       retryAttempts: 0, // a retry would pay for the model calls twice
       onFailure: new destinations.LambdaDestination(jobFailed),
     });
@@ -156,18 +144,14 @@ export class GeneratorApi extends Construct {
     for (const f of [owner, report]) props.sitesDistribution.grantCreateInvalidation(f);
     props.rateLimitTable.grantReadWriteData(owner);
 
-    // Bedrock: model calls are only allowed with our guardrail attached. The writer streams its pages.
+    // Bedrock: model calls are only allowed with our guardrail attached.
     const modelResources = (modelId: string) => [
       `arn:${stack.partition}:bedrock:${stack.region}:${stack.account}:inference-profile/${modelId}`,
       `arn:${stack.partition}:bedrock:*::foundation-model/${modelId.replace(/^(us|eu|apac|global)\./, '')}`,
     ];
     const guarded = { StringLike: { 'bedrock:GuardrailIdentifier': [props.guardrail.guardrailArn, `${props.guardrail.guardrailArn}:*`] } };
     const invokePrescreen = new iam.PolicyStatement({ actions: ['bedrock:InvokeModel'], resources: modelResources(props.prescreenModelId), conditions: guarded });
-    const invokeWriter = new iam.PolicyStatement({
-      actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
-      resources: modelResources(props.modelId),
-      conditions: guarded,
-    });
+    const invokeWriter = new iam.PolicyStatement({ actions: ['bedrock:InvokeModel'], resources: modelResources(props.modelId), conditions: guarded });
     const applyGuardrail = new iam.PolicyStatement({
       actions: ['bedrock:ApplyGuardrail'],
       resources: [
@@ -181,13 +165,7 @@ export class GeneratorApi extends Construct {
       f.addToRolePolicy(applyGuardrail);
     }
     generate.addToRolePolicy(invokeWriter);
-    // Image models take no guardrail. The scene text passes ApplyGuardrail first and the image passes Rekognition.
-    generate.addToRolePolicy(
-      new iam.PolicyStatement({
-        actions: ['bedrock:InvokeModel'],
-        resources: [`arn:${stack.partition}:bedrock:${IMAGE_MODEL_REGION}::foundation-model/${props.imageModelId}`],
-      }),
-    );
+    secretsmanager.Secret.fromSecretNameV2(this, 'AnthropicKey', ANTHROPIC_SECRET_NAME).grantRead(generate);
     owner.addToRolePolicy(applyGuardrail); // an edited address is checked by the guardrail; the owner Lambda never calls a model
 
     const route = (path: string, method: apigwv2.HttpMethod, handler: lambda.IFunction) =>

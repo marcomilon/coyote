@@ -19,6 +19,19 @@ export interface Business {
 
 export const BUSINESSES: Business[] = [
   {
+    id: 'menu-del-dia',
+    form: {
+      businessName: 'Sazón de Mamá Rosa',
+      about: 'Restaurante de menú en Surquillo, Lima. Todos los días un menú distinto: entrada, segundo y refresco por S/ 14. Lunes a sábado de 12 a 4 p. m. También para llevar.',
+      whatsapp: '+51 987 654 321',
+      address: 'Jr. Dante 842, Surquillo',
+      lang: 'es',
+    },
+    canned: {
+      details: 'Por ejemplo, hoy hay de entrada papa a la huancaína o sopa de quinua, y de segundo ají de gallina, lomo saltado o tallarines verdes con bistec. El menú del día lo mandamos cada mañana por WhatsApp.',
+    },
+  },
+  {
     id: 'salon-vago',
     form: { businessName: 'Salón Divina', about: 'Salón de belleza en Medellín.', whatsapp: '+57 300 555 1234', lang: 'es' },
     canned: {

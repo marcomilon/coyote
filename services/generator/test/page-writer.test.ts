@@ -55,6 +55,19 @@ describe('checkPage', () => {
     expect(checkPage(doc('<meta http-equiv="refresh" content="0;url=https://evil.test">'), opts).violations).not.toEqual([]);
   });
 
+  it('allows numbers and emails the owner wrote outside the contact answers, in any format', () => {
+    const ownerText = 'Sucursal centro: +54 11 4555-1234. Pedidos por mayor a Pedidos@Luna.test o al WhatsApp 11 5555 9876';
+    const page = doc(`<p>Sucursal centro: 11 4555 1234</p><a href="tel:+541145551234">Llamar</a><a href="mailto:pedidos@luna.test">Mail</a>
+      <a href="https://wa.me/5491155559876">Mayoristas</a><p>pedidos@luna.test</p>`);
+    const result = checkPage(page, { ...opts, ownerText });
+    expect(result.violations).toEqual([]);
+    expect(result.repairs).toEqual([]);
+    // Without the owner's text, the same page is someone else's contact details.
+    expect(checkPage(page, opts).violations).not.toEqual([]);
+    // A number the owner never gave is still rejected.
+    expect(checkPage(doc('<p>Llámanos al +54 9 11 5555 0000</p>'), { ...opts, ownerText }).violations).not.toEqual([]);
+  });
+
   it('does not mistake years, prices, or SVG paths for phone numbers', () => {
     const result = checkPage(
       doc(`<p>Desde 2019 – 2024 · $12.500</p><p>Tel. +57 300 123 4567</p><svg><path d="M4 -15 A15 15 0 1 1 4 15"/></svg>
@@ -124,6 +137,12 @@ describe('runGenerateJob with the page writer', () => {
       expect(t.jobs.get('job-1')!.error).toContain('page writer failed');
       expect(t.sites.size).toBe(0);
     }
+  });
+
+  it('keeps a number and email the owner wrote in the description', async () => {
+    const t = harness();
+    await submit({ ...body, about: `${body.about} Sucursal norte: +57 601 555 1234, pedidos@luna.test` }, '1.2.3.4', t.submitDeps);
+    expect(await runGenerateJob('job-1', t.generateDeps)).toMatchObject({ outcome: 'DONE' });
   });
 
   it('rejects the job when the page has someone else\'s phone number or the guardrail blocks it', async () => {

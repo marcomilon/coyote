@@ -1,6 +1,6 @@
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
 import type { Media, SiteContent } from './content';
-import { docMedia, loadDraft, mediaPrefix, saveDraft, type SiteDoc } from './drafts';
+import { docMedia, loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
 import type { Job, Stores } from './jobs';
 import { checkPage, maskContact, replaceContact } from './page-check';
 import { parsePage, pickLook, type PageEffort, type PagePhoto, type PageRequest, type WritePage } from './page-writer';
@@ -66,7 +66,7 @@ const LOWER: Record<PageEffort, PageEffort> = { max: 'xhigh', xhigh: 'high', hig
 type PageResult = { page: string } | { problem: 'failed' | 'policy' | 'guardrail'; detail: string; violations?: Violation[] };
 
 /** Asks the page writer for a page and runs the page checks and the output guardrail on it. */
-async function writeCheckedPage(request: PageRequest, slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
+async function writeCheckedPage(request: PageRequest, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
   const effort = deps.pageEffort ?? 'high';
   const { answers } = request;
   const masked = maskContact(answers.contact);
@@ -89,7 +89,7 @@ async function writeCheckedPage(request: PageRequest, slug: string, deps: Genera
   const parsed = parsePage(reply.text);
   if (!parsed) return { problem: 'failed', detail: `no HTML page in the reply (stop: ${reply.stopReason})` };
   const page = replaceContact(parsed, masked, answers.contact);
-  const checked = checkPage(page, { contact: answers.contact, businessName: answers.businessName, lang: answers.lang, ...deps.urls.pageLinks(slug, answers.lang) });
+  const checked = checkPage(page, { contact: answers.contact, ownerText: ownerText({ answers, notes: request.notes, requests }), businessName: answers.businessName, lang: answers.lang, ...deps.urls.pageLinks(slug, answers.lang) });
   if (checked.violations.length > 0) return { problem: 'policy', detail: JSON.stringify(checked.violations).slice(0, 300), violations: checked.violations };
   if (!(await deps.outputAllowed(checked.texts.join('\n')))) return { problem: 'guardrail', detail: 'page text' };
   if (checked.repairs.length > 0) console.info('page repaired', { slug, repairs: checked.repairs });
@@ -175,13 +175,14 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       // Opus writes the page (a new site), or changes the current one (an edit).
       const photos = await pagePhotos(slug, media, stores);
       const request = current ? { answers: job.answers, notes, photos, current: current.page, instruction: job.instruction } : { answers: job.answers, notes, photos, look: pickLook(deps.random) };
-      const written = await writeCheckedPage(request, slug, deps, usage);
+      const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
+      const written = await writeCheckedPage(request, requests, slug, deps, usage);
       if ('problem' in written) {
         if (written.problem === 'policy') throw new PolicyRejection(written.violations!);
         if (written.problem === 'guardrail') throw new GuardrailBlocked();
         throw new Error(`page writer failed: ${written.detail}`);
       }
-      doc = current ? { ...current, notes, page: written.page } : { answers: job.answers, notes, media, page: written.page };
+      doc = current ? { ...current, notes, page: written.page, requests } : { answers: job.answers, notes, media, page: written.page };
     }
 
     const draftId = await saveDraft(site, doc, deps);

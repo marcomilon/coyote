@@ -33,8 +33,14 @@ export const SiteDoc = z.object({
   notes: z.array(z.object({ question: z.string().max(200), answer: z.string().max(600) })).max(16),
   /** The page the page writer wrote, before checks. Absent on themed drafts. */
   page: z.string().max(500_000).optional(),
+  /** The owner's edit requests on the written page, so the numbers and emails they gave stay allowed. */
+  requests: z.array(z.string().max(1000)).optional(),
 });
 export type SiteDoc = z.infer<typeof SiteDoc>;
+
+/** Everything the owner wrote besides the contact answers: its phone numbers and emails may appear on the page. */
+export const ownerText = ({ answers, notes, requests }: Pick<SiteDoc, 'answers' | 'notes' | 'requests'>) =>
+  [answers.about, ...notes.map((n) => n.answer), ...(requests ?? [])].join('\n');
 
 /** Versions kept per site ("Deshacer" goes back through them). */
 export const MAX_DRAFTS = 5;
@@ -58,7 +64,7 @@ export interface DraftDeps {
 export function renderDraft(doc: SiteDoc, slug: string, urls: Urls): string {
   if (doc.page !== undefined) {
     const { contact, businessName, lang } = doc.answers;
-    const checked = checkPage(doc.page, { contact, businessName, lang, ...urls.pageLinks(slug, lang) });
+    const checked = checkPage(doc.page, { contact, ownerText: ownerText(doc), businessName, lang, ...urls.pageLinks(slug, lang) });
     if (checked.violations.length > 0) throw new Error(`written page breaks the page checks: ${JSON.stringify(checked.violations)}`);
     return checked.html;
   }

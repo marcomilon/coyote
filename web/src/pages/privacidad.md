@@ -19,7 +19,7 @@ No usamos cookies ni herramientas de analítica, ni en esta aplicación ni en lo
 
 ## Quién procesa tus datos
 
-Todo se aloja en Amazon Web Services. El diseño y los textos se generan con modelos de inteligencia artificial de Anthropic (Claude) y de Amazon Bedrock, que reciben tus respuestas y tus fotos para crear el sitio y no las usan para entrenar sus modelos. A esos modelos nunca les enviamos tu número de teléfono.
+Todo se aloja en Amazon Web Services. El diseño y los textos se generan con modelos de inteligencia artificial de Anthropic (Claude) y de Amazon Bedrock, que reciben tus respuestas y tus fotos para crear el sitio y no las usan para entrenar sus modelos. A esos modelos nunca les enviamos el número de WhatsApp ni el teléfono de contacto que escribiste en el formulario (sí reciben los números que escribas en la descripción o en tus respuestas).
 
 ## Los sitios que creamos
 

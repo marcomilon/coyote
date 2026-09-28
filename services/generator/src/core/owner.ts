@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { cleanContact, type ContactField } from './answers';
 import { Contact } from './content';
-import { deleteDraft, draftPrefix, loadDraft, mediaPrefix, saveDraft, sourcePrefix } from './drafts';
+import { deleteDraft, draftPrefix, loadDraft, mediaPrefix, ownerText, saveDraft, sourcePrefix } from './drafts';
 import { JOB_TTL_SECONDS, type Job, type SiteRecord, type Stores } from './jobs';
 import { checkPage, replaceContact } from './page-check';
 import { checkTexts } from './policy';
@@ -85,7 +85,7 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
     const page = current.page === undefined ? undefined : replaceContact(current.page, current.answers.contact, checked.data);
     const doc = { ...current, answers: { ...current.answers, contact: checked.data }, content: current.content && { ...current.content, contact: checked.data }, page };
     // A detail removed from the page can still be in its text; that change needs an edit request.
-    if (page !== undefined && checkPage(page, { contact: checked.data, businessName: doc.answers.businessName, lang: doc.answers.lang, reportUrl: '', privacyUrl: '' }).violations.length > 0) return { status: 422 };
+    if (page !== undefined && checkPage(page, { contact: checked.data, ownerText: ownerText(doc), businessName: doc.answers.businessName, lang: doc.answers.lang, reportUrl: '', privacyUrl: '' }).violations.length > 0) return { status: 422 };
     await saveDraft(site, doc, deps);
     site = (await stores.getSite(site.slug)) ?? site;
     current = doc;

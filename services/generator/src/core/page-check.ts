@@ -8,9 +8,9 @@ import { checkTexts, type Violation } from './policy';
 
 /**
  * Checks on a page Opus wrote freely. What can be repaired is repaired (a link that isn't the owner's becomes
- * "#", an outside image or script is removed); what can't (a redirect, someone else's phone number, text the
- * content policy rejects) is a violation, and the job falls back to the themed page. The sites CSP is the
- * second line: scripts cannot fetch or send anything, images load only from the site itself.
+ * "#", an outside image or script is removed); what can't (a redirect, a phone number or email the owner never
+ * gave, text the content policy rejects) is a violation, and the page is not used. The sites CSP is the second
+ * line: scripts cannot fetch or send anything, images load only from the site itself.
  */
 
 /** Where page scripts, stylesheets, and fonts may come from. The sites CSP lists the same hosts. */
@@ -42,22 +42,43 @@ const hostOf = (url: string) => {
 };
 const digits = (s: string) => s.replace(/\D/g, '');
 
-/** A number is the owner's when its digits end with a known number (with or without the country code). */
-function ownersNumber(found: string, contact: Contact): boolean {
-  const d = digits(found);
-  if (d.length < 7) return true;
-  return [contact.whatsapp, contact.phone].filter((n): n is string => !!n).some((n) => n.endsWith(d) || d.endsWith(n));
+const PHONE_LIKE = /[+(]?\d[\d\s().-]{6,}\d/g;
+const EMAIL_LIKE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+
+/**
+ * The contact details a page may show: the owner's contact answers, and every phone number and email the owner
+ * wrote anywhere else (a second branch, an orders email). What the model invents is none of these.
+ */
+interface Known {
+  contact: Contact;
+  numbers: string[];
+  emails: string[];
 }
 
-function linkAllowed(href: string, contact: Contact): boolean {
+function knownDetails(contact: Contact, ownerText: string): Known {
+  const written = [...ownerText.matchAll(PHONE_LIKE)].map(([n]) => digits(n)).filter((d) => d.length >= 7);
+  const numbers = [contact.whatsapp, contact.phone, ...written].filter((n): n is string => !!n);
+  const emails = [contact.email, ...[...ownerText.matchAll(EMAIL_LIKE)].map(([e]) => e)].filter((e): e is string => !!e).map((e) => e.toLowerCase());
+  return { contact, numbers, emails };
+}
+
+/** A number is the owner's when its digits end with a known number (with or without the country code). */
+function ownersNumber(found: string, known: Known): boolean {
+  const d = digits(found);
+  if (d.length < 7) return true;
+  return known.numbers.some((n) => n.endsWith(d) || d.endsWith(n));
+}
+
+function linkAllowed(href: string, known: Known): boolean {
+  const { contact } = known;
   if (href.startsWith('#') || href === '') return true;
-  if (/^tel:/i.test(href)) return ownersNumber(href, contact);
-  if (/^mailto:/i.test(href)) return !!contact.email && href.slice(7).split('?')[0]!.toLowerCase() === contact.email.toLowerCase();
+  if (/^tel:/i.test(href)) return ownersNumber(href, known);
+  if (/^mailto:/i.test(href)) return known.emails.includes(href.slice(7).split('?')[0]!.toLowerCase());
   const host = hostOf(href);
   if (!host || !/^https?:/i.test(href)) return false;
   if (host === 'wa.me' || host.endsWith('whatsapp.com')) {
     const phone = host === 'wa.me' ? new URL(href).pathname.slice(1) : (new URL(href).searchParams.get('phone') ?? '');
-    return digits(phone) === contact.whatsapp;
+    return digits(phone).length >= 7 && ownersNumber(phone, known);
   }
   if (host === 'maps.google.com' || host === 'maps.app.goo.gl' || ((host === 'www.google.com' || host === 'google.com') && new URL(href).pathname.startsWith('/maps')) || host === 'goo.gl') return true;
   if (host.endsWith('instagram.com')) return !!contact.instagram && new URL(href).pathname.replace(/\/+$/, '').toLowerCase() === `/${contact.instagram.toLowerCase()}`;
@@ -66,7 +87,7 @@ function linkAllowed(href: string, contact: Contact): boolean {
 }
 
 /** Scripts that send the visitor somewhere else. Links opened by a script must be the owner's WhatsApp or a map. */
-function redirects(code: string, contact: Contact): string[] {
+function redirects(code: string, known: Known): string[] {
   const found: string[] = [];
   if (/\b(?:window\.|document\.|top\.)?location\s*(?:\.href\s*)?=(?!=)|location\.(?:replace|assign)\s*\(/.test(code)) found.push('a script that changes location');
   for (const [, url] of code.matchAll(/["'`](https?:\/\/[^"'`\s$]+)/g)) {
@@ -75,19 +96,27 @@ function redirects(code: string, contact: Contact): string[] {
     if (!host) continue;
     const allowedHost = host === 'wa.me' || host.endsWith('whatsapp.com') || host.endsWith('google.com') || PAGE_SCRIPT_HOSTS.includes(host) || PAGE_STYLE_HOSTS.includes(host) || host === 'www.w3.org';
     if (!allowedHost) found.push(`a script URL to ${host}`);
-    if (host === 'wa.me' && /^https?:\/\/wa\.me\/\d/.test(url) && !linkAllowed(url, contact)) found.push('a script WhatsApp link to another number');
+    if (host === 'wa.me' && /^https?:\/\/wa\.me\/\d/.test(url) && !linkAllowed(url, known)) found.push('a script WhatsApp link to another number');
   }
   // Phone numbers a script shows or dials: a quoted "+57 300 …" or a tel: link. Number arrays and timestamps are not.
   for (const [, match] of code.matchAll(/(?:["'`]|tel:)(\+?\d[\d\s().-]{7,}\d)/g)) {
-    if (match && /[+\s().-]|^\d{9,13}$/.test(match) && digits(match).length >= 9 && !ownersNumber(match, contact)) found.push(`a phone number in a script (${match})`);
+    if (match && /[+\s().-]|^\d{9,13}$/.test(match) && digits(match).length >= 9 && !ownersNumber(match, known)) found.push(`a phone number in a script (${match})`);
   }
   return found;
 }
 
-const PHONE_LIKE = /[+(]?\d[\d\s().-]{6,}\d/g;
-const EMAIL_LIKE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+export interface PageCheckOptions {
+  contact: Contact;
+  /** Everything else the owner wrote (description, answers, edit requests): its numbers and emails are the owner's too. */
+  ownerText?: string;
+  businessName: string;
+  lang: 'es' | 'pt';
+  reportUrl: string;
+  privacyUrl: string;
+}
 
-export function checkPage(page: string, { contact, businessName, lang, reportUrl, privacyUrl }: { contact: Contact; businessName: string; lang: 'es' | 'pt'; reportUrl: string; privacyUrl: string }): PageCheckResult {
+export function checkPage(page: string, { contact, ownerText = '', businessName, lang, reportUrl, privacyUrl }: PageCheckOptions): PageCheckResult {
+  const known = knownDetails(contact, ownerText);
   const violations: Violation[] = [];
   const repairs: string[] = [];
   const texts: string[] = [];
@@ -127,7 +156,7 @@ export function checkPage(page: string, { contact, businessName, lang, reportUrl
     for (const name of Object.keys(el.attribs)) if (name === 'srcdoc' || name === 'formaction') delete el.attribs[name];
     if (tag === 'a' || tag === 'area') {
       const href = attr('href')?.trim();
-      if (href !== undefined && !linkAllowed(href, contact)) {
+      if (href !== undefined && !linkAllowed(href, known)) {
         el.attribs.href = '#';
         repairs.push(`link to ${href.slice(0, 60)} → #`);
       }
@@ -145,7 +174,7 @@ export function checkPage(page: string, { contact, businessName, lang, reportUrl
         return;
       }
       const code = el.children.map((c) => ('data' in c ? c.data : '')).join('');
-      for (const detail of redirects(code, contact)) violations.push({ code: 'forbidden-url', detail });
+      for (const detail of redirects(code, known)) violations.push({ code: 'forbidden-url', detail });
       return;
     }
     if (tag === 'link') {
@@ -181,15 +210,15 @@ export function checkPage(page: string, { contact, businessName, lang, reportUrl
     if (siblings) siblings.splice(siblings.indexOf(node), 1);
   }
 
-  // The text a visitor reads: the content policy, and contact details that are not the owner's.
+  // The text a visitor reads: the content policy, and contact details the owner never gave.
   violations.push(...checkTexts(texts, { businessName, headlines }));
   for (const text of texts) {
     for (const [number] of text.matchAll(PHONE_LIKE)) {
       // Phone-shaped: 9+ digits. Year ranges ("2019 – 2024") and prices are shorter or look different.
-      if (digits(number).length < 9 || /^(19|20)\d\d\D+(19|20)\d\d$/.test(number.trim()) || ownersNumber(number, contact)) continue;
-      violations.push({ code: 'forbidden-url', detail: `a phone number that is not the owner's (${number.trim()})` });
+      if (digits(number).length < 9 || /^(19|20)\d\d\D+(19|20)\d\d$/.test(number.trim()) || ownersNumber(number, known)) continue;
+      violations.push({ code: 'forbidden-url', detail: `a phone number the owner did not give (${number.trim()})` });
     }
-    for (const [email] of text.matchAll(EMAIL_LIKE)) if (email.toLowerCase() !== contact.email?.toLowerCase()) violations.push({ code: 'forbidden-url', detail: `an email that is not the owner's (${email})` });
+    for (const [email] of text.matchAll(EMAIL_LIKE)) if (!known.emails.includes(email.toLowerCase())) violations.push({ code: 'forbidden-url', detail: `an email the owner did not give (${email})` });
   }
 
   // Finish: no sideways scrolling on phones, and the platform footer.

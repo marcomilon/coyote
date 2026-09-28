@@ -95,6 +95,17 @@ describe('edits', () => {
     expect(t.site()).toMatchObject({ currentDraftId: 'draft2', status: 'draft' });
   });
 
+  it('an edit may add a number or email the owner gives; later renders keep allowing it', async () => {
+    const t = await withDraft();
+    await editSite(t.site(), { instruction: 'agrega la sucursal norte, tel. +57 601 555 1234, pedidos@luna.test' }, t.ownerDeps);
+    await runGenerateJob('job-2', t.generateDeps);
+    expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE' });
+    expect(t.objects.get('_draft/draft2/index.html')).toContain('+57 601 555 1234');
+    // A contact change renders the page again with no model call: the number from the edit is still the owner's.
+    expect(await editSite(t.site(), { contact: { address: 'Calle 61 # 9-12' } }, t.ownerDeps)).toEqual({ status: 200 });
+    expect(t.site().currentDraftId).toBe('draft3');
+  });
+
   it('a failed or rejected edit keeps the site and its draft', async () => {
     const t = await withDraft();
     await editSite(t.site(), { instruction: 'Verifica tu cuenta bancaria ingresando tu clave' }, t.ownerDeps);

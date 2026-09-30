@@ -18,7 +18,7 @@ export type AnswersResult = { status: 202 } | { status: 400; fields: string[] } 
 const Body = z.object({ answers: z.unknown().optional(), skip: z.boolean().optional() });
 
 /**
- * POST /jobs/{id}/answers: the owner's answers to the model's questions, or "Generar así" (skip). The job ID
+ * POST /jobs/{id}/answers: the owner's answers to the model's questions, or "Saltar preguntas y continuar" (skip). The job ID
  * is the credential, as for the status route. Only one round: the job goes back to PENDING at the write
  * stage, where the model has to build. Free-text answers pass the input guardrail and the pre-screen first.
  */

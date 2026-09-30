@@ -17,6 +17,8 @@ const Body = z.object({
   facebook: z.string().max(200).optional(),
   lang: z.string().max(5).optional(),
   uploadId: z.string().uuid().optional(),
+  /** The owner's email (account.ts): links the site to "Mis sitios". Not an answer: never sent to a model. */
+  ownerEmail: z.email().max(120),
 });
 
 export interface SubmitDeps {
@@ -48,9 +50,11 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
 
   let answers: Answers;
   let uploadId: string | undefined;
+  let ownerEmail: string;
   try {
     const parsed = Body.parse(body);
     uploadId = parsed.uploadId;
+    ownerEmail = parsed.ownerEmail.trim().toLowerCase();
     answers = normalizeAnswers(parsed);
   } catch (error) {
     if (error instanceof z.ZodError) return { status: 400, fields: [...new Set(error.issues.map((i) => i.path.join('.')))] };
@@ -70,6 +74,7 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
     ipHash,
     answers,
     uploadId,
+    ownerEmail,
     usage: [],
   };
   const reject = async (rejectedBy: Job['rejectedBy'], rejectDetail: string): Promise<SubmitResult> => {

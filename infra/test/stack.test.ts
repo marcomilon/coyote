@@ -29,7 +29,7 @@ describe('CoyoteStack, domainless', () => {
     template.resourceCountIs('AWS::CertificateManager::Certificate', 0);
     template.resourceCountIs('AWS::Route53::RecordSet', 0);
     template.resourceCountIs('AWS::CloudFront::Distribution', 2);
-    template.resourceCountIs('AWS::DynamoDB::GlobalTable', 4);
+    template.resourceCountIs('AWS::DynamoDB::GlobalTable', 6);
   });
 
   it('keeps both buckets private and versions the sites bucket', () => {
@@ -101,7 +101,28 @@ describe('CoyoteStack, domainless', () => {
 
   it('exposes the routes', () => {
     const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')).map((r) => r.Properties.RouteKey).sort();
-    expect(routes).toEqual(['DELETE /me', 'GET /jobs/{id}', 'GET /me', 'POST /generate', 'POST /jobs/{id}/answers', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads']);
+    expect(routes).toEqual([
+      'DELETE /me', 'GET /account', 'GET /jobs/{id}', 'GET /me', 'GET /me/chat', 'POST /account/login', 'POST /account/session', 'POST /generate',
+      'POST /jobs/{id}/answers', 'POST /me/chat', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads',
+    ]);
+  });
+
+  it('keeps the chat in its own table, and lets the chat poll above the stage limit', () => {
+    template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+      KeySchema: [
+        { AttributeName: 'slug', KeyType: 'HASH' },
+        { AttributeName: 'at', KeyType: 'RANGE' },
+      ],
+      TimeToLiveSpecification: { AttributeName: 'ttl', Enabled: true },
+    });
+    template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+      DefaultRouteSettings: Match.objectLike({ ThrottlingRateLimit: 5 }),
+      RouteSettings: { 'GET /me/chat': Match.objectLike({ ThrottlingRateLimit: 25 }) },
+    });
+    // Route settings fail to deploy if the stage is updated before the route exists.
+    const routes = template.findResources('AWS::ApiGatewayV2::Route', { Properties: { RouteKey: 'GET /me/chat' } });
+    const stage = Object.values(template.findResources('AWS::ApiGatewayV2::Stage'))[0]!;
+    expect(stage.DependsOn).toEqual(expect.arrayContaining(Object.keys(routes)));
   });
 
   it('only lets Lambdas call the text models with our guardrail attached', () => {
@@ -115,8 +136,8 @@ describe('CoyoteStack, domainless', () => {
     expect(JSON.stringify(text)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0'); // the pre-screen
     expect(JSON.stringify(text)).toContain('foundation-model/amazon.nova-2-lite-v1:0');
     const writer = text.filter((s) => JSON.stringify(s.Resource).includes(DEFAULT_MODEL_ID));
-    expect(writer).toHaveLength(1);
-    expect(writer[0]!.Action).toBe('bedrock:InvokeModel');
+    expect(writer).toHaveLength(2); // generate (plan_site) and the chat
+    for (const statement of writer) expect(statement.Action).toBe('bedrock:InvokeModel');
     expect(unguarded).toEqual([]); // no image model any more: every model call carries the guardrail
   });
 
@@ -137,6 +158,18 @@ describe('CoyoteStack, domainless', () => {
   it('is disposable: cdk destroy removes all data', () => {
     template.allResources('AWS::DynamoDB::GlobalTable', { DeletionPolicy: 'Delete' });
     template.allResources('AWS::S3::Bucket', { DeletionPolicy: 'Delete' });
+  });
+
+  it('sends email only with a verified sender, and only from the account and generate Lambdas', () => {
+    template.resourceCountIs('AWS::SES::EmailIdentity', 0);
+    const withSender = synth({ senderEmail: 'owner@example.test' });
+    withSender.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'owner@example.test' });
+    const senders = Object.entries(withSender.findResources('AWS::IAM::Policy'))
+      .filter(([, policy]) => JSON.stringify(policy.Properties.PolicyDocument).includes('ses:SendEmail'))
+      .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
+    expect(senders.sort()).toEqual(['GeneratorApiAccount', 'GeneratorApiGenerate']);
+    const account = Object.values(withSender.findResources('AWS::Lambda::Function')).find((f) => JSON.stringify(f.Properties.Environment ?? {}).includes('owner@example.test'));
+    expect(account).toBeDefined(); // SENDER_EMAIL reaches the Lambdas
   });
 
   it('exports the URLs the dev server and the Lambdas need', () => {
@@ -161,7 +194,11 @@ describe('CoyoteStack, domain mode', () => {
       DistributionConfig: { Aliases: ['sites.test', '*.sites.test'] },
     });
     template.hasResourceProperties('AWS::CloudFront::Distribution', { DistributionConfig: { Aliases: ['app.brand.test'] } });
-    template.resourceCountIs('AWS::Route53::RecordSet', 8);
+    template.resourceCountIs('AWS::Route53::RecordSet', 11); // 8 aliases + 3 DKIM records
+  });
+
+  it('sends email from notify.<domain> with DKIM', () => {
+    template.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'notify.brand.test' });
   });
 
   it('uses exact origins in the CSPs and the rewrite function', () => {

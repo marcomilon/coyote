@@ -1,0 +1,74 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const s = t(lang);
+const m = s.mySites;
+const other = t(s.otherLang.code);
+const clientStrings = { ...m, lang, chatPath: s.paths.chat, mySitePath: s.paths.mySite };
+---
+
+<Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySites} withConfig>
+  <div class="mysites wrap" id="mysites" data-state="loading" data-strings={JSON.stringify(clientStrings)}>
+    <section data-view="loading" class="panel"><div class="paint" aria-hidden="true"></div></section>
+
+    <section data-view="form">
+      <form class="ticket" data-signin novalidate>
+        <header>
+          <h1>{m.heading}</h1>
+          <p>{m.signIn.intro}</p>
+        </header>
+        <fieldset>
+          <label class="q" for="email">{m.signIn.label}</label>
+          <input type="email" id="email" name="email" maxlength="120" autocomplete="email" autocapitalize="none" inputmode="email" required />
+          <p class="error" data-error role="alert"></p>
+        </fieldset>
+        <div class="submit-row"><button class="btn" type="submit">{m.signIn.submit}</button></div>
+      </form>
+    </section>
+
+    <section data-view="message" class="panel" aria-live="assertive">
+      <h2 data-message-title></h2>
+      <p data-message-text></p>
+      <div class="actions"><button class="btn ghost" type="button" data-another>{m.another}</button></div>
+    </section>
+
+    <section data-view="editor">
+      <header class="sites-head">
+        <h1>{m.heading}</h1>
+        <p>{m.signedInAs} <b data-email></b> · <button class="linkbtn" type="button" data-signout>{m.signOut}</button></p>
+      </header>
+      <p class="notice" data-empty hidden>{m.empty}</p>
+      <div class="sites-layout">
+        <ul class="site-list" data-site-list></ul>
+        <div class="site-detail" data-detail hidden>
+          <div class="bar">
+            <h2 data-detail-name></h2>
+            <div class="actions">
+              <a class="btn small ghost" data-open target="_blank" rel="noopener">{m.open}</a>
+              <a class="btn small" data-mysite>{m.mySite}</a>
+            </div>
+          </div>
+          <div class="handoff">
+            <div class="qr" data-qr></div>
+            <div>
+              <h3>{m.qr.title}</h3>
+              <p>{m.qr.text}</p>
+              <a class="linkbtn" data-chat-open target="_blank" rel="noopener">{m.qr.open}</a>
+            </div>
+          </div>
+          <p class="notice updated" data-updated role="status" aria-live="polite"></p>
+          <div class="frame"><iframe title={m.heading} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<script>
+  import '../scripts/my-sites';
+</script>

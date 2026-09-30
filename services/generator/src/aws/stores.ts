@@ -1,14 +1,16 @@
 import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
 import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchWriteCommand, DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import type { Job, SiteRecord, Stores } from '../core/jobs';
+import type { Account, AccountToken, ChatMessage, Job, SiteRecord, Stores } from '../core/jobs';
 
 export interface StoreConfig {
   jobsTable: string;
   sitesTable: string;
   rateLimitTable: string;
   blocklistTable: string;
+  chatTable: string;
+  accountsTable: string;
   sitesBucket: string;
   /** Unset in Lambdas that never change a published site. */
   sitesDistributionId?: string;
@@ -25,6 +27,8 @@ export function storeConfigFromEnv(env: Record<string, string | undefined> = pro
     sitesTable: need('SITES_TABLE'),
     rateLimitTable: need('RATE_LIMIT_TABLE'),
     blocklistTable: need('BLOCKLIST_TABLE'),
+    chatTable: need('CHAT_TABLE'),
+    accountsTable: need('ACCOUNTS_TABLE'),
     sitesBucket: need('SITES_BUCKET'),
     sitesDistributionId: env.SITES_DISTRIBUTION_ID,
   };
@@ -158,8 +162,8 @@ export function createStores(config: StoreConfig): Stores {
             TableName: config.jobsTable,
             Key: { jobId },
             ConditionExpression: 'attribute_exists(jobId)',
-            UpdateExpression: 'SET #a = :redacted REMOVE #n, #i, #q, #t',
-            ExpressionAttributeNames: { '#a': 'answers', '#n': 'notes', '#i': 'instruction', '#q': 'questions', '#t': 'ownerToken' },
+            UpdateExpression: 'SET #a = :redacted REMOVE #n, #i, #q, #t, #e',
+            ExpressionAttributeNames: { '#a': 'answers', '#n': 'notes', '#i': 'instruction', '#q': 'questions', '#t': 'ownerToken', '#e': 'ownerEmail' },
             ExpressionAttributeValues: { ':redacted': { deleted: true } },
           }),
         );
@@ -262,14 +266,14 @@ export function createStores(config: StoreConfig): Stores {
       return (await getObject(key))?.transformToByteArray();
     },
 
-    async putPage(key, page) {
+    async putPage(key, page, cacheControl = 'public, max-age=300') {
       await s3.send(
         new PutObjectCommand({
           Bucket: config.sitesBucket,
           Key: key,
           Body: page,
           ContentType: 'text/html; charset=utf-8',
-          CacheControl: 'public, max-age=300',
+          CacheControl: cacheControl,
         }),
       );
     },
@@ -296,6 +300,101 @@ export function createStores(config: StoreConfig): Stores {
           MetadataDirective: 'REPLACE',
         }),
       );
+    },
+
+    async putChat(message) {
+      await db.send(new PutCommand({ TableName: config.chatTable, Item: message }));
+    },
+
+    async updateChat(slug, at, patch) {
+      await db.send(new UpdateCommand({ TableName: config.chatTable, Key: { slug, at }, ConditionExpression: 'attribute_exists(slug)', ...setExpression(patch) }));
+    },
+
+    async listChat(slug, after, limit) {
+      const { Items } = await db.send(
+        new QueryCommand({
+          TableName: config.chatTable,
+          KeyConditionExpression: 'slug = :slug AND #at > :after',
+          ExpressionAttributeNames: { '#at': 'at' },
+          ExpressionAttributeValues: { ':slug': slug, ':after': after },
+          ScanIndexForward: false,
+          Limit: limit,
+        }),
+      );
+      return ((Items ?? []) as ChatMessage[]).reverse();
+    },
+
+    async deleteChat(slug) {
+      let start: Record<string, unknown> | undefined;
+      do {
+        const page = await db.send(
+          new QueryCommand({
+            TableName: config.chatTable,
+            KeyConditionExpression: 'slug = :slug',
+            ExpressionAttributeValues: { ':slug': slug },
+            ProjectionExpression: 'slug, #at',
+            ExpressionAttributeNames: { '#at': 'at' },
+            ExclusiveStartKey: start,
+          }),
+        );
+        const keys = page.Items ?? [];
+        for (let i = 0; i < keys.length; i += 25) {
+          const batch = keys.slice(i, i + 25).map((Key) => ({ DeleteRequest: { Key } }));
+          await db.send(new BatchWriteCommand({ RequestItems: { [config.chatTable]: batch } }));
+        }
+        start = page.LastEvaluatedKey;
+      } while (start);
+    },
+
+    async linkAccountSite(emailId, email, lang, site) {
+      const pk = `email#${emailId}`;
+      await db.send(
+        new UpdateCommand({
+          TableName: config.accountsTable,
+          Key: { pk, sk: 'profile' },
+          UpdateExpression: 'SET email = :email, lang = if_not_exists(lang, :lang)',
+          ExpressionAttributeValues: { ':email': email, ':lang': lang },
+        }),
+      );
+      await db.send(new PutCommand({ TableName: config.accountsTable, Item: { pk, sk: `site#${site.slug}`, ...site } }));
+    },
+
+    async getAccount(emailId) {
+      const { Items = [] } = await db.send(
+        new QueryCommand({ TableName: config.accountsTable, KeyConditionExpression: 'pk = :pk', ExpressionAttributeValues: { ':pk': `email#${emailId}` } }),
+      );
+      const profile = Items.find((item) => item.sk === 'profile');
+      if (!profile) return undefined;
+      const sites = Items.filter((item) => String(item.sk).startsWith('site#')).map(({ slug, businessName, createdAt }) => ({ slug, businessName, createdAt }));
+      return { email: profile.email, lang: profile.lang, sites } as Account;
+    },
+
+    async unlinkAccountSite(emailId, slug) {
+      const pk = `email#${emailId}`;
+      await db.send(new DeleteCommand({ TableName: config.accountsTable, Key: { pk, sk: `site#${slug}` } }));
+      const account = await this.getAccount(emailId);
+      if (account && account.sites.length === 0) await db.send(new DeleteCommand({ TableName: config.accountsTable, Key: { pk, sk: 'profile' } }));
+    },
+
+    async putAccountToken({ kind, id, ...token }) {
+      await db.send(new PutCommand({ TableName: config.accountsTable, Item: { pk: `${kind}#${id}`, sk: '-', ...token, ttl: Math.ceil(token.expiresAt / 1000) } }));
+    },
+
+    async getAccountToken(kind, id) {
+      const { Item } = await db.send(new GetCommand({ TableName: config.accountsTable, Key: { pk: `${kind}#${id}`, sk: '-' } }));
+      return Item ? ({ kind, id, emailId: Item.emailId, secretHash: Item.secretHash, expiresAt: Item.expiresAt } as AccountToken) : undefined;
+    },
+
+    async takeAccountToken(kind, id) {
+      try {
+        const { Attributes } = await db.send(
+          new DeleteCommand({ TableName: config.accountsTable, Key: { pk: `${kind}#${id}`, sk: '-' }, ConditionExpression: 'attribute_exists(pk)', ReturnValues: 'ALL_OLD' }),
+        );
+        return Attributes ? ({ kind, id, emailId: Attributes.emailId, secretHash: Attributes.secretHash, expiresAt: Attributes.expiresAt } as AccountToken) : undefined;
+      } catch (error) {
+        if (isConditionFailure(error)) return undefined;
+        throw error;
+      }
     },
 
     async copyPrefix(from, to) {

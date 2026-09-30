@@ -15,7 +15,7 @@ This reverses the rule "the model writes content JSON, never HTML". **The user d
 ## Flow
 1. The form is submitted. `submit.ts` runs unchanged: rate limit → brand list → pre-screen → slug claim.
 2. The **clarify** step in the `generate` Lambda makes one forced tool call, `plan_site`. It returns either `{ ready: true }` or `{ questions: Question[] }`. When there are questions, the job becomes `NEEDS_INPUT`.
-3. The web app renders the questions as a form built by our own code. The owner answers them, or skips with "Generar así". Either way the app calls `POST /jobs/{id}/answers`.
+3. The web app renders the questions as a form built by our own code. The owner answers them, or skips with "Saltar preguntas y continuar". Either way the app calls `POST /jobs/{id}/answers`.
 4. The answers are checked (lengths, input guardrail, pre-screen). Then the **write** step makes one forced tool call, `write_site`, which returns `{ html, heroScene? }`. After that: sanitize → check the text → hero image → fill the placeholders → save the draft.
 5. The job becomes `DONE` and returns the **magic URL** `/mi-sitio#token=…`. This reuses the existing owner token (`core/token.ts`), now issued when the first draft is ready. The first `GET /jobs/{id}` after `DONE` takes it off the job, so it is shown once. The create page shows the result and the link, with "Guarda este enlace".
 6. Only one round of questions is allowed: after the answers, the model has to build.
@@ -163,7 +163,7 @@ The document is rebuilt from an allowlist (parsed with htmlparser2):
   1. From `npm run dev`, submit a vague salon: the questions form appears.
   2. Answer it: the draft reflects the answers, and the magic URL opens Mi sitio with the draft.
   3. Submit a detailed dentist: it goes straight to the draft.
-  4. Check that "Generar así" skips the questions.
+  4. Check that "Saltar preguntas y continuar" skips the questions.
   5. Check that the WhatsApp and Maps links match the form input.
   6. Check that `{slug}/` returns 404.
   7. In Mi sitio, send "cambia el horario del sábado a 9–13": a new draft shows the change, and "Deshacer" brings back the previous one.

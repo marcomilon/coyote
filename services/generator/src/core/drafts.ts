@@ -15,6 +15,8 @@ import type { Urls } from './urls';
  * served (noindex) only to whoever has the URL. `draftId` is random (128 bits), so the URL is the secret.
  * The record it was rendered from (answers, content, brief, notes) is kept under `_src/<slug>/`, never served:
  * rendering it again makes the same page with no model call (contact edits, a theme or domain change, `refill-all`).
+ * The last few drafts are kept for "Deshacer"; `currentDraftId` points at the one shown. The site's preview
+ * (`_draft/<previewId>/`) follows that pointer: a stable URL that always shows the current draft.
  * A page Opus wrote is kept as written (`page`) and finished (checks, repairs, footer) on every render. Older
  * drafts have no page: their theme content (`content`, `brief`) renders with the theme.
  */
@@ -58,6 +60,27 @@ export interface DraftDeps {
   stores: Stores;
   urls: Urls;
   newDraftId?: () => string;
+  newPreviewId?: () => string;
+}
+
+/**
+ * Copies the draft `currentDraftId` points at to the site's preview, creating the preview on first use. The page
+ * is served with no-cache, so a reload always shows the current version. Call it whenever the pointer moves.
+ */
+export async function refreshPreview(slug: string, draftId: string, deps: Pick<DraftDeps, 'stores' | 'newPreviewId'>): Promise<string> {
+  const { stores } = deps;
+  const site = await stores.getSite(slug);
+  const previewId = site?.previewId ?? (deps.newPreviewId ?? newDraftId)();
+  const from = draftPrefix(draftId);
+  const to = draftPrefix(previewId);
+  const page = await stores.getText(`${from}index.html`);
+  if (page === undefined) throw new Error(`draft ${draftId} of ${slug} has no page`);
+  for (const key of await stores.listKeys(from)) {
+    if (key !== `${from}index.html`) await stores.copyObject(key, `${to}${key.slice(from.length)}`, contentType(key));
+  }
+  await stores.putPage(`${to}index.html`, page, 'no-cache');
+  if (!site?.previewId) await stores.saveSite({ slug, previewId });
+  return previewId;
 }
 
 /** Renders the record (its written page, or its theme) and runs the final checks. A violation here is our bug. */
@@ -97,6 +120,7 @@ export async function saveDraft(site: SiteRecord, doc: SiteDoc, deps: DraftDeps)
   const all = [...(site.drafts ?? []), draftId];
   await stores.saveSite({ slug: site.slug, drafts: all.slice(-MAX_DRAFTS), currentDraftId: draftId });
   for (const old of all.slice(0, -MAX_DRAFTS)) await deleteDraft(site.slug, old, stores);
+  await refreshPreview(site.slug, draftId, deps);
   return draftId;
 }
 
@@ -118,5 +142,6 @@ export async function refillDraft(site: SiteRecord, deps: DraftDeps): Promise<bo
   if (!site.currentDraftId) return false;
   const doc = await loadDraft(site.slug, site.currentDraftId, deps.stores);
   await deps.stores.putPage(`${draftPrefix(site.currentDraftId)}index.html`, renderDraft(doc, site.slug, deps.urls));
+  await refreshPreview(site.slug, site.currentDraftId, deps);
   return true;
 }

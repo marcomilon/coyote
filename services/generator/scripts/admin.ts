@@ -19,6 +19,8 @@ const config = {
   sitesTable: outputs.SitesTableName!,
   rateLimitTable: outputs.RateLimitTableName!,
   blocklistTable: outputs.BlocklistTableName!,
+  chatTable: outputs.ChatTableName!,
+  accountsTable: outputs.AccountsTableName!,
   sitesBucket: outputs.SitesBucketName!,
   sitesDistributionId: outputs.SitesDistributionId!,
 };

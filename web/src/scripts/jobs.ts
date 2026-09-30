@@ -4,8 +4,12 @@ import type { Question } from './questions';
 export interface JobView {
   status: 'PENDING' | 'NEEDS_INPUT' | 'DONE' | 'REJECTED' | 'FAILED';
   kind?: 'create' | 'edit';
+  /** clarify: questions may still come. write: none left. */
+  stage?: 'clarify' | 'write';
   questions?: Question[];
   draftUrl?: string;
+  /** The site's stable URL: always the current version (for "open in another tab"). */
+  previewUrl?: string;
   /** A new site's magic link. Returned once, by the first read after DONE. */
   miSitioUrl?: string;
   ownerWhatsApp?: string;
@@ -22,14 +26,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<{ status
   return { status: response.status, body: (await response.json().catch(() => ({}))) as T };
 }
 
-/** Resolves when the job leaves PENDING, or to FAILED after the limit. */
-export async function waitForJob(jobId: string): Promise<JobView> {
+/** Resolves when the job leaves PENDING, or to FAILED after the limit. `onProgress` sees every PENDING read. */
+export async function waitForJob(jobId: string, onProgress?: (job: JobView) => void): Promise<JobView> {
   const started = Date.now();
   while (Date.now() - started < POLL_LIMIT_MS) {
     try {
       const { status, body } = await api<JobView>(`/jobs/${jobId}`);
       if (status === 404) break;
       if (status === 200 && body.status !== 'PENDING') return body;
+      if (status === 200) onProgress?.(body);
     } catch {
       // A dropped connection is normal on mobile: keep trying until the limit.
     }
@@ -38,7 +43,7 @@ export async function waitForJob(jobId: string): Promise<JobView> {
   return { status: 'FAILED' };
 }
 
-/** POST /jobs/{id}/answers: the answers, or skip ("Generar así"). */
+/** POST /jobs/{id}/answers: the answers, or skip ("Saltar preguntas y continuar"). */
 export function sendAnswers(jobId: string, body: { answers: Record<string, string | string[]> } | { skip: true }) {
   return api<{ fields?: string[] }>(`/jobs/${jobId}/answers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 }

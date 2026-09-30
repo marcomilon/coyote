@@ -47,6 +47,8 @@ export interface FakeModelOptions {
   copy?: Record<string, unknown>;
   /** The edit_content answer. */
   edit?: Record<string, unknown>;
+  /** The chat's edit_page answer, or a function of the call number (1, 2, …). */
+  chat?: Record<string, unknown> | ((call: number) => Record<string, unknown>);
 }
 
 /** A scripted model. Every option can be changed between calls. */
@@ -72,6 +74,7 @@ export function fakeWriter(options: { page?: (request: PageRequest) => string; f
 export function fakeModel(options: FakeModelOptions = {}) {
   const calls: string[] = [];
   const requests: ToolRequest<never>[] = [];
+  let chatCalls = 0;
   const callTool = (async (request) => {
     calls.push(request.tool.name);
     requests.push(request as ToolRequest<never>);
@@ -89,6 +92,11 @@ export function fakeModel(options: FakeModelOptions = {}) {
           return { ...modelContent, ...options.copy };
         case 'edit_content':
           return options.edit ?? { headline: 'Pan de masa madre, también los domingos' };
+        case 'edit_page': {
+          chatCalls++;
+          const chat = options.chat;
+          return typeof chat === 'function' ? chat(chatCalls) : (chat ?? { action: 'none', reply: '¡Hola! ¿Qué quieres cambiar?' });
+        }
         default:
           throw new Error(`unexpected tool ${request.tool.name}`);
       }

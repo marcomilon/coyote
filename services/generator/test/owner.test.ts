@@ -144,6 +144,37 @@ describe('edits', () => {
   });
 });
 
+describe('the preview (a stable URL that follows the current draft)', () => {
+  it('is made with the first draft, served with no-cache, and follows every change and undo under the same URL', async () => {
+    const t = await withDraft();
+    const previewId = t.site().previewId!;
+    expect(previewId).toMatch(/^[0-9a-f]{32}$/);
+    const preview = () => t.objects.get(`_draft/${previewId}/index.html`);
+    expect(preview()).toBe(t.objects.get('_draft/draft1/index.html'));
+    expect(t.pageCache.get(`_draft/${previewId}/index.html`)).toBe('no-cache');
+    expect(t.jobs.get('job-1')!.previewUrl).toBe(urls.draftUrl(previewId));
+
+    await editSite(t.site(), { contact: { whatsapp: '+57 311 999 8877' } }, t.ownerDeps);
+    expect(preview()).toContain('https://wa.me/573119998877');
+    expect(preview()).toBe(t.objects.get('_draft/draft2/index.html'));
+
+    await undo(t.site(), t.ownerDeps);
+    expect(preview()).toBe(t.objects.get('_draft/draft1/index.html'));
+    expect(t.site().previewId).toBe(previewId);
+    expect(await ownerView(t.site(), t.ownerDeps)).toMatchObject({ draftUrl: urls.draftUrl('draft1'), previewUrl: urls.draftUrl(previewId) });
+  });
+
+  it('survives the pruning of old drafts, and goes with the site', async () => {
+    const t = await withDraft();
+    const previewId = t.site().previewId!;
+    for (let i = 0; i < 6; i++) await editSite(t.site(), { contact: { instagram: `luna${i}` } }, t.ownerDeps);
+    expect(t.objects.get(`_draft/${previewId}/index.html`)).toBe(t.objects.get('_draft/draft7/index.html'));
+    await deleteSite(t.site(), t.ownerDeps);
+    expect(t.objects.has(`_draft/${previewId}/index.html`)).toBe(false);
+    expect(t.invalidated).toContain(`/_draft/${previewId}/*`);
+  });
+});
+
 describe('delete', () => {
   it('deletes every draft, the sources, the images, the site record, and the text of its jobs', async () => {
     const t = await withDraft();

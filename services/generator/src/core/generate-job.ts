@@ -1,3 +1,4 @@
+import { issueLogin, linkSite } from './account';
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
 import type { Media, SiteContent } from './content';
 import { docMedia, loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
@@ -7,6 +8,7 @@ import { parsePage, pickLook, type PageEffort, type PagePhoto, type PageRequest,
 import { checkContent, PolicyRejection, type Violation } from './policy';
 import { isRejected, prescreen } from './prescreen';
 import { editContent, planSite } from './site-writer';
+import { readyEmail, type SendEmail } from './mail';
 import { issueToken, TOKEN_TTL_SECONDS } from './token';
 import { processUploads } from './uploads';
 import type { Urls } from './urls';
@@ -31,6 +33,8 @@ export interface GenerateJobDeps {
   random?: () => number;
   /** Effort for new pages; edits run one level lower. */
   pageEffort?: PageEffort;
+  /** The "your site is ready" email. Undefined when no sender is set up. */
+  sendEmail?: SendEmail;
 }
 
 export type GenerateOutcome =
@@ -161,6 +165,8 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
         await finish({ status: 'NEEDS_INPUT', questions: plan.questions, media });
         return { outcome: 'NEEDS_INPUT', ...tokens() };
       }
+      // No questions left: the create page tells the owner they may close it (the ready email follows).
+      await stores.updateJob(jobId, { stage: 'write' });
     }
 
     let doc: SiteDoc;
@@ -201,11 +207,14 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
         tokenExpiresAt: Math.floor(deps.now() / 1000) + TOKEN_TTL_SECONDS,
         jobIds: [...new Set([...(site.jobIds ?? []), jobId])],
       });
+      if (job.ownerEmail) await linkSite(stores, job.ownerEmail, job.answers.lang, { slug, businessName: job.answers.businessName, createdAt: site.createdAt });
     } else {
       await stores.saveSite({ slug, jobIds: [...new Set([...(site.jobIds ?? []), jobId])] });
     }
 
-    await finish({ status: 'DONE', draftUrl: urls.draftUrl(draftId), media, ownerToken });
+    const previewUrl = site.previewId ? urls.draftUrl(site.previewId) : undefined;
+    await finish({ status: 'DONE', draftUrl: urls.draftUrl(draftId), previewUrl, media, ownerToken });
+    if (ownerToken && job.ownerEmail) await sendReady(job, slug, deps);
     return { outcome: 'DONE', ...tokens() };
   } catch (error) {
     await releaseNewSite(job, deps);
@@ -219,6 +228,20 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       return { outcome: 'FAILED', ...tokens() };
     }
     return { outcome: 'REJECTED', ...tokens() };
+  }
+}
+
+/** "Tu sitio está listo", with a sign-in link to "Mis sitios". A failure is logged: the site is there either way. */
+async function sendReady(job: Job, slug: string, deps: GenerateJobDeps): Promise<void> {
+  if (!deps.sendEmail || !job.ownerEmail) return;
+  try {
+    const site = await deps.stores.getSite(slug);
+    if (!site?.ownerEmailId) return;
+    const login = await issueLogin(deps.stores, site.ownerEmailId, deps.now());
+    const { lang, businessName } = job.answers;
+    await deps.sendEmail(readyEmail(job.ownerEmail, lang, businessName, deps.urls.mySitesUrl(login, lang, slug)));
+  } catch (error) {
+    console.error('ready email failed', { slug, error });
   }
 }
 

@@ -16,6 +16,8 @@ const clientStrings = {
   uploadFailed: c.photos.failed,
   submit: c.submit,
   mySitePath: s.paths.mySite,
+  chatPath: s.paths.chat,
+  qr: c.qr,
   copied: c.done.copied,
   question: s.questions,
   rejected: c.rejected,
@@ -23,6 +25,7 @@ const clientStrings = {
   failed: c.failed,
   lostLink: c.lostLink,
   noApi: c.noApi,
+  canClose: c.working.canClose,
 };---
 
 <Layout lang={lang} title={c.title} description={c.description} alternate={other.paths.create} withConfig>
@@ -80,6 +83,13 @@ const clientStrings = {
         </fieldset>
 
         <fieldset>
+          <label class="q" for="ownerEmail"><i>4</i>{c.email.label}</label>
+          <p class="hint" id="ownerEmail-hint">{c.email.hint}</p>
+          <input type="email" id="ownerEmail" name="ownerEmail" maxlength="120" autocomplete="email" autocapitalize="none" inputmode="email" aria-describedby="ownerEmail-hint" placeholder={c.email.placeholder} required />
+          <p class="error" data-error="ownerEmail" role="alert"></p>
+        </fieldset>
+
+        <fieldset>
           <legend class="sub">{c.siteLang}</legend>
           <div class="langs">
             <label><input type="radio" name="lang" value="es" checked={lang === 'es'} /><span>Español</span></label>
@@ -99,7 +109,7 @@ const clientStrings = {
       <h2>{c.working.title}</h2>
       <div class="paint" aria-hidden="true"></div>
       <ol class="worksteps">{c.working.steps.map((step) => <li>{step}</li>)}</ol>
-      <p class="hint">{c.working.note} <span class="elapsed" data-elapsed aria-hidden="true"></span></p>
+      <p class="hint"><span data-close-note>{c.working.note}</span> <span class="elapsed" data-elapsed aria-hidden="true"></span></p>
     </section>
 
     <section data-view="questions">
@@ -125,6 +135,14 @@ const clientStrings = {
         </div>
         <a class="btn small ghost" data-draft-link target="_blank" rel="noopener">{c.done.open}</a>
       </div>
+      <div class="handoff" data-handoff hidden>
+        <div class="qr" data-qr></div>
+        <div>
+          <h3>{c.qr.title}</h3>
+          <p>{c.qr.text}</p>
+          <a class="linkbtn" data-chat-open target="_blank" rel="noopener">{c.qr.open}</a>
+        </div>
+      </div>
       <div class="magic">
         <h3>{c.magic.title}</h3>
         <p>{c.magic.text}</p>
@@ -135,6 +153,7 @@ const clientStrings = {
           <a class="btn small" data-magic-open>{c.magic.open}</a>
         </div>
       </div>
+      <p class="notice updated" data-updated role="status" aria-live="polite"></p>
       <div class="frame"><iframe title={c.done.title} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></div>
     </section>
 

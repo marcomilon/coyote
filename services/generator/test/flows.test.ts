@@ -145,7 +145,7 @@ describe('questions', () => {
     expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!).answers.contact.phone).toBe('576015551234');
   });
 
-  it('"Generar así" skips the questions with no extra model call', async () => {
+  it('"Saltar preguntas y continuar" skips the questions with no extra model call', async () => {
     const t = harness({ questions: QUESTIONS });
     await submit(body, '1.2.3.4', t.submitDeps);
     await runGenerateJob('job-1', t.generateDeps);
@@ -228,7 +228,8 @@ describe('status', () => {
     const t = harness();
     await submit(body, '1.2.3.4', t.submitDeps);
     const job = t.jobs.get('job-1')!;
-    expect(publicJob(job, job.createdAt + 1000)).toEqual({ jobId: 'job-1', status: 'PENDING', kind: 'create', slug: 'panaderia-luna', lang: 'es', questions: undefined, draftUrl: undefined });
+    expect(publicJob(job, job.createdAt + 1000)).toEqual({ jobId: 'job-1', status: 'PENDING', kind: 'create', slug: 'panaderia-luna', lang: 'es', stage: 'clarify', questions: undefined, draftUrl: undefined });
+    expect(JSON.stringify(publicJob(job, job.createdAt))).not.toContain('example.com'); // never the owner's email
     expect(publicJob(job, job.createdAt + PENDING_TIMEOUT_MS + 1).status).toBe('FAILED');
     // The clock restarts when the owner answers.
     expect(publicJob({ ...job, startedAt: job.createdAt + PENDING_TIMEOUT_MS }, job.createdAt + PENDING_TIMEOUT_MS + 1).status).toBe('PENDING');

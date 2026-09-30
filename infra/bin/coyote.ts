@@ -16,4 +16,5 @@ new CoyoteStack(app, 'Coyote', {
   prescreenModelId: app.node.tryGetContext('prescreenModelId') as string | undefined,
   hostedZoneName: app.node.tryGetContext('hostedZoneName') as string | undefined,
   sitesHostedZoneName: app.node.tryGetContext('sitesHostedZoneName') as string | undefined,
+  senderEmail: app.node.tryGetContext('senderEmail') as string | undefined,
 });

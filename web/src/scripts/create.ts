@@ -3,6 +3,7 @@
 import { ZodError } from 'zod';
 import { normalizeAnswers } from '../../../services/generator/src/core/answers';
 import { api, apiUrl, sendAnswers, waitForJob, type JobView } from './jobs';
+import { followDraft, qrCode } from './live-preview';
 import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
 import { uploadImages } from './upload';
 
@@ -14,6 +15,8 @@ interface Strings {
   uploadFailed: string;
   submit: string;
   mySitePath: string;
+  chatPath: string;
+  qr: { title: string; updated: string };
   copied: string;
   question: QuestionStrings & { invalid: string };
   rejected: Message;
@@ -21,6 +24,7 @@ interface Strings {
   failed: Message;
   lostLink: Message;
   noApi: string;
+  canClose: string;
 }
 
 const root = document.getElementById('create') as HTMLElement;
@@ -108,14 +112,35 @@ function showDone(jobId: string, job: JobView) {
   // The link points at this app's own Mi sitio page (localhost in development).
   const link = `${location.origin}${strings.mySitePath}${new URL(magic.miSitioUrl).hash}`;
   $<HTMLIFrameElement>('[data-view="done"] iframe').src = job.draftUrl;
-  $<HTMLAnchorElement>('[data-draft-link]').href = job.draftUrl;
+  // The stable URL: a tab opened with it shows every later change on reload.
+  $<HTMLAnchorElement>('[data-draft-link]').href = job.previewUrl ?? job.draftUrl;
   const box = $<HTMLAnchorElement>('[data-magic-link]');
   box.href = link;
   box.textContent = link.replace(/^https?:\/\//, '').replace(/#token=.{12}.*$/, '#token=…');
   copyButton($<HTMLButtonElement>('[data-magic-copy]'), link);
   $<HTMLAnchorElement>('[data-magic-whatsapp]').href = `https://wa.me/${magic.ownerWhatsApp ?? ''}?text=${encodeURIComponent(link)}`;
   $<HTMLAnchorElement>('[data-magic-open]').href = link;
+  showChatHandoff(new URL(magic.miSitioUrl).hash, job.draftUrl);
   show('done');
+}
+
+let stopFollowing: (() => void) | undefined;
+
+/** The QR code opens the chat on the owner's phone; this page then shows every change the chat makes. */
+function showChatHandoff(hash: string, draftUrl: string) {
+  const token = decodeURIComponent(/^#token=(.+)$/.exec(hash)?.[1] ?? '');
+  if (!token) return;
+  const chatLink = `${location.origin}${strings.chatPath}${hash}`;
+  $<HTMLElement>('[data-qr]').replaceChildren(qrCode(chatLink, strings.qr.title));
+  $<HTMLAnchorElement>('[data-chat-open]').href = chatLink;
+  $<HTMLElement>('[data-handoff]').hidden = false;
+  stopFollowing?.();
+  stopFollowing = followDraft(token, draftUrl, (next) => {
+    $<HTMLIFrameElement>('[data-view="done"] iframe').src = next;
+    const updated = $<HTMLElement>('[data-updated]');
+    updated.textContent = strings.qr.updated;
+    window.setTimeout(() => (updated.textContent = ''), 4000);
+  });
 }
 
 function showQuestions(jobId: string, job: JobView) {
@@ -144,9 +169,27 @@ function showQuestions(jobId: string, job: JobView) {
   $<HTMLElement>('[data-question-list] input, [data-question-list] textarea')?.focus({ preventScroll: true });
 }
 
+/** The email typed in the form, kept for this tab so a reload still names it. */
+const emailKey = (jobId: string) => `coyote:email:${jobId}`;
+
+/** Once no questions can come, the owner may leave: the ready email brings them back. */
+function progress(jobId: string, job: JobView) {
+  if (job.kind !== 'create' || job.stage !== 'write') return;
+  let email = '';
+  try {
+    email = sessionStorage.getItem(emailKey(jobId)) ?? '';
+  } catch {
+    // Storage blocked: the note still makes sense without the address.
+  }
+  $('[data-close-note]').textContent = strings.canClose.replace('{email}', email || '✉');
+}
+
+const waitNote = $('[data-close-note]').textContent;
+
 async function follow(jobId: string) {
+  $('[data-close-note]').textContent = waitNote;
   show('working');
-  const job = await waitForJob(jobId);
+  const job = await waitForJob(jobId, (current) => progress(jobId, current));
   if (job.status === 'NEEDS_INPUT') showQuestions(jobId, job);
   else if (job.status === 'DONE') showDone(jobId, job);
   else if (job.status === 'REJECTED') showMessage(strings.rejected);
@@ -167,12 +210,14 @@ form.addEventListener('submit', async (event) => {
     facebook: data.facebook || undefined,
     lang: data.lang,
   };
+  const ownerEmail = (data.ownerEmail ?? '').trim();
   try {
     normalizeAnswers(raw as never);
   } catch (error) {
-    if (error instanceof ZodError) return setErrors([...new Set(error.issues.map((issue) => issue.path.join('.')))]);
+    if (error instanceof ZodError) return setErrors([...new Set(error.issues.map((issue) => issue.path.join('.'))), ...(validEmail(ownerEmail) ? [] : ['ownerEmail'])]);
     throw error;
   }
+  if (!validEmail(ownerEmail)) return setErrors(['ownerEmail']);
   setErrors([]);
 
   const button = form.querySelector('button[type="submit"]') as HTMLButtonElement;
@@ -192,9 +237,14 @@ form.addEventListener('submit', async (event) => {
     const { status, body } = await api<{ jobId?: string; fields?: string[] }>('/generate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(raw),
+      body: JSON.stringify({ ...raw, ownerEmail }),
     });
     if (status === 202 && body.jobId) {
+      try {
+        sessionStorage.setItem(emailKey(body.jobId), ownerEmail);
+      } catch {
+        // Only the "you may close" note uses it.
+      }
       // The job lives in the URL so a reload picks it up again.
       history.replaceState(null, '', `#job=${body.jobId}`);
       return void follow(body.jobId);
@@ -210,6 +260,10 @@ form.addEventListener('submit', async (event) => {
     button.textContent = strings.submit;
   }
 });
+
+function validEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 120;
+}
 
 strings.errors.noApi = strings.noApi;
 strings.errors.photos = strings.uploadFailed;

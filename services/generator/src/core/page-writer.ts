@@ -34,6 +34,8 @@ export interface PagePhoto {
  * Each request starts from nothing, so Opus falls back on its favorite look for the kind of business (every
  * bakery cream and serif). A random nudge, in the skill's own words, spreads the sites out; Opus picks the one
  * direction of the three that suits the business. The tones are the skill's list (frontend-design.ts).
+ * Opus's favorite eye-catcher is a scrolling ticker strip (10 of 12 pages had one), so most requests ask for a
+ * page without one; a quarter say nothing, so some sites still get it.
  */
 export const TONES = [
   'brutally minimal', 'maximalist', 'retro-futuristic', 'organic/natural', 'luxury/refined', 'playful/toy-like',
@@ -44,13 +46,17 @@ export const TONES = [
 export interface Look {
   tones: [string, string, string];
   dark: boolean;
+  noTicker: boolean;
 }
 
-/** Three different tones and a light or dark page. `random` is injectable for tests. */
+/** How often a new site's request asks for no ticker strip. */
+const NO_TICKER_SHARE = 0.75;
+
+/** Three different tones, a light or dark page, and usually no ticker strip. `random` is injectable for tests. */
 export function pickLook(random: () => number = Math.random): Look {
   const pool: string[] = [...TONES];
   const tones = [0, 1, 2].map(() => pool.splice(Math.floor(random() * pool.length), 1)[0]!) as Look['tones'];
-  return { tones, dark: random() < 0.4 };
+  return { tones, dark: random() < 0.4, noTicker: random() < NO_TICKER_SHARE };
 }
 
 export interface PageRequest {
@@ -131,7 +137,9 @@ The owner asks for this change: ${instruction}
 ${photosLine}Keep everything else as it is, and don't invent facts the owner didn't give. Reply with the complete HTML file.`;
   }
 
-  const lookLine = look ? `For the look, go with whichever of these suits the business best: ${look.tones[0]}, ${look.tones[1]}, or ${look.tones[2]}, on a ${look.dark ? 'dark' : 'light'} background.\n\n` : '';
+  const lookLine = look
+    ? `For the look, go with whichever of these suits the business best: ${look.tones[0]}, ${look.tones[1]}, or ${look.tones[2]}, on a ${look.dark ? 'dark' : 'light'} background${look.noTicker ? ', without a scrolling ticker or marquee strip' : ''}.\n\n`
+    : '';
   return `Use the frontend-design skill to create a one-page website for this small business, as a single HTML file.
 
 ${business}

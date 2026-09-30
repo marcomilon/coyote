@@ -1,7 +1,7 @@
 /**
  * Runs the prescreen fixture set through the DEPLOYED API (the whole stack: rate limit, brand list,
  * guardrail, classifier, generation). Bad cases must get 422 at submit; good cases must reach DONE. When the model
- * asks questions, the check skips them ("Generar así"), so every good case also writes one page.
+ * asks questions, the check skips them ("Saltar preguntas y continuar"), so every good case also writes one page.
  *   npm run verify:live -w services/generator      (costs about 60 model calls, 21 of them whole pages; rejections may trigger the Rejected alarm)
  */
 import { readFileSync } from 'node:fs';
@@ -20,7 +20,8 @@ await Promise.all(
       const response = await fetch(`${api}/generate`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ businessName: c.name, about: c.about, whatsapp: '+57 300 123 4567' }),
+        // SES's mailbox simulator: the ready email is accepted and never bounces.
+        body: JSON.stringify({ businessName: c.name, about: c.about, whatsapp: '+57 300 123 4567', ownerEmail: 'success@simulator.amazonses.com' }),
       });
       const body = (await response.json().catch(() => ({}))) as { jobId?: string };
       let final = response.status === 422 ? 'REJECTED' : `HTTP ${response.status}`;

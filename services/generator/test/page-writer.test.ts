@@ -96,15 +96,16 @@ describe('contact details on a written page', () => {
     expect(pagePrompt(request)).toContain('frontend-design skill');
   });
 
-  it('nudges each new site toward three different tones and a light or dark page', () => {
+  it('nudges each new site toward three different tones and a light or dark page, usually without a ticker strip', () => {
     let n = 0;
-    const seq = [0.99, 0.99, 0.99, 0.1];
+    const seq = [0.99, 0.99, 0.99, 0.1, 0.9];
     const look = pickLook(() => seq[n++]!);
     expect(new Set(look.tones).size).toBe(3);
     expect(look.tones.every((t) => (TONES as readonly string[]).includes(t))).toBe(true);
-    expect(look.dark).toBe(true);
+    expect(look).toMatchObject({ dark: true, noTicker: false });
     const answers = { businessName: 'Luna', about: 'Pan', lang: 'es' as const, contact };
-    expect(pagePrompt({ answers, notes: [], photos: [], look })).toContain(`go with whichever of these suits the business best: ${look.tones.join(', ').replace(/, ([^,]+)$/, ', or $1')}, on a dark background`);
+    expect(pagePrompt({ answers, notes: [], photos: [], look })).toContain(`go with whichever of these suits the business best: ${look.tones.join(', ').replace(/, ([^,]+)$/, ', or $1')}, on a dark background.`);
+    expect(pagePrompt({ answers, notes: [], photos: [], look: { ...look, noTicker: true } })).toContain('on a dark background, without a scrolling ticker or marquee strip.');
     expect(pagePrompt({ answers, notes: [], photos: [], current: '<html></html>', instruction: 'x' })).not.toContain('For the look');
   });
 

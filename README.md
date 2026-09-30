@@ -32,6 +32,7 @@ All commands use the AWS profile `coyote` (override with `COYOTE_AWS_PROFILE`).
 | I want to… | Do this |
 |---|---|
 | Deploy | `./coyote.sh deploy`. It builds the frontend, checks that every Lambda bundle loads, then runs `cdk deploy`. |
+| Send email ("Mis sitios", "your site is ready") | Set `senderEmail` in the `context` of `infra/cdk.json` (or pass `-c senderEmail=you@example.com` on every deploy: a deploy without it removes the sender). SES emails that address a verification link: click it. While SES is in the sandbox, verify each test recipient too: `aws sesv2 create-email-identity --email-identity them@example.com --profile coyote`. |
 | Get alert emails | `./coyote.sh subscribe-alerts you@example.com`. AWS sends one confirmation email per topic. **Do not click** "Confirm subscription": copy its link address and run `./coyote.sh confirm-alerts '<link>'`. Confirming through the API disables the no-login unsubscribe link, which mail scanners otherwise follow, silently removing the subscription. `./coyote.sh protect-alerts` fixes subscriptions that were confirmed by clicking. |
 | See what is happening | CloudWatch dashboard **Coyote** (requests, rejections, tokens, API errors). |
 | Investigate an alarm | `./coyote.sh abuse-report`: requests per visitor (hashed IP), rejections with the layer that stopped them, and the newest drafts. Open them and look at them. |

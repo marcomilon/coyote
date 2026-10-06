@@ -16,11 +16,13 @@ import {
   aws_route53_targets as targets,
   aws_s3 as s3,
   aws_s3_deployment as s3deploy,
+  aws_ses as ses,
   aws_sns as sns,
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
-import { DEFAULT_IMAGE_MODEL_ID, DEFAULT_MODEL_ID } from '../../services/generator/src/core/models';
+import { DEFAULT_MODEL_ID, DEFAULT_PRESCREEN_MODEL_ID } from '../../services/generator/src/core/models';
 import { createUrls } from '../../services/generator/src/core/urls';
+import { PAGE_FONT_HOSTS, PAGE_SCRIPT_HOSTS, PAGE_STYLE_HOSTS } from '../../services/generator/src/core/page-check';
 import { appCsp, sitesCsp } from './csp';
 import { GeneratorApi } from './generator-api';
 import { CoyoteGuardrail } from './guardrail';
@@ -36,16 +38,21 @@ export interface CoyoteStackProps extends StackProps {
   domainName?: string;
   /** Registrable domain for user sites. Unset = domainless mode. */
   sitesDomainName?: string;
-  /** Bedrock model or inference profile. Defaults to the one in services/generator/src/core/models.ts. */
+  /** Bedrock model or inference profile that writes the sites. Defaults to the one in services/generator/src/core/models.ts. */
   modelId?: string;
-  /** Text-to-image model for hero photos. Defaults to the one in models.ts. */
-  imageModelId?: string;
+  /** Bedrock model or inference profile of the pre-screen classifier. Defaults to the one in models.ts. */
+  prescreenModelId?: string;
   /** The built frontend. Defaults to web/dist (run `npm run build -w web` first). */
   webDist?: string;
   /** Route 53 zone that holds `domainName`. Defaults to `domainName`. */
   hostedZoneName?: string;
   /** Route 53 zone that holds `sitesDomainName`. Defaults to `sitesDomainName`. */
   sitesHostedZoneName?: string;
+  /**
+   * Domainless mode: the address our emails come from, verified in SES (👤 click the verification email). Unset =
+   * no email ("Mis sitios" sign-in answers 503). Domain mode sends from no-reply@notify.<domainName> instead.
+   */
+  senderEmail?: string;
 }
 
 const LOCAL_DEV_ORIGIN = 'http://localhost:5173';
@@ -58,6 +65,8 @@ export class CoyoteStack extends Stack {
   readonly sitesTable: dynamodb.TableV2;
   readonly rateLimitTable: dynamodb.TableV2;
   readonly blocklistTable: dynamodb.TableV2;
+  readonly chatTable: dynamodb.TableV2;
+  readonly accountsTable: dynamodb.TableV2;
   readonly api: apigwv2.HttpApi;
   readonly guardrail: CoyoteGuardrail;
   readonly abuseReports: sns.Topic;
@@ -96,7 +105,6 @@ export class CoyoteStack extends Stack {
       autoDeleteObjects: true,
       lifecycleRules: [
         { id: 'noncurrent-versions', noncurrentVersionExpiration: Duration.days(30) },
-        { id: 'previews', prefix: '_preview/', expiration: Duration.days(1) },
         { id: 'uploads', prefix: '_uploads/', expiration: Duration.days(1) },
         { id: 'aborted-uploads', abortIncompleteMultipartUploadAfter: Duration.days(1) },
       ],
@@ -121,6 +129,22 @@ export class CoyoteStack extends Stack {
     this.sitesTable = table('SitesTable', 'slug', false);
     this.rateLimitTable = table('RateLimitTable', 'ip', true);
     this.blocklistTable = table('BlocklistTable', 'slug', false);
+    // The chat of each site (chat.ts): one row per message, ordered by `at` (ms). Rows expire after 90 days.
+    this.chatTable = new dynamodb.TableV2(this, 'ChatTable', {
+      partitionKey: { name: 'slug', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'at', type: dynamodb.AttributeType.NUMBER },
+      billing: dynamodb.Billing.onDemand(),
+      timeToLiveAttribute: 'ttl',
+      removalPolicy,
+    });
+    // "Mis sitios" (account.ts): `email#<id>` → profile + one row per site; `login#…` and `session#…` expire.
+    this.accountsTable = new dynamodb.TableV2(this, 'AccountsTable', {
+      partitionKey: { name: 'pk', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'sk', type: dynamodb.AttributeType.STRING },
+      billing: dynamodb.Billing.onDemand(),
+      timeToLiveAttribute: 'ttl',
+      removalPolicy,
+    });
 
     // ---------------------------------------------------------------------------------------
     // App distribution (our frontend, JS allowed)
@@ -154,7 +178,7 @@ export class CoyoteStack extends Stack {
                   domain ? domain.urls.apiUrl : `https://*.execute-api.${this.region}.amazonaws.com`,
                   `https://${this.sitesBucket.bucketRegionalDomainName}`, // presigned photo uploads
                 ],
-                frameSrc: [domain ? domain.urls.previewOrigin : 'https://*.cloudfront.net'],
+                frameSrc: [domain ? domain.urls.draftOrigin : 'https://*.cloudfront.net'],
               }),
             },
             ...commonSecurityHeaders,
@@ -212,10 +236,15 @@ export class CoyoteStack extends Stack {
                 // Used by the post-MVP contact form. Wildcard in domainless mode, as above.
                 formAction: domain ? domain.urls.apiUrl : `https://*.execute-api.${this.region}.amazonaws.com`,
                 frameAncestors: [appUrl, LOCAL_DEV_ORIGIN],
+                scriptHosts: PAGE_SCRIPT_HOSTS,
+                styleHosts: PAGE_STYLE_HOSTS,
+                fontHosts: PAGE_FONT_HOSTS,
               }),
             },
             ...commonSecurityHeaders,
           },
+          // Nothing is published yet: every page served here is a private draft.
+          customHeadersBehavior: { customHeaders: [{ header: 'X-Robots-Tag', value: 'noindex, nofollow', override: true }] },
         }),
       },
     });
@@ -241,7 +270,7 @@ export class CoyoteStack extends Stack {
         maxAge: Duration.hours(1),
       },
     });
-    new apigwv2.HttpStage(this, 'ApiStage', {
+    const apiStage = new apigwv2.HttpStage(this, 'ApiStage', {
       httpApi: this.api,
       stageName: '$default',
       autoDeploy: true,
@@ -292,7 +321,19 @@ export class CoyoteStack extends Stack {
 
     this.urlEnv = domain
       ? { DOMAIN_NAME: props.domainName!, SITES_DOMAIN_NAME: props.sitesDomainName! }
-      : { APP_BASE_URL: appUrl, API_BASE_URL: apiUrl, SITES_BASE_URL: sitesBaseUrl };
+      : { APP_BASE_URL: appUrl, API_BASE_URL: apiUrl, SITES_BASE_URL: sitesBaseUrl, ...(props.senderEmail ? { SENDER_EMAIL: props.senderEmail } : {}) };
+
+    // ---------------------------------------------------------------------------------------
+    // Email (SES): sign-in links and "your site is ready"
+    // ---------------------------------------------------------------------------------------
+    let mailIdentity: ses.EmailIdentity | undefined;
+    if (domain) {
+      const mailDomain = domain.urls.mailFrom!.split('@')[1]!;
+      mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', { identity: ses.Identity.domain(mailDomain) });
+      mailIdentity.dkimRecords.forEach((record, i) => new route53.CnameRecord(this, `MailDkim${i}`, { zone: domain.zone, recordName: record.name, domainName: record.value }));
+    } else if (props.senderEmail) {
+      mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', { identity: ses.Identity.email(props.senderEmail) });
+    }
 
     const generatorApi = new GeneratorApi(this, 'GeneratorApi', {
       api: this.api,
@@ -300,15 +341,22 @@ export class CoyoteStack extends Stack {
       sitesTable: this.sitesTable,
       rateLimitTable: this.rateLimitTable,
       blocklistTable: this.blocklistTable,
+      chatTable: this.chatTable,
+      accountsTable: this.accountsTable,
+      mailIdentity,
       sitesBucket: this.sitesBucket,
       sitesDistribution,
       guardrail: this.guardrail,
       abuseReports: this.abuseReports,
       modelId: props.modelId ?? DEFAULT_MODEL_ID,
-      imageModelId: props.imageModelId ?? DEFAULT_IMAGE_MODEL_ID,
+      prescreenModelId: props.prescreenModelId ?? DEFAULT_PRESCREEN_MODEL_ID,
       rateLimitPerDay: 100, // sandbox account; production uses 3
       urlEnv: this.urlEnv,
     });
+
+    // The chat and the result page poll GET /me/chat every few seconds; a few of them would use up the stage limit.
+    (apiStage.node.defaultChild as apigwv2.CfnStage).addPropertyOverride('RouteSettings', { 'GET /me/chat': { ThrottlingRateLimit: 25, ThrottlingBurstLimit: 50 } });
+    apiStage.node.addDependency(generatorApi.chatPollRoute); // the route must exist before its settings
 
     new Monitoring(this, 'Monitoring', {
       api: this.api,
@@ -327,6 +375,8 @@ export class CoyoteStack extends Stack {
     new CfnOutput(this, 'SitesTableName', { value: this.sitesTable.tableName });
     new CfnOutput(this, 'RateLimitTableName', { value: this.rateLimitTable.tableName });
     new CfnOutput(this, 'BlocklistTableName', { value: this.blocklistTable.tableName });
+    new CfnOutput(this, 'ChatTableName', { value: this.chatTable.tableName });
+    new CfnOutput(this, 'AccountsTableName', { value: this.accountsTable.tableName });
     new CfnOutput(this, 'GuardrailId', { value: this.guardrail.guardrailId });
     new CfnOutput(this, 'GuardrailVersion', { value: this.guardrail.version });
   }
@@ -340,7 +390,7 @@ export class CoyoteStack extends Stack {
     });
     const appHost = new URL(urls.appUrl).host;
     const apiHost = new URL(urls.apiUrl).host;
-    const sitesHost = new URL(urls.previewOrigin).host.replace(/^preview\./, '');
+    const sitesHost = new URL(urls.draftOrigin).host.replace(/^draft\./, '');
 
     const zoneName = props.hostedZoneName ?? props.domainName;
     const sitesZoneName = props.sitesHostedZoneName ?? props.sitesDomainName;

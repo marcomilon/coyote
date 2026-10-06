@@ -12,6 +12,7 @@
     ]
   },
   "context": {
+    "senderEmail": "marco.milon+coyote@gmail.com",
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
     "@aws-cdk/core:newStyleStackSynthesis": true,
     "@aws-cdk/core:stackRelativeExports": true,

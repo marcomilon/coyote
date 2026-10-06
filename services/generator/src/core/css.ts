@@ -71,6 +71,10 @@ export function sanitizeSignatureCss(input: string): CssResult {
         const property = node.property.toLowerCase();
         if (!ALLOWED_PROPERTIES.has(property)) reasons.push(`property ${node.property}`);
         if (node.value.type === 'Raw') reasons.push(`unparsable value for ${node.property}`);
+        // Decoration only: text written through CSS would skip the content checks and the guardrail.
+        if (property === 'content' && !/^(""|''|none|normal)$/.test(generate(node.value).trim())) {
+          reasons.push('content with text');
+        }
         if (property === 'position' && !ALLOWED_POSITIONS.has(generate(node.value).toLowerCase())) {
           reasons.push(`position: ${generate(node.value)}`);
         }

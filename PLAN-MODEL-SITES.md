@@ -1,0 +1,169 @@
+# Model-written sites (design first)
+
+> **Status: replaced.** Built and tested on Haiku 4.5 (commit `b085099` on `feature/model-sites`); the pages did not look good enough. Model-written pages came back in a different form: Opus 5.5 through Anthropic's API, with the frontend-design skill as the system prompt, no rules in the prompt, and checks on the finished page, with the themed page as the fallback (`PLAN.md` "Page writer"). The placeholders and the sanitizer below are not used. Kept from this plan: the follow-up questions, private drafts with the magic link, Mi sitio (free-text edits now go through `edit_content` on the content JSON), no publishing yet, and `refill-all`. The rest of this document describes the parked design.
+
+## Context
+The fixed themes (about 70 lines each) look outdated. Claude writes much better landing pages when left free, and good design is the core of the product. The new approach: **Claude Opus 5.5 (the default model) writes each site's full HTML and CSS.** When it lacks information, it **asks the business owner follow-up questions, shown as a form**, before it builds the site. The owner gets a **magic URL** where they can see the result and ask for changes in free text.
+
+The project isn't live yet, so **nothing is published in this plan**. There is no public `{slug}/` page, no publish step and no review. Publishing, admin review and the go-live email come in a later plan.
+
+This reverses the rule "the model writes content JSON, never HTML". **The user decided to also allow JavaScript, CDN libraries, and outside images** on the pages, for design quality. Safety rests on:
+1. Contact details and links come from **placeholders that our code fills**.
+2. A strict **HTML/CSS sanitizer**.
+3. The existing guardrail, pre-screen and policy checks, run on the text pulled out of the page.
+
+## Flow
+1. The form is submitted. `submit.ts` runs unchanged: rate limit → brand list → pre-screen → slug claim.
+2. The **clarify** step in the `generate` Lambda makes one forced tool call, `plan_site`. It returns either `{ ready: true }` or `{ questions: Question[] }`. When there are questions, the job becomes `NEEDS_INPUT`.
+3. The web app renders the questions as a form built by our own code. The owner answers them, or skips with "Saltar preguntas y continuar". Either way the app calls `POST /jobs/{id}/answers`.
+4. The answers are checked (lengths, input guardrail, pre-screen). Then the **write** step makes one forced tool call, `write_site`, which returns `{ html, heroScene? }`. After that: sanitize → check the text → hero image → fill the placeholders → save the draft.
+5. The job becomes `DONE` and returns the **magic URL** `/mi-sitio#token=…`. This reuses the existing owner token (`core/token.ts`), now issued when the first draft is ready. The first `GET /jobs/{id}` after `DONE` takes it off the job, so it is shown once. The create page shows the result and the link, with "Guarda este enlace".
+6. Only one round of questions is allowed: after the answers, the model has to build.
+
+### Drafts (private, visible only through the magic URL)
+- Each version of the site is written to `_draft/{draftId}/`, where `draftId` is a random 128-bit ID. The site record stores `currentDraftId` and keeps the last few versions.
+- `cf-rewrite.js` serves `_draft/` (domainless: `/_draft/{draftId}/`; domain mode: `draft.<sites-domain>/{draftId}/`) and never serves `{slug}/` for now. The sites distribution sends `X-Robots-Tag: noindex, nofollow` on everything, since every page is a draft.
+- Storage: the filled page and a copy of its images in `_draft/{draftId}/`; the unfilled source and `site.json` in `_src/{slug}/` (never served); the moderated uploads and the hero photo in `_media/{slug}/` (never served).
+- `_draft/` has no expiry. `_preview/` stops being used.
+- Mi sitio calls `GET /me`, which returns the `draftUrl`, and shows it in an iframe at phone and desktop widths. `frame-ancestors` already allows the app.
+
+### Questions (model output shown in our app, so kept strict)
+```ts
+Question = {
+  id: string,                    // [a-z0-9_]{1,30}
+  label: string,                 // ≤120 chars, owner's language
+  help?: string,                 // ≤160
+  type: 'text' | 'textarea' | 'choice' | 'multi' | 'yesno'
+      | 'address' | 'phone' | 'whatsapp' | 'email' | 'instagram' | 'facebook',
+  options?: string[],            // 2–6, ≤40 chars each, for choice/multi
+}
+// max 4 questions; all optional for the owner
+```
+- **What the model may ask:** anything that improves the site: services and prices, what makes the business different, hours, the style they like, delivery or home visits, and the business's **public contact details** (address, phone, WhatsApp, email, Instagram, Facebook). It must not ask for personal data that isn't meant for customers (ID numbers, home address of the owner, payment details).
+- **Contact questions use the contact types**, never `text`. Our form renders them as proper inputs (`type="tel"`, `type="email"`, address field), and the answers are validated like the original form fields (`Contact` schema in `content.ts`, extended with `phone` and `email`) and saved into the site's **contact details, not into the model's answers**. They reach the page only through placeholders, so a contact detail in the page always equals what the owner typed. A contact answer written into a `text` question is caught by the existing phone/URL scrub and ignored.
+- **Checks on the questions:** labels and options go through `outputAllowed` and `checkContent`. A contact question for a detail the owner already gave is dropped. The model is told never to ask for photos or files. The frontend always escapes them (`textContent`).
+- **Answers:** 500 characters max each. They are stored with the site and passed inside the guarded `<answers>` block (`answersBlock`, `prompt.ts:96`).
+- **Edits:** they use the same mechanism. If a change request is unclear, the model can ask first.
+
+### Writing the site
+- **Model: Claude Opus 5.5** is the default in `core/models.ts` (the Bedrock inference profile ID is confirmed in the console when access is granted; `BEDROCK_MODEL_ID` still overrides it). The pre-screen classifier stays on a cheaper model through its own `PRESCREEN_MODEL_ID`, since it runs on every request, including the ones it rejects.
+- **Opus 5.5 API differences**, handled in `callTool` (`core/bedrock.ts:63`):
+  - **It rejects a forced tool choice** (`toolChoice: { tool }`, `bedrock.ts:83-86`) with a 400. `callTool` switches to `toolChoice: auto`, the prompt names the tool to call, and the zod validation stays. A response with no tool call counts as `ModelOutputError` and goes through the existing retry.
+  - **Thinking can't be turned off.** Its effort level defaults to `medium`, so we set effort explicitly per call (`additionalModelRequestFields`): `low` for `plan_site`, and `medium` or `high` for `write_site`/`edit_site`, chosen during the bake-off.
+  - The whole page comes back in one response, so `write_site`/`edit_site` stream the response (`ConverseStream`) with maxTokens ≈ 32k, to stay clear of request timeouts.
+- **New `core/site-writer.ts`** makes the `plan_site`, `write_site` and `edit_site` calls through `callTool` and `callWithRetry` (`pipeline.ts:83`).
+- **Timeouts:** the generate Lambda gets 10 minutes; the stuck-job cutoff in `jobs.ts:97` goes to 12 minutes.
+- **Prompts** (`prompt.ts`). The model is told to:
+  - write a modern, mobile-first page that makes the kind and character of the business clear
+  - cover the four jobs: who they are, what they do, how to reach them, and where they are (address, a "Cómo llegar" button, hours)
+  - write the copy in es-419 or pt-BR
+  - follow the placeholder contract
+  - use only the allowed tags and CSS, with Google Fonts through `<link>` only
+  - draw icons and illustrations as inline SVG
+  - add no forms, scripts or external URLs
+
+  `BANNED_PHRASES` stays.
+- **Design guide** (`services/generator/prompts/design-guide.md`, versioned in the repo): the system prompt for `write_site` and `edit_site` includes it. Bedrock has no Agent Skills, code execution or Files API, so this guide plays the role a skill would. It is built from two sources plus our own rules:
+  - **Anthropic's `frontend-design` skill** (Apache-2.0, `anthropics/skills`) as the base: commit to one clear direction, distinctive fonts, no generic AI look, vary the style between sites. Its `LICENSE.txt` is kept next to the guide, with a note that we changed it.
+  - **Coyote adaptations** of that skill: CSS-only motion, used sparingly; bold where the business suits it (bakery, barber) and calm where trust matters (dentist, clinic); creativity in the hero and decoration while the four key sections stay easy to scan; nothing about React or dashboards.
+  - **A subset of Vercel's `web-interface-guidelines`** (MIT): one `h1` and a clean heading order, `alt` on images and `aria-hidden` on decorative SVG, `width`/`height` on `<img>`, `prefers-reduced-motion`, animating only `transform`/`opacity`, `text-wrap: balance` on headings, `…` and curly quotes, visible focus states, large tap targets.
+  - **Small-business rules:** mobile first (390px), the four jobs, a WhatsApp button always in reach, "Cómo llegar", hours with today's day easy to find, and what suits each business type (salon, dentist, mini market, trades, food).
+
+  It is kept stable and first in the prompt so Bedrock prompt caching covers it. Any change to it is judged on the screenshot sheet (step 1).
+- **Images:** uploaded photos and the logo go to Claude as image blocks, so it designs around them. In the page they appear only as `{{photo:1..3}}` and `{{logo}}`. When there are no photos and `heroScene` is set, `generateHero` (`core/images.ts`) fills `{{hero}}`. If that fails, the element with `{{hero}}` is removed.
+- **Placeholders** (`core/placeholders.ts`): `{{whatsapp_url}}`, `{{whatsapp_display}}`, `{{phone_url}}` (`tel:`), `{{phone_display}}`, `{{email_url}}` (`mailto:`), `{{email_display}}`, `{{maps_url}}`, `{{map}}`, `{{address}}`, `{{instagram_url}}`, `{{facebook_url}}`, `{{photo:N}}`, `{{logo}}`, `{{hero}}`. The new `core/fill.ts` fills them:
+  - it escapes every value
+  - it builds the Maps URL with the logic at `render.ts:43-48`, going through `urls.ts`
+  - a placeholder with no value (no email, no address…) removes the element that carries it, so the model can design every contact option and the page shows only the ones the owner has. `data-needs="phone_url email_url"` on a wrapper removes the whole group (a label with its link)
+  - it appends the platform footer (`render.ts:93`)
+- **Google map (`{{map}}`):** the model places `<div data-slot="map"></div>` where the map goes and styles the box (size, corners, border). Our code, never the model, fills it with a keyless Google Maps embed of the owner's address, so the map always points to that address:
+  ```html
+  <iframe title="Mapa: {businessName}, {address}" loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade"
+    src="https://maps.google.com/maps?q={encoded address}&z=16&output=embed"></iframe>
+  ```
+  - no API key. This URL form is not documented by Google and could change. If it stops working, we switch the iframe in `fill.ts` (to the keyed Embed API, or no map) and run `refill-all`; the "Cómo llegar" button stays either way
+  - no address → the map element is removed
+  - the sanitizer still rejects every `<iframe>` the model writes; the map iframe is added after sanitizing, in `fill.ts`, and `checkHtml` allows exactly that iframe shape
+  - the sites CSP gets `frame-src https://maps.google.com https://www.google.com` (`infra/lib/csp.ts`; Google may redirect between the two). The map runs inside Google's own frame.
+- **Stored per site:** the unfilled HTML (the "source") and `site.json` (answers, question answers, contact, media, lang). Filling the source again makes the page with no model call. That covers contact edits and a domain switch (`refill-all` replaces `rerender-all`).
+
+### Sanitizer and checks (`core/sanitize.ts`, extending `policy.ts`)
+The document is rebuilt from an allowlist (parsed with htmlparser2):
+
+**HTML**
+- **Allowed:** layout and text tags, inline SVG (no `foreignObject`, no `<a>`/`<use>` inside SVG, no animation that sets attributes), `<script>` (inline, or `src` from the CDN list in `core/cdn.ts`: jsDelivr, cdnjs, unpkg, the Tailwind CDN), and `on*` attributes.
+- **Forbidden:** `iframe`, `object`, `embed`, `form`, `input`, `button`, `base`, `meta` (except charset, viewport, description).
+- `<link>` only as a stylesheet or preconnect on the CDN list (Google Fonts included).
+- `href` may only be a placeholder or `#anchor`. `src`/`srcset` of images: a placeholder, `data:image/svg+xml`, or any `https:` URL.
+- The prompt requires every visible word to be in the HTML (scripts add behavior only), so the text checks still see the page text. What a script does at run time is not checked. The sites CSP keeps `default-src 'none'`, so scripts cannot `fetch` or send XHR; images from any `https:` host can still carry data out (a tracking-pixel risk accepted with this decision).
+
+**CSS** in `<style>` and `style=` is parsed with css-tree (the same approach as `sanitizeSignatureCss`, `core/css.ts`):
+- no `@import` and no `@font-face`
+- `url()` only with `data:image/svg+xml`, a placeholder, or an `https:` URL
+- size limits
+
+**Text**
+- **What's extracted:** visible text, `alt`/`title`/`aria-label`, SVG `<text>`, and CSS `content:`. Hidden text (display:none, opacity 0, font-size 0, off-screen) is rejected.
+- **Checks on it:** `checkContent`, a rejection of phone numbers or URLs written into the text, `outputAllowed`, and the banned phrases.
+
+**Quality lint** (rules from `web-interface-guidelines`): no `h1` or more than one, `<img>` without `alt` or without `width`/`height`, `outline: none` with no focus replacement, `transition: all`, animation with no `prefers-reduced-motion` rule. A lint failure is not a rejection: it goes back to the model as retry feedback, the way `lintContent` works today.
+
+**After filling:** `checkHtml` runs as the final check, and every `wa.me` link must match the owner's number.
+
+**On failure:** one retry with feedback, then REJECTED or FAILED as today.
+
+### Edits in the magic URL (free text)
+- Mi sitio gets a "¿Qué quieres cambiar?" textarea and the contact fields. It calls `POST /me/edit { instruction?, contact? }`:
+  - An instruction starts an async edit job: the pre-screen on the request, the optional clarify step, then `edit_site` (current source + instruction → new source). The result goes through the same sanitizer and checks, and becomes a new draft.
+  - A contact change just refills the placeholders, at once (200, no job). A changed address also passes the text checks and the output guardrail.
+- Mi sitio polls the job, shows the questions form if the model asks, then reloads the iframe with the new draft. It also offers "Deshacer", which goes back to the previous version.
+- `updateContent` and the structured-patch UI (`core/owner.ts:58`, `ContentPatch`) are removed.
+- Rate limit: 10 edits per day per site.
+- Unpublish, republish and the publish route are removed until the publishing plan. Delete stays.
+
+### Web app (`web/`)
+- **`create.ts`:**
+  - a new `NEEDS_INPUT` state renders the questions form
+  - at `DONE`, it shows the draft and the magic URL instead of "Publicar"
+  - copy: "Tarda 1–2 minutos"
+- **`my-site.ts`:** draft iframe, edit box, questions form, undo, delete.
+- **`strings.ts`:** new es and pt copy. Copy that promises "¡Tu sitio está en línea!" or publishing goes away.
+
+### Infra
+- Generate Lambda timeout: 10 minutes.
+- Routes:
+  - added: `POST /jobs/{id}/answers` (on the `submit` Lambda, which already has the pre-screen), `POST /me/edit`, `POST /me/undo`
+  - removed: `POST /jobs/{id}/publish`, `POST /jobs/{id}/regenerate`, `POST /me/content`, `POST /me/regenerate`, `POST /me/unpublish`, `POST /me/republish`
+- `cf-rewrite.js` changes: serve `_draft/`, stop serving `{slug}/`. Update its tests.
+- S3: no lifecycle expiry on `_draft/`.
+- IAM for the models follows `modelId` (with `InvokeModelWithResponseStream`, `generate` only) and `prescreenModelId`. The sites CSP adds `frame-src https://maps.google.com https://www.google.com` for the map (stack test updated).
+
+### Docs
+- **PLAN.md:** rewrite Decisions `:14`, Generation `:116`, Content safety `:136`, Design quality `:178`, Site ownership `:233` and Preview `:241`. Add "Phase 5c — Model-written sites" to the tracker, with a 👤 item for the later publishing, review and email plan.
+- **PLAN-PHASE2.md:** update Flow B (`:58`).
+- **CLAUDE.md:** update the Architecture bullets and the themes convention.
+- **README:** document `refill-all`.
+
+## Steps
+0. 👤 **Bedrock access for Claude:** the Anthropic use-case form (PLAN.md Phase 0). Everything else is blocked on it.
+1. **Offline bake-off:** write the design guide first. Then `site-writer` (with the guide in its system prompt) + sanitizer + fill run through `scripts/local-generate.ts` on 10 fixed businesses (salon, dentist, mini market, hardware store, bakery…), with canned answers to the questions. Run each on Opus 5.5 (the default) and on Sonnet 5 as a cheaper reference, and compare cost per site, time per site and quality. Build a screenshot sheet at mobile and desktop widths (extending `themes:sheet`). Each site is also reviewed against the full `web-interface-guidelines` checklist, with its problems listed next to its screenshots. **👤 The user judges the quality, and confirms Opus 5.5 once they have seen its cost next to Sonnet 5's.** Iterate on the prompt and the design guide until the sites are good.
+2. **Sanitizer tests** with hostile fixtures: hidden text, a fake login, a smuggled `wa.me` link, `url()` exfiltration, SVG tricks, meta refresh, injected questions. Then `npm test`.
+3. **Pipeline:** clarify → `NEEDS_INPUT` → answers → write → sanitize → fill → draft + magic URL. Update `flows.test.ts` and `pipeline.test.ts`.
+4. **Web:** the questions form, the magic-URL page, and the es/pt copy.
+5. **Free-text edits** with undo. Update `owner.test.ts`.
+6. **Remove publishing** (routes, `{slug}/` serving). Add `refill-all`. Update the docs.
+7. **Deploy and live check.**
+8. **Cleanup:** delete the themes, the brief, `ModelContent` rendering, `variety.ts` and the theme sheet.
+
+## Verification
+- `npm run build`, `npm test` and `npm run synth` (without credentials) pass.
+- The hostile fixtures are rejected or neutralized, and the 48 `verify:live` safety fixtures still pass.
+- **Live checks:**
+  1. From `npm run dev`, submit a vague salon: the questions form appears.
+  2. Answer it: the draft reflects the answers, and the magic URL opens Mi sitio with the draft.
+  3. Submit a detailed dentist: it goes straight to the draft.
+  4. Check that "Saltar preguntas y continuar" skips the questions.
+  5. Check that the WhatsApp and Maps links match the form input.
+  6. Check that `{slug}/` returns 404.
+  7. In Mi sitio, send "cambia el horario del sábado a 9–13": a new draft shows the change, and "Deshacer" brings back the previous one.

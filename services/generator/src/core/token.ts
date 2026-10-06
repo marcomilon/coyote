@@ -2,7 +2,11 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export const TOKEN_TTL_SECONDS = 365 * 24 * 60 * 60;
 
-const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+export const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+export const newSecret = () => randomBytes(32).toString('base64url');
+
+/** The key of an owner's account: the hash of the lowercased email (the email itself is stored only to send to). */
+export const emailId = (email: string) => sha256(email.trim().toLowerCase());
 
 /** The magic-link token is "<slug>.<secret>". Only the hash of the secret is stored. */
 export function issueToken(slug: string): { token: string; tokenHash: string } {

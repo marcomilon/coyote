@@ -27,7 +27,16 @@ export function fixBrief(brief: Brief, candidates: Candidate[]): Brief {
 }
 
 /** Copy problems worth one regeneration. Messages are written for the model. */
-export function lintContent(content: ModelContent, lang: Lang): string[] {
+/** Voseo forms, as written (accents matter: "contá" is voseo, "cuenta" is tuteo). */
+const VOSEO = /(^|[^\p{L}])(contá|contanos|pedí|pedinos|escribí|escribinos|llamanos|visitanos|vení|mirá|consultá|agendá|reservá|tenés|podés|querés|sos|pasá|seguí|descubrí|probá|elegí|disfrutá|comprá|encontrá|sumate|animate|acercate)(?=[^\p{L}]|$)/iu;
+/** Places where voseo is the norm. The answers decide; without a match, the copy uses tuteo. */
+const VOSEO_PLACES = /argentin|uruguay|paraguay|buenos aires|montevideo|asunci[oó]n|rosario|mendoza|c[oó]rdoba, ar|la plata|mar del plata|tucum[aá]n|salta|neuqu[eé]n/i;
+
+/**
+ * Copy problems worth one regeneration. Messages are written for the model. `answersText` (the owner's own
+ * words) decides whether voseo is right.
+ */
+export function lintContent(content: ModelContent, lang: Lang, answersText = ''): string[] {
   const problems: string[] = [];
   const texts = [content.title, content.headline, content.subhead, content.about, content.ctaText, ...content.services.flatMap((s) => [s.name, s.detail ?? ''])];
 
@@ -40,5 +49,15 @@ export function lintContent(content: ModelContent, lang: Lang): string[] {
   }
   if (texts.some((text) => EMOJI.test(text))) problems.push('Remove every emoji.');
   if (/!{2,}|¡.*!.*¡.*!/.test(texts.join(' '))) problems.push('Too many exclamation marks. Use a calm, concrete voice.');
+  const voseo = lang === 'es' && !VOSEO_PLACES.test(answersText) ? VOSEO.exec(texts.join(' \n '))?.[2] : undefined;
+  if (voseo) problems.push(`"${voseo}" is voseo. This business is not in Argentina, Uruguay, or Paraguay: use tuteo (tú) everywhere.`);
   return problems;
+}
+
+/** The hero photo prompt must be English: a Spanish "llamas" (flames) became a llama in the photo. */
+export function looksEnglish(text: string): boolean {
+  // Function words, not accents: "Bogotá" or "São Paulo" belong in an English scene too.
+  const words = text.toLowerCase().split(/[^a-zà-ÿ]+/).filter(Boolean);
+  const foreign = words.filter((w) => ['de', 'del', 'la', 'las', 'los', 'el', 'con', 'y', 'en', 'sobre', 'da', 'do', 'das', 'dos', 'com', 'e', 'em', 'um', 'uma', 'por', 'para', 'una', 'un', 'al'].includes(w)).length;
+  return foreign <= 1;
 }

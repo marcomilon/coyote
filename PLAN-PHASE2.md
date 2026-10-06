@@ -5,7 +5,7 @@ Companion to `PLAN.md`. Phase 2 code starts after MVP phases 0–6 are live. Its
 ## Why
 Competing with Wix/Squarespace/Hostinger on generation quality is a losing axis. For LatAm small businesses the advantage is low friction: they run the business on WhatsApp, won't learn an editor, and don't have USD cards. Phase 2 makes WhatsApp the main interface: create the site by chat, edit by chat, receive leads as WhatsApp messages. The MVP web form stays as a second entry point.
 
-- **Reused unchanged from the MVP**: theme library, design brief, Haiku 4.5 content generation, renderer, content patching, safety layers, slug/hosting, magic link.
+- **Reused unchanged from the MVP**: theme library, design brief, content generation with follow-up questions, renderer, `edit_content`, safety layers, slug/hosting, drafts and the magic link.
 - **Added**: a conversational front end, the contact form (designed in `PLAN.md`, built here), and WhatsApp as the first lead-delivery channel. SES email follows as the fallback (`PLAN.md` phase 7).
 - **URLs**: as in `PLAN.md` (sites at `{slug}.<sites-domain>`, app at `app.<domain>`, API at `api.<domain>`). All URLs in messages come from `urls.ts`, so the flows also run in domainless mode during development. Sending site links to real users requires the final domains: a `cloudfront.net/{slug}/` link looks like spam and would change later.
 
@@ -54,10 +54,10 @@ Entry: the user taps a `wa.me/<number>?text=Hola` link (site, Instagram bio, QR 
 ### B. Edit by message
 "cambia el horario a 9 a 6", "pon que también hacemos envíos", "quita la foto 2".
 - Sender phone → sites via the GSI on `sites.ownerPhone`. One site → proceed. Several → WhatsApp list message "¿Cuál sitio?"; the choice is kept in `wa_sessions` for the session.
-- Haiku tool `edit_site` → patch `{ hours?, about?, services?[], removeMedia?[], contact? }`, validated by the content schema and applied with the same `content.ts` patch function "Mi sitio" uses. Re-render, no generation.
-- Unpatchable request → "Eso lo puedes cambiar en tu página Mi sitio: <magic link>".
-- Caps: 10 edits/day per site; full regeneration stays at 2 per site.
-- Patched text passes `ApplyGuardrail` + policy + lint before publish.
+- The message goes through the web chat's path (`PLAN.md` "Chat edits (QR)", `chat.ts` `runChatTurn`): pre-screen, Haiku text changes on the page outline, contact changes validated like the form, page checks and output guardrail, a new draft. A change that needs design work gets "Rediseñar" as a quick reply, which starts the Opus edit job.
+- The reply carries the new draft link and "Deshacer" as a quick reply.
+- Caps: the chat's 30 messages/day per site; redesigns count against the 5 Opus edits/day.
+- The edited copy passes the pre-screen (on the message), the policy checks, and `ApplyGuardrail`, exactly as a web edit.
 
 ### C. Contact form + leads to WhatsApp
 Builds the contact form from `PLAN.md` ("Post-MVP: Contact form": theme slot, `contact` Lambda, spam controls, `messages` table) with WhatsApp delivery. Existing sites get the form on their next re-render once the owner opts in.
@@ -132,7 +132,7 @@ Tick a box (`[x]`) only when the item is done and its check passed. 👤 = needs
 - [ ] BAJA/STOP handling; digest rule
 
 ### Step 5 — Flow B (edit by message)
-- [ ] `edit_site` tool on the shared `content.ts` patch function
+- [ ] WhatsApp messages → the same edit jobs as "Mi sitio" (`POST /me/edit` logic), questions and "Deshacer" as WhatsApp replies
 - [ ] Multi-site disambiguation (list message)
 - [ ] Caps (10 edits/day) + safety checks on patched text
 
@@ -154,7 +154,7 @@ Tick a box (`[x]`) only when the item is done and its check passed. 👤 = needs
 - A duplicate SNS delivery of the same message id causes no duplicate step or message.
 - A contact-form submission reaches the owner on WhatsApp within 10 s. A message with newlines and URLs arrives flattened and de-linked. An email-only `contacto` shows as text; a phone shows as a `wa.me` link. BAJA stops delivery, and the message still appears in "Mi sitio".
 - A site with no delivery channel renders no form.
-- "cambia el horario a 9-6" updates the page with no generation call. An owner with two sites is asked which one. An unpatchable request gets the Mi sitio link.
+- "cambia el horario a 9-6" updates the page through the chat path (Haiku, no page writer). An owner with two sites is asked which one. A request that needs design work gets "Rediseñar".
 - Bad-actor fixtures (adult, phishing) via WhatsApp end `REJECTED` with nothing in S3.
 - CloudWatch shows AWS + Meta fees per message. A 100-conversation test run stays under $5.
 

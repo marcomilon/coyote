@@ -87,21 +87,46 @@ export function scrubModelContent(content: ModelContent): ModelContent {
 }
 
 export function checkContent(content: SiteContent): Violation[] {
-  const violations: Violation[] = [];
-
-  const nameBrand = findBrand(content.businessName, 'name');
-  if (nameBrand) violations.push({ code: 'brand', detail: `businessName: ${nameBrand}` });
-  for (const field of ['title', 'headline'] as const) {
-    const brand = findBrand(content[field], 'copy');
-    if (brand) violations.push({ code: 'brand', detail: `${field}: ${brand}` });
-  }
-
   const texts = [
     content.businessName, content.title, content.description, content.headline, content.subhead, content.about,
     content.ctaText, content.contact.address ?? '',
     ...content.services.flatMap((s) => [s.name, s.detail ?? '']),
     ...(content.hours ?? []).flatMap((h) => [h.days, h.time]),
   ];
+  return checkTexts(texts, { businessName: content.businessName, headlines: [content.title, content.headline] });
+}
+
+const EMAIL_LIKE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+
+/**
+ * Contact details written into the page text instead of through a placeholder: URLs, e-mail addresses, and
+ * phone-like numbers (8+ digits; prices after a currency sign do not count). Resolves to what was found.
+ */
+export function contactInText(text: string): string[] {
+  const found = [...(text.match(URL_LIKE) ?? []), ...(text.match(EMAIL_LIKE) ?? [])];
+  for (const match of text.matchAll(PHONE_LIKE)) {
+    const before = text.slice(Math.max(0, match.index - 3), match.index);
+    if (match[0].replace(/\D/g, '').length >= 8 && !/[$€£]\s?$/.test(before)) found.push(match[0]);
+  }
+  return found;
+}
+
+/**
+ * Content policy on the text a visitor can read. `named` are the texts where a brand name counts as
+ * impersonation (the business name, the title, the h1); every text is checked for scam phrases,
+ * credential requests, and card numbers.
+ */
+export function checkTexts(texts: string[], named: { businessName?: string; headlines?: string[] } = {}): Violation[] {
+  const violations: Violation[] = [];
+
+  if (named.businessName) {
+    const nameBrand = findBrand(named.businessName, 'name');
+    if (nameBrand) violations.push({ code: 'brand', detail: `businessName: ${nameBrand}` });
+  }
+  for (const headline of named.headlines ?? []) {
+    const brand = findBrand(headline, 'copy');
+    if (brand) violations.push({ code: 'brand', detail: `headline: ${brand}` });
+  }
 
   for (const text of texts) {
     const normalized = normalizeForMatch(text);
@@ -132,9 +157,16 @@ export interface HtmlPolicyOptions {
   platformOrigins: string[];
   /** Exact `action` of the theme contact form. Unset (MVP) = no form allowed at all. */
   contactFormAction?: string;
+  /** The owner's WhatsApp number: every wa.me link must point to it. */
+  whatsapp?: string;
+  /** Inline scripts the page may carry, exactly (the themes' own scripts). Any other script is a violation. */
+  scripts?: string[];
 }
 
-const FORBIDDEN_ELEMENTS = new Set(['script', 'iframe', 'frame', 'object', 'embed', 'applet', 'base', 'portal', 'noscript']);
+/** The one iframe a page may carry: the renderer's keyless Google Maps embed (render.ts mapEmbedUrl). */
+export const MAP_EMBED = /^https:\/\/maps\.google\.com\/maps\?q=[^&"<>\s]+&z=16&output=embed$/;
+
+const FORBIDDEN_ELEMENTS = new Set(['iframe', 'frame', 'object', 'embed', 'applet', 'base', 'portal', 'noscript']);
 const FORM_FIELD_TYPES = new Set(['text', 'tel', 'email', 'hidden', 'submit']);
 const LINK_HOSTS = new Set([
   'wa.me', 'api.whatsapp.com', 'instagram.com', 'www.instagram.com', 'facebook.com', 'www.facebook.com',
@@ -176,7 +208,8 @@ function cssViolations(css: string, where: string): Violation[] {
 
 export function checkHtml(page: string, options: HtmlPolicyOptions): Violation[] {
   const violations: Violation[] = [];
-  const { platformOrigins, contactFormAction } = options;
+  const { platformOrigins, contactFormAction, whatsapp, scripts = [] } = options;
+  let maps = 0;
 
   const visit = (node: ChildNode, insideContactForm: boolean): void => {
     if (node.type === 'script' || node.type === 'style' || node.type === 'tag') {
@@ -185,7 +218,12 @@ export function checkHtml(page: string, options: HtmlPolicyOptions): Violation[]
       const attr = (name: string) => el.attribs[name];
       let inForm = insideContactForm;
 
-      if (FORBIDDEN_ELEMENTS.has(tag)) violations.push({ code: 'forbidden-element', detail: `<${tag}>` });
+      const isMap = tag === 'iframe' && 'data-coyote-map' in el.attribs && MAP_EMBED.test(attr('src') ?? '') && ++maps === 1;
+      if (FORBIDDEN_ELEMENTS.has(tag) && !isMap) violations.push({ code: 'forbidden-element', detail: `<${tag}>` });
+      if (tag === 'script') {
+        const code = el.children.map((child) => ('data' in child ? child.data : '')).join('');
+        if (attr('src') !== undefined || !scripts.includes(code)) violations.push({ code: 'forbidden-element', detail: '<script> that is not a theme script' });
+      }
 
       for (const [name, value] of Object.entries(el.attribs)) {
         if (/^on/i.test(name)) violations.push({ code: 'forbidden-attribute', detail: `${tag}[${name}]` });
@@ -202,6 +240,9 @@ export function checkHtml(page: string, options: HtmlPolicyOptions): Violation[]
         if (href !== undefined && !urlAllowed(href.trim(), 'link', platformOrigins)) {
           violations.push({ code: 'forbidden-url', detail: `a[href]: ${href.slice(0, 80)}` });
         }
+        if (href !== undefined && whatsapp !== undefined && /^https:\/\/wa\.me\//i.test(href.trim()) && !new RegExp(`^https://wa\\.me/${whatsapp}(\\?|$)`).test(href.trim())) {
+          violations.push({ code: 'forbidden-url', detail: 'a[href]: wa.me link to another number' });
+        }
       }
 
       if (tag === 'link') {
@@ -214,7 +255,7 @@ export function checkHtml(page: string, options: HtmlPolicyOptions): Violation[]
 
       for (const name of ['src', 'srcset', 'poster', 'data', 'background'] as const) {
         const value = attr(name);
-        if (value === undefined) continue;
+        if (value === undefined || (isMap && name === 'src')) continue;
         const targets = name === 'srcset' ? value.split(',').map((part) => part.trim().split(/\s+/)[0] ?? '') : [value.trim()];
         if (!targets.every(isRelative)) violations.push({ code: 'forbidden-url', detail: `${tag}[${name}]: ${value.slice(0, 80)}` });
       }

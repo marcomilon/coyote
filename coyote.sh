@@ -18,7 +18,7 @@ Commands:
   abuse-report                   Requests, rejections, and new sites of the last 24 h
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
-  rerender-all                   Re-render every published site (after theme, renderer, or domain changes)
+  refill-all                     Re-render every site's current draft (after theme, renderer, or domain changes; no model call)
   subscribe-alerts <email>       Email alarms, visitor reports, and cost alerts to this address (then confirm-alerts)
   protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
                                  AWS sends new confirmation emails; confirm each with confirm-alerts, never by clicking
@@ -44,7 +44,7 @@ check_bundles() {
   for bundle in "$ROOT"/infra/cdk.out/asset.*/index.js; do
     grep -q "services/generator/src/handlers" "$bundle" 2>/dev/null || grep -q "JOBS_TABLE" "$bundle" || continue
     cp "$bundle" "$tmp/index.js"
-    if ! (cd "$tmp" && JOBS_TABLE=x SITES_TABLE=x RATE_LIMIT_TABLE=x BLOCKLIST_TABLE=x SITES_BUCKET=x \
+    if ! (cd "$tmp" && JOBS_TABLE=x SITES_TABLE=x RATE_LIMIT_TABLE=x BLOCKLIST_TABLE=x CHAT_TABLE=x ACCOUNTS_TABLE=x SITES_BUCKET=x \
       APP_BASE_URL=https://a.invalid API_BASE_URL=https://b.invalid SITES_BASE_URL=https://c.invalid AWS_REGION=us-east-1 \
       node -e "if (typeof require('./index.js').handler !== 'function') { console.error('no handler export'); process.exit(1) }"); then
       echo "bundle failed to load: $bundle" >&2
@@ -164,7 +164,7 @@ shift || true
 case "$command" in
   deploy) cmd_deploy "$@" ;;
   destroy) cmd_destroy ;;
-  abuse-report | unpublish | restore | rerender-all) cmd_admin "$command" "$@" ;;
+  abuse-report | unpublish | restore | refill-all) cmd_admin "$command" "$@" ;;
   confirm-alerts) cmd_confirm_alerts "$@" ;;
   protect-alerts) cmd_protect_alerts ;;
   subscribe-alerts) cmd_subscribe_alerts "$@" ;;

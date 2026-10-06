@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { SiteContent } from './content';
+import type { Media } from './content';
 import type { Stores } from './jobs';
 import { hashIp } from './ratelimit';
 
@@ -61,7 +61,6 @@ export interface ProcessDeps {
   moderate(key: string): Promise<string[]>;
 }
 
-export type Media = SiteContent['media'];
 export type ProcessResult = { ok: true; media: Media } | { ok: false; reason: string };
 
 /** Moderates every uploaded file, then copies the clean ones next to the page. Anything flagged rejects the job. */

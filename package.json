@@ -19,7 +19,9 @@
     "prescreen:fixtures": "npm run prescreen:fixtures -w services/generator --",
     "diff": "npm run diff -w infra",
     "deploy": "./coyote.sh deploy",
-    "themes:sheet": "npm run themes:sheet -w services/generator"
+    "sites:sheet": "npm run sites:sheet -w services/generator",
+    "themes:sheet": "npm run themes:sheet -w services/generator",
+    "themes:tailwind": "npm run themes:tailwind -w services/generator"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.163",

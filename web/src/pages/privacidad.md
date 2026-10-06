@@ -11,6 +11,7 @@ Coyote crea y aloja sitios web sencillos para negocios. Guardamos lo mínimo par
 ## Qué guardamos
 
 - **Tus respuestas**: el nombre del negocio, la descripción, el número de WhatsApp, la dirección y las redes que escribiste. Con ellas se genera y se muestra tu sitio.
+- **Tu correo**, para avisarte cuando tu sitio esté listo y para enviarte el enlace a «Mis sitios» cuando lo pidas. No aparece en tu sitio, no lo reciben los modelos de inteligencia artificial y no te enviamos publicidad.
 - **El contenido de tu sitio**, para que puedas editarlo sin generarlo de nuevo.
 - **Un registro de cada solicitud** (respuestas y resultado de la revisión de seguridad) durante 90 días, para investigar abusos.
 - **Tu dirección IP, solo como un código irreversible (hash)**, para limitar cuántos sitios se crean por día.
@@ -19,15 +20,15 @@ No usamos cookies ni herramientas de analítica, ni en esta aplicación ni en lo
 
 ## Quién procesa tus datos
 
-Todo se aloja en Amazon Web Services. Los textos se generan con modelos de inteligencia artificial a través de Amazon Bedrock; a esos modelos nunca les enviamos tu número de teléfono.
+Todo se aloja en Amazon Web Services, que también envía nuestros correos. El diseño y los textos se generan con modelos de inteligencia artificial de Anthropic (Claude) y de Amazon Bedrock, que reciben tus respuestas y tus fotos para crear el sitio y no las usan para entrenar sus modelos. A esos modelos nunca les enviamos el número de WhatsApp ni el teléfono de contacto que escribiste en el formulario (sí reciben los números que escribas en la descripción o en tus respuestas).
 
 ## Los sitios que creamos
 
-Un sitio publicado es público: cualquiera puede ver el nombre, la descripción, el WhatsApp, la dirección y las redes que pusiste. Los visitantes de esos sitios no son rastreados.
+Un sitio publicado es público: cualquiera puede ver el nombre, la descripción, el WhatsApp, la dirección y las redes que pusiste. Los visitantes de esos sitios no son rastreados. Los sitios cargan tipografías y librerías desde servicios públicos (Google Fonts, Tailwind, jsDelivr, cdnjs, unpkg), que reciben la dirección IP del visitante como cualquier servidor web.
 
 ## Cómo borrar tus datos
 
-Abre **Mi sitio** con el enlace que recibiste al publicar y elige «Borrar mi sitio y mis datos». Se eliminan las páginas, el contenido y el texto de tus solicitudes. Si perdiste el enlace, por ahora no podemos verificar que el sitio es tuyo; estamos trabajando en una forma de recuperarlo.
+Abre **Mi sitio** con el enlace que recibiste al crear tu sitio y elige «Borrar mi sitio y mis datos». También puedes llegar a él desde **Mis sitios**, con un enlace que te enviamos a tu correo. Se eliminan las páginas, el contenido y el texto de tus solicitudes; tu correo se borra con tu último sitio.
 
 ## Tus derechos
 

@@ -37,9 +37,16 @@ export const ModelContent = z.object({
 });
 export type ModelContent = z.infer<typeof ModelContent>;
 
-/** Copied verbatim from the form. The model never writes these. */
+const phone = z.string().regex(/^[1-9]\d{7,14}$/, 'digits only, with country code');
+
+/**
+ * The business's public contact details. Copied from what the owner typed (the form, a contact question,
+ * or Mi sitio), never from model output. The renderer builds every link from them.
+ */
 export const Contact = z.object({
-  whatsapp: z.string().regex(/^[1-9]\d{7,14}$/, 'digits only, with country code'),
+  whatsapp: phone,
+  phone: phone.optional(),
+  email: z.email().max(120).optional(),
   address: text(160).optional(),
   instagram: z
     .string()
@@ -62,6 +69,7 @@ export const SiteContent = ModelContent.extend({
   media: z
     .object({
       logo: assetPath.optional(),
+      /** Uploaded photos, or the generated hero photo when there are none. The first one is the hero. */
       photos: z.array(assetPath).max(3),
     })
     .default({ photos: [] }),
@@ -99,3 +107,6 @@ export function applyPatch(content: SiteContent, patch: unknown): SiteContent {
     },
   });
 }
+
+/** Images next to the page. The files live in `_media/<slug>/assets/` and are copied into every draft. */
+export type Media = SiteContent['media'];

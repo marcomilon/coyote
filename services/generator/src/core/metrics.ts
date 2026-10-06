@@ -3,8 +3,8 @@
  * Namespace "Coyote". Alarms and the dashboard are defined in infra/lib/monitoring.ts.
  */
 export type MetricName =
-  | 'Submitted' | 'RateLimited' | 'Rejected' | 'Generated' | 'Failed' | 'Published'
-  | 'Reported' | 'Quarantined' | 'TokensIn' | 'TokensOut' | 'HeroImages';
+  | 'Submitted' | 'RateLimited' | 'Rejected' | 'NeedsInput' | 'Generated' | 'Failed' | 'Published' | 'Edited'
+  | 'Reported' | 'Quarantined' | 'TokensIn' | 'TokensOut' | 'ChatReplied' | 'ChatEdited' | 'ChatFailed';
 
 export function emitMetrics(metrics: Partial<Record<MetricName, number>>, log: (line: string) => void = console.log): void {
   const names = Object.keys(metrics);

@@ -1,54 +1,54 @@
 // "Mi sitio": the owner's page. The magic-link token arrives in the URL hash and is sent as a Bearer token.
-interface Row {
-  a: string;
-  b: string;
-}
+// Shows the current draft, takes free-text change requests (with the model's questions when it asks),
+// contact changes, undo, and delete.
+import { api as apiCall, apiUrl, sendAnswers, waitForJob } from './jobs';
+import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
+
+const CONTACT_FIELDS = ['whatsapp', 'phone', 'email', 'address', 'instagram', 'facebook'] as const;
+type Contact = Partial<Record<(typeof CONTACT_FIELDS)[number], string>>;
+
 interface View {
   slug: string;
-  status: 'published' | 'unpublished' | 'claimed';
-  siteUrl: string;
-  regenerationsLeft: number;
-  content?: {
-    headline: string;
-    subhead: string;
-    about: string;
-    ctaText: string;
-    services: { name: string; detail?: string }[];
-    hours: { days: string; time: string }[];
-    contact: { whatsapp: string; address?: string; instagram?: string; facebook?: string };
-  };
+  status: string;
+  draftUrl?: string;
+  previewUrl?: string;
+  canUndo: boolean;
+  businessName?: string;
+  contact?: Contact;
 }
 type Message = { title: string; text: string };
 interface Strings {
   noToken: Message;
   badToken: Message;
   deleted: Message;
-  status: Record<string, string>;
-  fields: { remove: string };
-  save: string;
-  saving: string;
+  heading: string;
   saved: string;
+  contactSaved: string;
+  changed: string;
+  undone: string;
   rejected: string;
   invalid: string;
   error: string;
-  regenerationsLeft: string;
-  unpublish: string;
-  republish: string;
+  limit: string;
+  empty: string;
   deleteConfirm: string;
-  createPath: string;
+  question: QuestionStrings & { invalid: string };
 }
 
 const root = document.getElementById('mysite') as HTMLElement;
 const strings = JSON.parse(root.dataset.strings ?? '{}') as Strings;
-const form = root.querySelector('form') as HTMLFormElement;
 const $ = <T extends Element>(selector: string) => root.querySelector(selector) as T;
-const apiUrl = (new URLSearchParams(location.search).get('api') ?? window.COYOTE_CONFIG?.apiUrl ?? '').replace(/\/+$/, '');
+const editForm = $<HTMLFormElement>('form[data-edit]');
+const contactForm = $<HTMLFormElement>('form[data-contact]');
+const questionsForm = $<HTMLFormElement>('form[data-questions]');
 const token = decodeURIComponent(/^#token=(.+)$/.exec(location.hash)?.[1] ?? '');
+
+const show = (state: string) => (root.dataset.state = state);
 
 function showMessage(message: Message) {
   $('[data-message-title]').textContent = message.title;
   $('[data-message-text]').textContent = message.text;
-  root.dataset.state = 'message';
+  show('message');
 }
 
 function notice(text: string, kind: 'ok' | 'error' = 'ok') {
@@ -57,76 +57,31 @@ function notice(text: string, kind: 'ok' | 'error' = 'ok') {
   el.dataset.kind = kind;
 }
 
-async function api<T>(path: string, method = 'GET', body?: unknown): Promise<{ status: number; body: T }> {
-  const response = await fetch(apiUrl + path, {
+const api = <T>(path: string, method = 'GET', body?: unknown) =>
+  apiCall<T>(path, {
     method,
     headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
-  return { status: response.status, body: (await response.json().catch(() => ({}))) as T };
-}
-
-function addRow(list: HTMLElement, row: Row = { a: '', b: '' }) {
-  const wrapper = document.createElement('div');
-  for (const [key, value] of [['a', row.a], ['b', row.b]] as const) {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = value;
-    input.dataset.col = key;
-    input.placeholder = list.dataset[key] ?? '';
-    input.setAttribute('aria-label', input.placeholder);
-    wrapper.append(input);
-  }
-  const remove = document.createElement('button');
-  remove.type = 'button';
-  remove.textContent = strings.fields.remove;
-  remove.onclick = () => wrapper.remove();
-  wrapper.append(remove);
-  list.append(wrapper);
-}
-
-const rows = (name: string): Row[] =>
-  [...$<HTMLElement>(`[data-list="${name}"]`).children]
-    .map((el) => ({ a: el.querySelector<HTMLInputElement>('[data-col="a"]')!.value.trim(), b: el.querySelector<HTMLInputElement>('[data-col="b"]')!.value.trim() }))
-    .filter((row) => row.a !== '');
 
 function fill(view: View) {
-  const c = view.content;
-  if (!c) return showMessage(strings.badToken);
-  const set = (name: string, value = '') => ((form.elements.namedItem(name) as HTMLInputElement).value = value);
-  set('headline', c.headline);
-  set('subhead', c.subhead);
-  set('about', c.about);
-  set('ctaText', c.ctaText);
-  set('whatsapp', `+${c.contact.whatsapp}`);
-  set('address', c.contact.address);
-  set('instagram', c.contact.instagram);
-  set('facebook', c.contact.facebook);
-  for (const [name, items] of [['services', c.services.map((s) => ({ a: s.name, b: s.detail ?? '' }))], ['hours', c.hours.map((h) => ({ a: h.days, b: h.time }))]] as const) {
-    const list = $<HTMLElement>(`[data-list="${name}"]`);
-    list.replaceChildren();
-    items.forEach((row) => addRow(list, row));
+  if (!view.draftUrl) return showMessage(strings.badToken);
+  $('[data-business]').textContent = view.businessName ?? strings.heading;
+  const frame = $<HTMLIFrameElement>('.device iframe');
+  if (frame.src !== view.draftUrl) frame.src = view.draftUrl;
+  $<HTMLAnchorElement>('[data-draft-link]').href = view.previewUrl ?? view.draftUrl;
+  $<HTMLButtonElement>('[data-undo]').disabled = !view.canUndo;
+  for (const field of CONTACT_FIELDS) {
+    const input = contactForm.elements.namedItem(field) as HTMLInputElement;
+    const value = view.contact?.[field] ?? '';
+    input.value = value && (field === 'whatsapp' || field === 'phone') ? `+${value}` : value;
   }
-  const badge = $<HTMLElement>('[data-status]');
-  badge.textContent = strings.status[view.status] ?? view.status;
-  badge.dataset.status = view.status;
-  $<HTMLAnchorElement>('[data-site-link]').href = view.siteUrl;
-  $('[data-regen-left]').textContent = strings.regenerationsLeft.replace('{n}', String(view.regenerationsLeft));
-  $<HTMLButtonElement>('[data-regenerate]').disabled = view.regenerationsLeft === 0;
-  const toggle = $<HTMLButtonElement>('[data-toggle]');
-  toggle.textContent = view.status === 'published' ? strings.unpublish : strings.republish;
-  toggle.onclick = async () => {
-    toggle.disabled = true;
-    await api(view.status === 'published' ? '/me/unpublish' : '/me/republish', 'POST');
-    toggle.disabled = false;
-    void load();
-  };
   $<HTMLButtonElement>('[data-delete]').onclick = async () => {
     if (window.prompt(`${strings.deleteConfirm} ${view.slug}`) !== view.slug) return;
     const { status } = await api('/me', 'DELETE');
     if (status === 200) showMessage(strings.deleted);
   };
-  root.dataset.state = 'editor';
+  show('editor');
 }
 
 async function load() {
@@ -140,41 +95,66 @@ async function load() {
   }
 }
 
-root.querySelectorAll<HTMLButtonElement>('[data-add]').forEach((button) => {
-  button.onclick = () => addRow($<HTMLElement>(`[data-list="${button.dataset.add}"]`));
+/** Follows an edit job to the end: questions when the model asks, then the new draft. */
+async function followEdit(jobId: string) {
+  show('working');
+  const job = await waitForJob(jobId);
+  if (job.status === 'NEEDS_INPUT') {
+    renderQuestions($<HTMLElement>('[data-question-list]'), job.questions ?? [], strings.question);
+    const answer = async (body: Parameters<typeof sendAnswers>[1]) => {
+      const { status, body: result } = await sendAnswers(jobId, body);
+      if (status === 400) return markInvalid($<HTMLElement>('[data-question-list]'), result.fields ?? [], strings.question.invalid);
+      if (status === 202 || status === 409) return void followEdit(jobId);
+      await load();
+      notice(status === 422 ? strings.rejected : strings.error, 'error');
+    };
+    questionsForm.onsubmit = (event) => {
+      event.preventDefault();
+      void answer({ answers: readAnswers($<HTMLElement>('[data-question-list]')) });
+    };
+    $<HTMLButtonElement>('[data-skip]').onclick = () => void answer({ skip: true });
+    show('questions');
+    return;
+  }
+  await load();
+  if (job.status === 'DONE') {
+    editForm.reset();
+    notice(strings.changed);
+  } else notice(job.status === 'REJECTED' ? strings.rejected : strings.error, 'error');
+}
+
+editForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const instruction = (editForm.elements.namedItem('instruction') as HTMLTextAreaElement).value.trim();
+  if (instruction.length < 3) return notice(strings.empty, 'error');
+  const button = editForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+  button.disabled = true;
+  try {
+    const { status, body } = await api<{ jobId?: string }>('/me/edit', 'POST', { instruction });
+    if (status === 202 && body.jobId) return void followEdit(body.jobId);
+    notice(status === 429 ? strings.limit : strings.error, 'error');
+  } catch {
+    notice(strings.error, 'error');
+  } finally {
+    button.disabled = false;
+  }
 });
 
-$<HTMLButtonElement>('[data-regenerate]').onclick = async () => {
-  const { status, body } = await api<{ jobId?: string }>('/me/regenerate', 'POST');
-  // The create page shows the preview and the publish button for the new version.
-  if (status === 202 && body.jobId) location.href = `${strings.createPath}#job=${body.jobId}`;
-  else notice(strings.error, 'error');
-};
-
-form.addEventListener('submit', async (event) => {
+contactForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const data = Object.fromEntries(new FormData(form)) as Record<string, string>;
-  const optional = (value?: string) => value?.trim().replace(/^@/, '') || undefined;
-  const patch = {
-    headline: data.headline,
-    subhead: data.subhead,
-    about: data.about,
-    ctaText: data.ctaText,
-    services: rows('services').map((row) => ({ name: row.a, detail: row.b || undefined })),
-    hours: rows('hours').map((row) => ({ days: row.a, time: row.b })),
-    contact: { whatsapp: (data.whatsapp ?? '').replace(/\D/g, ''), address: optional(data.address), instagram: optional(data.instagram), facebook: optional(data.facebook) },
-  };
-  const button = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+  const data = Object.fromEntries(new FormData(contactForm)) as Record<string, string>;
+  const contact = Object.fromEntries(CONTACT_FIELDS.map((field) => [field, (data[field] ?? '').trim()]));
+  const button = contactForm.querySelector('button[type="submit"]') as HTMLButtonElement;
   button.disabled = true;
-  button.textContent = strings.saving;
-  form.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
+  contactForm.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
   try {
-    const { status, body } = await api<View & { fields?: string[] }>('/me/content', 'POST', patch);
+    const { status, body } = await api<View & { fields?: string[] }>('/me/edit', 'POST', { contact });
     if (status === 200) {
       fill(body);
-      notice(strings.saved);
+      notice(strings.contactSaved);
     } else if (status === 400) {
-      for (const field of body.fields ?? []) (form.elements.namedItem(field.split('.').pop() ?? '') as HTMLElement | null)?.setAttribute('aria-invalid', 'true');
+      for (const field of body.fields ?? []) (contactForm.elements.namedItem(field.split('.').pop() ?? '') as HTMLElement | null)?.setAttribute('aria-invalid', 'true');
+      contactForm.querySelector<HTMLElement>('[aria-invalid]')?.focus();
       notice(strings.invalid, 'error');
     } else {
       notice(status === 422 ? strings.rejected : strings.error, 'error');
@@ -183,8 +163,22 @@ form.addEventListener('submit', async (event) => {
     notice(strings.error, 'error');
   } finally {
     button.disabled = false;
-    button.textContent = strings.save;
   }
+});
+
+$<HTMLButtonElement>('[data-undo]').onclick = async () => {
+  const { status, body } = await api<View>('/me/undo', 'POST');
+  if (status === 200) {
+    fill(body);
+    notice(strings.undone);
+  } else notice(strings.error, 'error');
+};
+
+root.querySelectorAll<HTMLButtonElement>('.viewport button').forEach((button) => {
+  button.onclick = () => {
+    root.querySelectorAll<HTMLButtonElement>('.viewport button').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+    $<HTMLElement>('.device').dataset.width = button.dataset.width;
+  };
 });
 
 void load();

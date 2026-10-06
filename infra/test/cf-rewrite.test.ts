@@ -10,25 +10,22 @@ function load(file: string, replacements: Record<string, string> = {}) {
   return (uri: string, host = 'd111.cloudfront.test') => handler({ request: { uri, headers: { host: { value: host } } } });
 }
 
+const DRAFT = '0123456789abcdef0123456789abcdef';
+
 describe('sites rewrite, domainless mode', () => {
   const run = load('cf-rewrite.js', { __SITES_HOST__: '', __APP_URL__: 'https://app.test' });
 
-  it('serves sites by path', () => {
-    expect(run('/panaderia-luna/').uri).toBe('/panaderia-luna/index.html');
-    expect(run('/panaderia-luna/assets/logo.webp').uri).toBe('/panaderia-luna/assets/logo.webp');
+  it('serves drafts by path', () => {
+    expect(run(`/_draft/${DRAFT}/`).uri).toBe(`/_draft/${DRAFT}/index.html`);
+    expect(run(`/_draft/${DRAFT}/assets/hero.jpg`).uri).toBe(`/_draft/${DRAFT}/assets/hero.jpg`);
   });
 
   it('adds the trailing slash so relative assets resolve', () => {
-    expect(run('/panaderia-luna')).toMatchObject({ statusCode: 301, headers: { location: { value: '/panaderia-luna/' } } });
-    expect(run('/_preview/job1')).toMatchObject({ statusCode: 301, headers: { location: { value: '/_preview/job1/' } } });
+    expect(run(`/_draft/${DRAFT}`)).toMatchObject({ statusCode: 301, headers: { location: { value: `/_draft/${DRAFT}/` } } });
   });
 
-  it('serves previews', () => {
-    expect(run('/_preview/job1/').uri).toBe('/_preview/job1/index.html');
-  });
-
-  it('hides internal prefixes', () => {
-    for (const uri of ['/_uploads/job1/foto.jpg', '/_quarantine/x/index.html', '/_errors/404.html', '/_anything']) {
+  it('serves no published site for now, and hides internal prefixes', () => {
+    for (const uri of ['/panaderia-luna/', '/panaderia-luna', '/_draft/', '/_draft/short/', '/_src/luna/x.html', '/_media/luna/assets/logo.png', '/_uploads/job1/foto.jpg', '/_quarantine/x/index.html', '/_errors/404.html', '/_anything']) {
       expect(run(uri).statusCode, uri).toBe(404);
     }
   });
@@ -41,14 +38,12 @@ describe('sites rewrite, domainless mode', () => {
 describe('sites rewrite, domain mode', () => {
   const run = load('cf-rewrite.js', { __SITES_HOST__: 'sites.test', __APP_URL__: 'https://app.brand.test' });
 
-  it('maps the subdomain to the site folder', () => {
-    expect(run('/', 'panaderia-luna.sites.test').uri).toBe('/panaderia-luna/index.html');
-    expect(run('/assets/logo.webp', 'Panaderia-Luna.sites.test').uri).toBe('/panaderia-luna/assets/logo.webp');
-  });
-
-  it('maps the preview host', () => {
-    expect(run('/job1/', 'preview.sites.test').uri).toBe('/_preview/job1/index.html');
-    expect(run('/', 'preview.sites.test').statusCode).toBe(404);
+  it('maps the draft host to the draft folder', () => {
+    expect(run(`/${DRAFT}/`, 'draft.sites.test').uri).toBe(`/_draft/${DRAFT}/index.html`);
+    expect(run(`/${DRAFT}/assets/logo.png`, 'Draft.Sites.Test').uri).toBe(`/_draft/${DRAFT}/assets/logo.png`);
+    expect(run(`/${DRAFT}`, 'draft.sites.test')).toMatchObject({ statusCode: 301, headers: { location: { value: `/${DRAFT}/` } } });
+    expect(run('/', 'draft.sites.test').statusCode).toBe(404);
+    expect(run('/_src/luna/x.html', 'draft.sites.test').statusCode).toBe(404);
   });
 
   it('sends the apex and www to the app', () => {
@@ -56,14 +51,10 @@ describe('sites rewrite, domain mode', () => {
     expect(run('/x', 'www.sites.test').statusCode).toBe(302);
   });
 
-  it('rejects hosts that are not a slug', () => {
-    for (const host of ['_uploads.sites.test', 'a.b.sites.test', 'evil.test', 'xsites.test', 'd111.cloudfront.test', '-x.sites.test']) {
+  it('serves no published site for now, and rejects other hosts', () => {
+    for (const host of ['panaderia-luna.sites.test', '_uploads.sites.test', 'a.b.sites.test', 'evil.test', 'xsites.test', 'd111.cloudfront.test']) {
       expect(run('/', host).statusCode, host).toBe(404);
     }
-  });
-
-  it('cannot reach internal prefixes through a slug host', () => {
-    expect(run('/_uploads/job1/foto.jpg', 'luna.sites.test').uri).toBe('/luna/_uploads/job1/foto.jpg');
   });
 });
 

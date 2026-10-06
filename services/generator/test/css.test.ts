@@ -41,3 +41,10 @@ describe('sanitizeSignatureCss', () => {
 
   it('accepts an empty string', () => ok(''));
 });
+
+describe('signatureCss content', () => {
+  it('keeps empty content for decoration and drops text written through CSS', () => {
+    expect(sanitizeSignatureCss('.signature::before{content:"";display:block}').ok).toBe(true);
+    expect(sanitizeSignatureCss('.signature::before{content:"5 a.m."}')).toMatchObject({ ok: false, reasons: ['content with text'] });
+  });
+});

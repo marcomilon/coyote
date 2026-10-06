@@ -2,8 +2,9 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_IMAGE_MODEL_ID, IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
+import { DEFAULT_MODEL_ID } from '../../services/generator/src/core/models';
 import { CoyoteStack, type CoyoteStackProps } from '../lib/coyote-stack';
+import { PAGE_SCRIPT_HOSTS } from '../../services/generator/src/core/page-check';
 
 const synth = (props: Partial<CoyoteStackProps> = {}) =>
   Template.fromStack(
@@ -28,7 +29,7 @@ describe('CoyoteStack, domainless', () => {
     template.resourceCountIs('AWS::CertificateManager::Certificate', 0);
     template.resourceCountIs('AWS::Route53::RecordSet', 0);
     template.resourceCountIs('AWS::CloudFront::Distribution', 2);
-    template.resourceCountIs('AWS::DynamoDB::GlobalTable', 4);
+    template.resourceCountIs('AWS::DynamoDB::GlobalTable', 6);
   });
 
   it('keeps both buckets private and versions the sites bucket', () => {
@@ -37,16 +38,34 @@ describe('CoyoteStack, domainless', () => {
     });
     template.hasResourceProperties('AWS::S3::Bucket', {
       VersioningConfiguration: { Status: 'Enabled' },
-      LifecycleConfiguration: { Rules: Match.arrayWith([Match.objectLike({ Prefix: '_preview/', ExpirationInDays: 1 })]) },
+      LifecycleConfiguration: { Rules: Match.arrayWith([Match.objectLike({ Prefix: '_uploads/', ExpirationInDays: 1 })]) },
     });
   });
 
-  it('gives generated sites a no-script CSP that only our app may frame', () => {
+  it('never expires drafts', () => {
+    const rules = Object.values(template.findResources('AWS::S3::Bucket')).flatMap((b) => b.Properties.LifecycleConfiguration?.Rules ?? []);
+    expect(rules.filter((r: { Prefix?: string }) => r.Prefix === '_draft/' || r.Prefix === undefined).every((r: { ExpirationInDays?: number }) => r.ExpirationInDays === undefined)).toBe(true);
+  });
+
+  it('gives generated sites a CSP with inline scripts and the listed CDNs, no network access, and that only our app may frame', () => {
     const csp = cspOf(template, 'SitesHeaders');
-    expect(csp).toContain("script-src 'none'");
+    expect(/script-src ([^;]*);/.exec(csp)![1]).toBe(`'unsafe-inline' 'unsafe-eval' ${PAGE_SCRIPT_HOSTS.map((h) => `https://${h}`).join(' ')}`);
+    expect(csp).not.toContain('connect-src'); // default-src 'none': scripts cannot fetch or send anything
+    expect(csp).toContain("img-src 'self' data: blob:");
+    expect(csp).toContain('frame-src https://maps.google.com https://www.google.com');
     expect(csp).toContain("default-src 'none'");
     expect(csp).toContain('frame-ancestors');
     expect(csp).toContain('http://localhost:5173'); // this account is the development sandbox
+    const policies = template.findResources('AWS::CloudFront::ResponseHeadersPolicy');
+    const [, sites] = Object.entries(policies).find(([id]) => id.startsWith('SitesHeaders'))!;
+    expect(JSON.stringify(sites.Properties.ResponseHeadersPolicyConfig.CustomHeadersConfig)).toContain('X-Robots-Tag'); // drafts stay out of search
+  });
+
+  it('lets only the generate Lambda read the Anthropic API key, and gives it time for the page writer', () => {
+    const readers = Object.values(template.findResources('AWS::IAM::Policy')).filter((p) => JSON.stringify(p).includes('secretsmanager:GetSecretValue'));
+    expect(readers).toHaveLength(1);
+    expect(JSON.stringify(readers[0])).toContain('coyote/anthropic-api-key');
+    template.hasResourceProperties('AWS::Lambda::Function', { Timeout: 600, Environment: { Variables: Match.objectLike({ ANTHROPIC_SECRET_NAME: 'coyote/anthropic-api-key' }) } });
   });
 
   it('lets the app run its own scripts only', () => {
@@ -81,25 +100,45 @@ describe('CoyoteStack, domainless', () => {
   });
 
   it('exposes the routes', () => {
-    for (const routeKey of ['POST /generate', 'GET /jobs/{id}', 'POST /jobs/{id}/publish', 'POST /jobs/{id}/regenerate', 'GET /me', 'DELETE /me', 'POST /me/content', 'POST /me/unpublish', 'POST /report/{slug}', 'POST /uploads']) {
-      template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: routeKey });
-    }
+    const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')).map((r) => r.Properties.RouteKey).sort();
+    expect(routes).toEqual([
+      'DELETE /me', 'GET /account', 'GET /jobs/{id}', 'GET /me', 'GET /me/chat', 'POST /account/login', 'POST /account/session', 'POST /generate',
+      'POST /jobs/{id}/answers', 'POST /me/chat', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads',
+    ]);
   });
 
-  it('only lets Lambdas call the text model with our guardrail attached', () => {
+  it('keeps the chat in its own table, and lets the chat poll above the stage limit', () => {
+    template.hasResourceProperties('AWS::DynamoDB::GlobalTable', {
+      KeySchema: [
+        { AttributeName: 'slug', KeyType: 'HASH' },
+        { AttributeName: 'at', KeyType: 'RANGE' },
+      ],
+      TimeToLiveSpecification: { AttributeName: 'ttl', Enabled: true },
+    });
+    template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+      DefaultRouteSettings: Match.objectLike({ ThrottlingRateLimit: 5 }),
+      RouteSettings: { 'GET /me/chat': Match.objectLike({ ThrottlingRateLimit: 25 }) },
+    });
+    // Route settings fail to deploy if the stage is updated before the route exists.
+    const routes = template.findResources('AWS::ApiGatewayV2::Route', { Properties: { RouteKey: 'GET /me/chat' } });
+    const stage = Object.values(template.findResources('AWS::ApiGatewayV2::Stage'))[0]!;
+    expect(stage.DependsOn).toEqual(expect.arrayContaining(Object.keys(routes)));
+  });
+
+  it('only lets Lambdas call the text models with our guardrail attached', () => {
     const statements = Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
       (policy) => policy.Properties.PolicyDocument.Statement as { Action: string | string[]; Resource: unknown; Condition?: unknown }[],
     );
     const invoke = statements.filter((s) => [s.Action].flat().includes('bedrock:InvokeModel'));
-    const [image, text] = [invoke.filter((s) => !s.Condition), invoke.filter((s) => s.Condition)];
+    const [unguarded, text] = [invoke.filter((s) => !s.Condition), invoke.filter((s) => s.Condition)];
     expect(text.length).toBeGreaterThan(0);
     for (const statement of text) expect(JSON.stringify(statement.Condition)).toContain('bedrock:GuardrailIdentifier');
-    expect(JSON.stringify(text)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0');
+    expect(JSON.stringify(text)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0'); // the pre-screen
     expect(JSON.stringify(text)).toContain('foundation-model/amazon.nova-2-lite-v1:0');
-    // Image models take no guardrail: the one unconditioned statement names only the image model.
-    expect(image).toHaveLength(1);
-    expect(JSON.stringify(image[0]!.Resource)).toContain(`${IMAGE_MODEL_REGION}::foundation-model/${DEFAULT_IMAGE_MODEL_ID}`);
-    expect(JSON.stringify(image[0]!.Resource)).not.toContain('nova');
+    const writer = text.filter((s) => JSON.stringify(s.Resource).includes(DEFAULT_MODEL_ID));
+    expect(writer).toHaveLength(2); // generate (plan_site) and the chat
+    for (const statement of writer) expect(statement.Action).toBe('bedrock:InvokeModel');
+    expect(unguarded).toEqual([]); // no image model any more: every model call carries the guardrail
   });
 
   it('never retries a failed generation and records the failure', () => {
@@ -119,6 +158,18 @@ describe('CoyoteStack, domainless', () => {
   it('is disposable: cdk destroy removes all data', () => {
     template.allResources('AWS::DynamoDB::GlobalTable', { DeletionPolicy: 'Delete' });
     template.allResources('AWS::S3::Bucket', { DeletionPolicy: 'Delete' });
+  });
+
+  it('sends email only with a verified sender, and only from the account and generate Lambdas', () => {
+    template.resourceCountIs('AWS::SES::EmailIdentity', 0);
+    const withSender = synth({ senderEmail: 'owner@example.test' });
+    withSender.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'owner@example.test' });
+    const senders = Object.entries(withSender.findResources('AWS::IAM::Policy'))
+      .filter(([, policy]) => JSON.stringify(policy.Properties.PolicyDocument).includes('ses:SendEmail'))
+      .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
+    expect(senders.sort()).toEqual(['GeneratorApiAccount', 'GeneratorApiGenerate']);
+    const account = Object.values(withSender.findResources('AWS::Lambda::Function')).find((f) => JSON.stringify(f.Properties.Environment ?? {}).includes('owner@example.test'));
+    expect(account).toBeDefined(); // SENDER_EMAIL reaches the Lambdas
   });
 
   it('exports the URLs the dev server and the Lambdas need', () => {
@@ -143,13 +194,17 @@ describe('CoyoteStack, domain mode', () => {
       DistributionConfig: { Aliases: ['sites.test', '*.sites.test'] },
     });
     template.hasResourceProperties('AWS::CloudFront::Distribution', { DistributionConfig: { Aliases: ['app.brand.test'] } });
-    template.resourceCountIs('AWS::Route53::RecordSet', 8);
+    template.resourceCountIs('AWS::Route53::RecordSet', 11); // 8 aliases + 3 DKIM records
+  });
+
+  it('sends email from notify.<domain> with DKIM', () => {
+    template.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'notify.brand.test' });
   });
 
   it('uses exact origins in the CSPs and the rewrite function', () => {
     expect(cspOf(template, 'SitesHeaders')).toContain('frame-ancestors https://app.brand.test http://localhost:5173');
     expect(cspOf(template, 'SitesHeaders')).toContain('form-action https://api.brand.test');
-    expect(cspOf(template, 'AppHeaders')).toContain('frame-src https://preview.sites.test');
+    expect(cspOf(template, 'AppHeaders')).toContain('frame-src https://draft.sites.test');
     expect(JSON.stringify(template.findResources('AWS::CloudFront::Function'))).toContain("var SITES_HOST = 'sites.test'");
   });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkContent, checkHtml, scrubModelContent, scrubText } from '../src/core/policy';
+import { checkContent, checkHtml, contactInText, scrubModelContent, scrubText } from '../src/core/policy';
 import { render } from '../src/core/render';
 import { editorial as plain } from '../themes/editorial';
 import { brief, content } from './fixtures';
@@ -63,6 +63,17 @@ describe('scrubText', () => {
   });
 });
 
+describe('contactInText', () => {
+  it.each([
+    ['Llama al +57 311 999 0000', true],
+    ['Escríbenos a hola@luna.co', true],
+    ['Visita www.luna.com.co', true],
+    ['Abrimos de 9:00 a 18:00', false],
+    ['Hogaza a $18.000.000 para eventos', false],
+    ['Más de 20.000 clientes desde 1998', false],
+  ])('%s', (text, found) => expect(contactInText(text).length > 0).toBe(found));
+});
+
 describe('checkHtml', () => {
   const options = { platformOrigins: ['https://app.test', 'https://sites.test'] };
   const page = render({
@@ -117,5 +128,11 @@ describe('checkHtml', () => {
     expect(checkHtml(withBody(form(action)), { ...options, contactFormAction: action })).toEqual([]);
     expect(codes(checkHtml(withBody(form('https://evil.test/collect')), { ...options, contactFormAction: action }))).toContain('forbidden-form');
     expect(codes(checkHtml(withBody(form(action, '<input type="password" name="clave">')), { ...options, contactFormAction: action }))).toContain('forbidden-form');
+  });
+
+  it('rejects a wa.me link to a number other than the owner\'s', () => {
+    const other = page.replace(/https:\/\/wa\.me\/573001234567/g, 'https://wa.me/5215555555555');
+    expect(codes(checkHtml(other, { ...options, whatsapp: '573001234567' }))).toContain('forbidden-url');
+    expect(checkHtml(page, { ...options, whatsapp: '573001234567' })).toEqual([]);
   });
 });

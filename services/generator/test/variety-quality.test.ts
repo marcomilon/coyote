@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { THEMES } from '../themes';
+import { THEME_SCRIPTS, THEMES } from '../themes';
 import { contrast } from '../src/core/color';
 import { FONT_PAIRINGS } from '../src/core/fonts';
 import { checkHtml } from '../src/core/policy';
-import { fixBrief, lintContent } from '../src/core/quality';
+import { fixBrief, lintContent, looksEnglish } from '../src/core/quality';
 import { render } from '../src/core/render';
 import { candidatesFor } from '../src/core/variety';
 import { brief, content } from './fixtures';
@@ -72,8 +72,8 @@ describe('every theme', () => {
       reportUrl: 'https://app.test/reportar?sitio=x',
       privacyUrl: 'https://app.test/privacidad',
     });
-    expect(checkHtml(page, { platformOrigins: ['https://app.test', 'https://sites.test'] })).toEqual([]);
-    expect(page).toContain('class="signature"');
+    expect(checkHtml(page, { platformOrigins: ['https://app.test', 'https://sites.test'], scripts: THEME_SCRIPTS })).toEqual([]);
+    expect(page).toMatch(/class="signature[ "]/);
     expect(page).toContain('https://wa.me/573001234567');
     expect(page).toContain(content.headline);
     const { ink, paper, accent } = theme.meta.defaultPalette;
@@ -86,5 +86,39 @@ describe('every theme', () => {
       const compatible = Object.values(FONT_PAIRINGS).filter((p) => theme.meta.fontStyles.includes(p.style));
       expect(compatible.length, theme.id).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+describe('theme scripts', () => {
+  it('never close the script element and respect reduced motion', () => {
+    for (const script of THEME_SCRIPTS) {
+      expect(script).not.toMatch(/<\/script/i);
+      expect(script).toContain('prefers-reduced-motion');
+    }
+  });
+
+  it('are the only scripts a page may carry', () => {
+    const page = render({ theme: THEMES.mostrador!, content, brief: { ...brief, theme: 'mostrador' }, siteUrl: 'https://sites.test/x/', reportUrl: 'https://app.test/r', privacyUrl: 'https://app.test/p' });
+    const options = { platformOrigins: ['https://app.test', 'https://sites.test'], scripts: THEME_SCRIPTS };
+    expect(page).toContain('<script>');
+    expect(checkHtml(page, options)).toEqual([]);
+    const codes = (html: string) => checkHtml(html, options).map((v) => v.detail);
+    expect(codes(page.replace('</body>', '<script>alert(1)</script></body>'))).toContain('<script> that is not a theme script');
+    expect(codes(page.replace('</body>', `<script src="https://evil.test/x.js">${THEME_SCRIPTS[0]}</script></body>`))).toContain('<script> that is not a theme script');
+    expect(checkHtml(page, { platformOrigins: options.platformOrigins }).map((v) => v.detail)).toContain('<script> that is not a theme script');
+  });
+});
+
+describe('copy and scene checks', () => {
+  it('flags voseo unless the business is in a voseo country', () => {
+    const copy = { ...modelContent, ctaText: 'Contá tu pedido' };
+    expect(lintContent(copy, 'es', 'Panadería en Chapinero, Bogotá').join(' ')).toContain('voseo');
+    expect(lintContent(copy, 'es', 'Panadería en Palermo, Buenos Aires').join(' ')).not.toContain('voseo');
+    expect(lintContent({ ...modelContent, ctaText: 'Cuéntanos tu pedido' }, 'es', 'Bogotá').join(' ')).not.toContain('voseo');
+  });
+
+  it('knows an English scene from a Spanish one', () => {
+    expect(looksEnglish('Early morning light through a bakery window in Bogotá, bread on a wooden counter')).toBe(true);
+    expect(looksEnglish('Trompo girando sobre llamas de carbón en la madrugada')).toBe(false);
   });
 });

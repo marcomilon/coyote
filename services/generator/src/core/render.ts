@@ -4,9 +4,10 @@ import { readableOn } from './color';
 import { sanitizeSignatureCss } from './css';
 import { FONT_PAIRINGS, googleFontsUrl, type FontPairingId } from './fonts';
 import { faviconDataUri, markSvg, type MarkInput } from '../../logos';
-import { html, raw } from './html';
+import { html, raw, type SafeHtml } from './html';
 import { strings } from './i18n';
 import type { SiteLinks, Theme } from './theme';
+import { TAILWIND_CSS } from '../../themes/generated/tailwind';
 
 export interface RenderInput {
   theme: Theme;
@@ -29,6 +30,7 @@ h1,h2,h3{font-family:var(--font-display);font-weight:var(--font-display-weight);
 a:focus-visible{outline:2px solid currentColor;outline-offset:3px}
 dd,td{font-variant-numeric:tabular-nums}
 img{max-width:100%;display:block}
+.map{display:block;width:100%;height:100%;min-height:15rem;border:0}
 .mark{width:3rem;height:3rem;flex:none;object-fit:contain}
 .photos{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))}
 .photos img,.heroimg img{width:100%;height:100%;object-fit:cover;aspect-ratio:4/3}
@@ -37,19 +39,40 @@ a{color:inherit}
 .coyote-footer a{margin-left:.5rem}
 `;
 
+/** "Cómo llegar": a Google Maps search for the address. */
+export const mapsUrl = (place: string) => `https://maps.google.com/?q=${encodeURIComponent(place)}`;
+
+/**
+ * The keyless Google Maps embed. An undocumented URL form: if Google changes it, switch it here (for example
+ * to the keyed Embed API) and run `refill-all`. checkHtml allows exactly this iframe.
+ */
+export const mapEmbedUrl = (place: string) => `https://maps.google.com/maps?q=${encodeURIComponent(place)}&z=16&output=embed`;
+
+/** The map for the owner's address, built by us (never by the model). Absent without an address. */
+function buildMap(content: SiteContent, title: string): SafeHtml | undefined {
+  if (!content.contact.address) return undefined;
+  const place = [content.contact.address, content.location.neighborhood, content.location.city].filter(Boolean).join(', ');
+  return html`<iframe class="map" title="${title}: ${content.businessName}, ${place}" src="${mapEmbedUrl(place)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" data-coyote-map></iframe>`;
+}
+
 export function buildLinks(content: SiteContent): SiteLinks {
   const { contact, location, lang } = content;
   const greeting = encodeURIComponent(strings(lang).whatsappGreeting);
   const place = [contact.address, location.neighborhood, location.city].filter(Boolean).join(', ');
   return {
     whatsapp: `https://wa.me/${contact.whatsapp}?text=${greeting}`,
+    phone: contact.phone ? `tel:+${contact.phone}` : undefined,
+    email: contact.email ? `mailto:${contact.email}` : undefined,
     instagram: contact.instagram ? `https://instagram.com/${contact.instagram}` : undefined,
     facebook: contact.facebook ? `https://facebook.com/${contact.facebook}` : undefined,
-    maps: contact.address ? `https://maps.google.com/?q=${encodeURIComponent(place)}` : undefined,
+    maps: contact.address ? mapsUrl(place) : undefined,
   };
 }
 
-/** Pure function of the stored record: same input, same page. No model call. */
+/**
+ * Pure function of the stored record: same input, same page. No model call. In a Tailwind theme the base
+ * styles go into Tailwind's base layer, so utilities override them (unlayered CSS would win over any layer).
+ */
 export function render(input: RenderInput): string {
   const { theme, content, brief, siteUrl, reportUrl, privacyUrl } = input;
   const t = strings(content.lang);
@@ -86,11 +109,12 @@ export function render(input: RenderInput): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${googleFontsUrl(brief.fontPairing as FontPairingId)}">
-<style>${raw(tokens)}${raw(BASE_CSS)}${raw(theme.css)}${raw(signatureCss)}</style>
+<style>${raw(tokens)}${raw(theme.tailwind ? `@layer base{${BASE_CSS}}` : BASE_CSS)}${raw(TAILWIND_CSS[theme.id] ?? '')}${raw(theme.css)}${raw(signatureCss)}</style>
 </head>
 <body>
-${theme.body({ content, brief, links: buildLinks(content), t, logo, photos })}
+${theme.body({ content, brief, links: buildLinks(content), t, logo, photos, map: buildMap(content, t.mapTitle) })}
 <footer class="coyote-footer">${t.madeWith}<a href="${reportUrl}">${t.report}</a><a href="${privacyUrl}">${t.privacy}</a></footer>
+${theme.script ? html`<script>${raw(theme.script)}</script>` : ''}
 </body>
 </html>
 `;

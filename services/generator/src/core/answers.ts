@@ -33,6 +33,29 @@ const handle = (value: string | undefined, host: string): string | undefined => 
   return cleaned || undefined;
 };
 
+const digits = (value: string) => value.replace(/\D/g, '').replace(/^00/, '');
+
+export type ContactField = keyof Contact;
+
+/** Cleans one raw contact value the way the form does. Empty → undefined. Validate the result with `Contact`. */
+export function cleanContact(field: ContactField, value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  switch (field) {
+    case 'whatsapp':
+    case 'phone':
+      return digits(trimmed) || undefined;
+    case 'instagram':
+      return handle(trimmed, 'instagram\\.com');
+    case 'facebook':
+      return handle(trimmed, 'facebook\\.com');
+    case 'email':
+      return trimmed.toLowerCase();
+    case 'address':
+      return trimmed;
+  }
+}
+
 /** Cleans raw form input, then validates. Throws ZodError on invalid input. */
 export function normalizeAnswers(raw: RawAnswers): Answers {
   return Answers.parse({
@@ -40,10 +63,10 @@ export function normalizeAnswers(raw: RawAnswers): Answers {
     about: raw.about,
     lang: raw.lang ?? 'es',
     contact: {
-      whatsapp: raw.whatsapp.replace(/\D/g, '').replace(/^00/, ''),
-      address: raw.address?.trim() || undefined,
-      instagram: handle(raw.instagram, 'instagram\\.com'),
-      facebook: handle(raw.facebook, 'facebook\\.com'),
+      whatsapp: cleanContact('whatsapp', raw.whatsapp) ?? '',
+      address: cleanContact('address', raw.address),
+      instagram: cleanContact('instagram', raw.instagram),
+      facebook: cleanContact('facebook', raw.facebook),
     },
   });
 }

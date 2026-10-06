@@ -70,3 +70,19 @@ describe('render', () => {
     ).toThrow();
   });
 });
+
+describe('the map', () => {
+  it('is built from the owner address, escaped, and is the only iframe the HTML check allows', async () => {
+    const { checkHtml } = await import('../src/core/policy');
+    const { THEMES, THEME_SCRIPTS } = await import('../themes');
+    const theme = THEMES.mostrador!;
+    const page = render({ ...base, theme, brief: { ...brief, theme: 'mostrador' }, content });
+    expect(page).toContain('src="https://maps.google.com/maps?q=Calle%2060%20%23%209-12%2C%20Chapinero%2C%20Bogot%C3%A1&amp;z=16&amp;output=embed"');
+    const options = { platformOrigins: ['https://app.test', 'https://sites.test'], scripts: THEME_SCRIPTS };
+    expect(checkHtml(page, options)).toEqual([]);
+    expect(checkHtml(page.replace('</main>', '<iframe src="https://evil.test"></iframe></main>'), options).map((v) => v.code)).toContain('forbidden-element');
+    expect(checkHtml(page.replace('</main>', '<iframe data-coyote-map src="https://maps.google.com/maps?q=x&z=16&output=embed"></iframe></main>'), options).map((v) => v.code)).toContain('forbidden-element'); // a second one
+    const noAddress = render({ ...base, theme, brief: { ...brief, theme: 'mostrador' }, content: { ...content, contact: { ...content.contact, address: undefined } } });
+    expect(noAddress).not.toContain('<iframe');
+  });
+});

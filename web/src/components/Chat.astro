@@ -1,0 +1,61 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const s = t(lang);
+const c = s.chat;
+const other = t(s.otherLang.code);
+const clientStrings = { ...c, question: s.questions };
+---
+
+<Layout lang={lang} title={c.title} description={c.description} alternate={other.paths.chat} withConfig>
+  <div class="chat wrap" id="chat" data-state="loading" data-strings={JSON.stringify(clientStrings)}>
+    <section data-view="loading" class="panel"><div class="paint" aria-hidden="true"></div></section>
+
+    <section data-view="message" class="panel" aria-live="assertive">
+      <h2 data-message-title></h2>
+      <p data-message-text></p>
+    </section>
+
+    <section data-view="chat">
+      <header class="chat-head">
+        <div>
+          <p class="script">Coyote</p>
+          <h1 data-business>{c.heading}</h1>
+        </div>
+        <a class="btn small ghost" data-draft-link target="_blank" rel="noopener">{c.view}</a>
+      </header>
+      <ol class="thread" data-thread aria-live="polite"></ol>
+      <div class="examples" data-examples>
+        {c.examples.map((example) => <button type="button" class="chip">{example}</button>)}
+      </div>
+      <form class="composer" data-composer novalidate>
+        <textarea name="text" rows="2" maxlength="500" placeholder={c.placeholder} aria-label={c.placeholder}></textarea>
+        <button class="btn small" type="submit">{c.send}</button>
+      </form>
+      <p class="notice" data-notice role="status" aria-live="polite"></p>
+    </section>
+
+    <section data-view="questions">
+      <form class="ticket" data-questions novalidate>
+        <header>
+          <h2>{c.questionsTitle}</h2>
+          <p>{s.questions.intro}</p>
+        </header>
+        <div data-question-list></div>
+        <div class="submit-row">
+          <button class="btn" type="submit">{c.questionsSubmit}</button>
+          <button class="btn ghost" type="button" data-skip>{s.questions.skip}</button>
+        </div>
+      </form>
+    </section>
+  </div>
+</Layout>
+
+<script>
+  import '../scripts/chat';
+</script>

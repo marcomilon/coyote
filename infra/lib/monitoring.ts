@@ -62,7 +62,7 @@ export class Monitoring extends Construct {
       return a;
     };
 
-    alarm('PublishRate', 'More sites published in an hour than normal. Run ./coyote.sh abuse-report.', metric('Published'), 20);
+    alarm('DraftRate', 'More sites generated in an hour than normal. Run ./coyote.sh abuse-report.', metric('Generated'), 20);
     alarm('RateLimited', 'Someone keeps hitting the per-IP limit.', metric('RateLimited'), 20);
     alarm('Rejected', 'Many rejected requests in an hour: someone is probing the safety filters.', metric('Rejected'), 15);
     alarm('GenerationFailures', 'Generations are failing.', metric('Failed'), 3);
@@ -81,7 +81,7 @@ export class Monitoring extends Construct {
       dashboardName: 'Coyote',
       widgets: [
         [
-          new cw.GraphWidget({ title: 'Requests', width: 12, left: [metric('Submitted'), metric('Generated'), metric('Published')] }),
+          new cw.GraphWidget({ title: 'Requests', width: 12, left: [metric('Submitted'), metric('NeedsInput'), metric('Generated'), metric('Edited')] }),
           new cw.GraphWidget({ title: 'Blocked', width: 12, left: [metric('Rejected'), metric('RateLimited'), metric('Failed'), metric('Reported'), metric('Quarantined')] }),
         ],
         [

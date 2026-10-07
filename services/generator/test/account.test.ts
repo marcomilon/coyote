@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { loginEmail, readyEmail } from '../src/core/mail';
 import { accountView, checkSession, LOGIN_TTL_MS, requestLogin, SESSION_TTL_MS, startSession } from '../src/core/account';
 import { runGenerateJob } from '../src/core/generate-job';
 import { publicJob } from '../src/core/jobs';
@@ -123,5 +124,20 @@ describe('Mis sitios', () => {
     await deleteSite(t.sites.get('panaderia-luna')!, t.ownerDeps);
     expect(t.accounts.has(ID)).toBe(false);
     expect(t.jobs.get('job-1')!.ownerEmail).toBeUndefined();
+  });
+});
+
+describe('emails', () => {
+  it('are branded HTML with a plain-text version, the logo from the app, and the owner\'s text escaped', () => {
+    const email = readyEmail('a@b.pe', 'es', 'Pan <b>& Café</b>', 'https://app.test/mis-sitios#login=x', 'https://app.test');
+    expect(email.subject).toBe('Tu sitio está listo: Pan <b>& Café</b>');
+    expect(email.text).toContain('Ver mi sitio: https://app.test/mis-sitios#login=x');
+    expect(email.html).toContain('<img src="https://app.test/logo.png"');
+    expect(email.html).toContain('href="https://app.test/mis-sitios#login=x"');
+    expect(email.html).toContain('Pan &lt;b&gt;&amp; Café&lt;/b&gt;');
+    expect(email.html).not.toContain('<b>&');
+    const login = loginEmail('a@b.pe', 'pt', ['Padaria Lua'], 'https://app.test/pt/meus-sites#login=y', 'https://app.test');
+    expect(login.html).toContain('Entrar nos meus sites');
+    expect(login.html).toContain('<li style="margin:4px 0;font-weight:700">Padaria Lua</li>');
   });
 });

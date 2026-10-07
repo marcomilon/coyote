@@ -214,7 +214,7 @@ async function sendReady(job: Job, slug: string, deps: GenerateJobDeps): Promise
     if (!site?.ownerEmailId) return;
     const login = await issueLogin(deps.stores, site.ownerEmailId, deps.now());
     const { lang, businessName } = job.answers;
-    await deps.sendEmail(readyEmail(job.ownerEmail, lang, businessName, deps.urls.mySitesUrl(login, lang, slug)));
+    await deps.sendEmail(readyEmail(job.ownerEmail, lang, businessName, deps.urls.mySitesUrl(login, lang, slug), deps.urls.appUrl));
   } catch (error) {
     console.error('ready email failed', { slug, error });
   }

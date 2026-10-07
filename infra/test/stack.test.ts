@@ -200,8 +200,8 @@ describe('CoyoteStack, domain mode', () => {
     template.hasResourceProperties('AWS::CloudFront::Distribution', {
       DistributionConfig: { Aliases: ['sites.test', '*.sites.test'] },
     });
-    template.hasResourceProperties('AWS::CloudFront::Distribution', { DistributionConfig: { Aliases: ['app.brand.test'] } });
-    template.resourceCountIs('AWS::Route53::RecordSet', 11); // 8 aliases + 3 DKIM records
+    template.hasResourceProperties('AWS::CloudFront::Distribution', { DistributionConfig: { Aliases: ['www.brand.test', 'brand.test'] } });
+    template.resourceCountIs('AWS::Route53::RecordSet', 13); // 10 aliases (A + AAAA for www, the bare domain, sites, *.sites, api) + 3 DKIM records
   });
 
   it('sends email from notify.<domain> with DKIM', () => {
@@ -209,7 +209,7 @@ describe('CoyoteStack, domain mode', () => {
   });
 
   it('uses exact origins in the CSPs and the rewrite function', () => {
-    expect(cspOf(template, 'SitesHeaders')).toContain('frame-ancestors https://app.brand.test http://localhost:5173');
+    expect(cspOf(template, 'SitesHeaders')).toContain('frame-ancestors https://www.brand.test http://localhost:5173');
     expect(cspOf(template, 'SitesHeaders')).toContain('form-action https://api.brand.test');
     expect(cspOf(template, 'AppHeaders')).toContain('frame-src https://draft.sites.test');
     expect(JSON.stringify(template.findResources('AWS::CloudFront::Function'))).toContain("var SITES_HOST = 'sites.test'");

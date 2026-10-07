@@ -13,6 +13,10 @@
   },
   "context": {
     "senderEmail": "marco.milon+coyote@gmail.com",
+    "domainName": "ventas314.com",
+    "sitesDomainName": "sites.ventas314.com",
+    "sitesHostedZoneName": "ventas314.com",
+    "account": "887799775985",
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
     "@aws-cdk/core:newStyleStackSynthesis": true,
     "@aws-cdk/core:stackRelativeExports": true,

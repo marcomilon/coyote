@@ -112,11 +112,12 @@ export interface PageCheckOptions {
   ownerText?: string;
   businessName: string;
   lang: 'es' | 'pt';
+  homeUrl: string;
   reportUrl: string;
   privacyUrl: string;
 }
 
-export function checkPage(page: string, { contact, ownerText = '', businessName, lang, reportUrl, privacyUrl }: PageCheckOptions): PageCheckResult {
+export function checkPage(page: string, { contact, ownerText = '', businessName, lang, homeUrl, reportUrl, privacyUrl }: PageCheckOptions): PageCheckResult {
   const known = knownDetails(contact, ownerText);
   const violations: Violation[] = [];
   const repairs: string[] = [];
@@ -233,7 +234,7 @@ export function checkPage(page: string, { contact, ownerText = '', businessName,
     head.children.push(guard);
     const t = strings(lang);
     const footer = parseDocument(
-      h`<footer style="padding:1.25rem;font:13px/1.5 system-ui,sans-serif;text-align:center;opacity:.75;background:inherit">${t.madeWith} · <a href="${reportUrl}" style="color:inherit">${t.report}</a> · <a href="${privacyUrl}" style="color:inherit">${t.privacy}</a></footer>`.value,
+      h`<footer style="padding:1.25rem;font:13px/1.5 system-ui,sans-serif;text-align:center;opacity:.75;background:inherit"><a href="${homeUrl}" style="color:inherit">${t.madeWith}</a> · <a href="${reportUrl}" style="color:inherit">${t.report}</a> · <a href="${privacyUrl}" style="color:inherit">${t.privacy}</a></footer>`.value,
     ).children[0]!;
     footer.parent = body;
     body.children.push(footer);

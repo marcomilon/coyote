@@ -3,7 +3,7 @@
 // Mi sitio, and the chat work with it as they do with the link shown at creation.
 import { api as apiCall, apiUrl } from './jobs';
 import { followDraft, qrCode } from './live-preview';
-import { forgetOwnerTokens } from './owner-token';
+import { readSession, saveSession, type Session } from './session';
 
 interface Site {
   slug: string;
@@ -27,12 +27,6 @@ interface Strings {
   created: string;
   qr: { title: string; updated: string };
 }
-interface Session {
-  token: string;
-  expiresAt: number;
-}
-
-const SESSION_KEY = 'coyote:session';
 const root = document.getElementById('mysites') as HTMLElement;
 const strings = JSON.parse(root.dataset.strings ?? '{}') as Strings;
 const $ = <T extends Element>(selector: string) => root.querySelector(selector) as T;
@@ -44,25 +38,6 @@ function showNote(note: Note) {
   $('[data-message-title]').textContent = note.title;
   $('[data-message-text]').textContent = note.text;
   show('message');
-}
-
-function readSession(): Session | undefined {
-  try {
-    const session = JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null') as Session | null;
-    return session && session.expiresAt > Date.now() ? session : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function saveSession(session: Session | undefined) {
-  if (!session) forgetOwnerTokens('sessions'); // the sites opened with it, kept by owner-token.ts
-  try {
-    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    else localStorage.removeItem(SESSION_KEY);
-  } catch {
-    // Storage blocked: the session lasts as long as this page.
-  }
 }
 
 const json = (body: unknown) => ({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });

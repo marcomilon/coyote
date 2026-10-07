@@ -38,7 +38,7 @@ const es = {
     },
     q3: { label: '¿Cómo te contactan?', whatsapp: 'WhatsApp', country: 'País', countryPick: 'Elige tu país', email: 'Correo del negocio (opcional)', emailPlaceholder: 'contacto@tunegocio.com', address: 'Dirección (opcional)', instagram: 'Instagram (opcional)', instagramPlaceholder: '@tunegocio', facebook: 'Facebook (opcional)', facebookPlaceholder: 'facebook.com/tunegocio' },
     photos: { label: 'Logo y fotos (opcional)', hint: 'Tu logo y hasta 3 fotos de tu negocio. Si no tienes, el sitio queda bien igual.', logo: 'Logo', pics: 'Fotos (máximo 3)', uploading: 'Subiendo tus fotos…', tooMany: 'Puedes subir máximo 3 fotos: usaremos las 3 primeras.', notImage: 'Ese archivo no es una imagen. Elige una foto (JPG o PNG).', failed: 'No pudimos subir las fotos. Inténtalo de nuevo o continúa sin ellas.' },
-    email: { label: 'Tu correo', hint: 'Lo usaremos para avisarte cuando tu sitio esté listo y para que puedas acceder a tus sitios. Este email no será publicado.', placeholder: 'tu@correo.com' },
+    email: { label: 'Tu correo', hint: 'Lo usaremos para avisarte cuando tu sitio esté listo y para que puedas acceder a tus sitios. Este email no será publicado.', placeholder: 'tu@correo.com', signedIn: 'Es el correo con el que entraste a «Mis sitios».' },
     terms: 'Al crear el sitio aceptas los términos de uso y la política de privacidad.',
     submit: 'Crear mi sitio',
     errors: {
@@ -190,7 +190,7 @@ const pt: typeof es = {
     },
     q3: { label: 'Como te encontram?', whatsapp: 'WhatsApp', country: 'País', countryPick: 'Escolha seu país', email: 'E-mail do negócio (opcional)', emailPlaceholder: 'contato@seunegocio.com', address: 'Endereço (opcional)', instagram: 'Instagram (opcional)', instagramPlaceholder: '@seunegocio', facebook: 'Facebook (opcional)', facebookPlaceholder: 'facebook.com/seunegocio' },
     photos: { label: 'Logo e fotos (opcional)', hint: 'Seu logo e até 3 fotos do negócio. Se não tiver, o site fica bom do mesmo jeito.', logo: 'Logo', pics: 'Fotos (máximo 3)', uploading: 'Enviando suas fotos…', tooMany: 'Você pode enviar no máximo 3 fotos: vamos usar as 3 primeiras.', notImage: 'Esse arquivo não é uma imagem. Escolha uma foto (JPG ou PNG).', failed: 'Não foi possível enviar as fotos. Tente de novo ou continue sem elas.' },
-    email: { label: 'Seu e-mail', hint: 'Vamos usá-lo para avisar quando o seu site estiver pronto e para que você possa acessar os seus sites. Este e-mail não será publicado.', placeholder: 'voce@email.com' },
+    email: { label: 'Seu e-mail', hint: 'Vamos usá-lo para avisar quando o seu site estiver pronto e para que você possa acessar os seus sites. Este e-mail não será publicado.', placeholder: 'voce@email.com', signedIn: 'É o e-mail com que você entrou no «Meus sites».' },
     terms: 'Ao criar o site você aceita os termos de uso e a política de privacidade.',
     submit: 'Criar meu site',
     errors: {

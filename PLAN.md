@@ -18,7 +18,7 @@ A public web form asks 3 questions. Opus writes the page (a model first asks the
 
 ## Domains
 Two domains:
-- `<domain>` — the brand. Hosts the generator UI (`www.<domain>`; the bare domain redirects there), the API (`api.<domain>`), and email (`notify.<domain>`). Needs a Route 53 hosted zone.
+- `<domain>` — the brand. Hosts the generator UI (`www.<domain>`; the bare domain redirects there), the API (`api.<domain>`), and email (`no-reply@<domain>`). Needs a Route 53 hosted zone.
 - `<sites-domain>` — a separate registrable domain, only for user sites (`{slug}.<sites-domain>`). Safe Browsing and mail reputation are tracked per registrable domain, so a phishing page must not be able to flag the app, API, or email. Buy it with Route 53 Domains and submit it to the Public Suffix List once live.
 
 Domains arrive in stages. The `cdk.json` context (`domainName`, `sitesDomainName`) selects the mode:
@@ -203,7 +203,7 @@ Every site made with one email is listed at `/mis-sitios` (`/pt/meus-sites`), fr
 - A site is reached with `<slug>.@<id>.<secret>`: the shape of a magic link, so Mi sitio, the chat, the QR, and the live preview take it unchanged; `authenticate` checks the session and that the site is in its account.
 - The page lists the sites; one selected shows its preview (following the chat's changes), the QR to the chat, and Mi sitio.
 - Deleting a site unlinks it; the account goes with its last site. Sites made before this are not linked.
-- Email: SES `SendEmail`, plain text, fixed subjects, business names the only owner text. From: domainless, the CDK context `senderEmail` (an address verified in SES; unset = no email, sign-in answers 503); domain mode, `no-reply@notify.<domain>` with DKIM (`urls.ts` `mailFrom`). While SES is in the sandbox, recipients must be verified too, so `ses:SendEmail` covers the account's identities. Test runs send to `success@simulator.amazonses.com`.
+- Email: SES `SendEmail`, branded HTML with a plain-text version, fixed subjects, business names the only owner text. From: domainless, the CDK context `senderEmail` (an address verified in SES; unset = no email, sign-in answers 503); domain mode, `no-reply@<domain>` with DKIM (`urls.ts` `mailFrom`). While SES is in the sandbox, recipients must be verified too, so `ses:SendEmail` covers the account's identities. Test runs send to `success@simulator.amazonses.com`.
 
 ## Chat edits (QR)
 The owner looks at the draft on a computer and asks for changes from their phone.
@@ -251,7 +251,7 @@ The owner looks at the draft on a computer and asks for changes from their phone
 - `BucketDeployment` of `web/dist/` (the Astro build) plus the generated `config.js` → `appBucket`.
 - DynamoDB, MVP: `jobs` (pk `jobId`, TTL 90 d; answers, safety outcomes, usage), `sites` (pk `slug`; status, currentDraftId, drafts, ownerWhatsApp, tokenHash, createdAt), `ratelimit` (pk `ip`, TTL), `blocklist` (pk `slug`), `chat` (pk `slug`, sk `at`, TTL 90 d), `accounts` (pk `pk`, sk `sk`, TTL; "Mis sitios"). Post-MVP: `messages`, `suppression`, `wa_*` (`PLAN-PHASE2.md`), `domains`, GSI on `sites.ownerPhone`.
 - `CfnGuardrail` + `CfnGuardrailVersion` (Standard tier; filters, denied topics, word filters as above). ID/version passed to Lambdas via env.
-- Lambdas: `NodejsFunction`, Node 22, esbuild. MVP: `submit` (sync, 15 s), `generate` (async, 5 min, 1 GB, on-failure destination → `job-failed` handler), `status`, `uploads`, `owner` (`/me`), `chat` (async, 2 min, started by `owner`), `account` (`/account/*`), `report`. SES email identity (`senderEmail` in domainless mode, `notify.<domain>` with DKIM in domain mode). `submit` also serves `POST /jobs/{id}/answers`. Post-MVP: `contact`, `ses-events`, `digest`, `domains`, `wa-*`.
+- Lambdas: `NodejsFunction`, Node 22, esbuild. MVP: `submit` (sync, 15 s), `generate` (async, 5 min, 1 GB, on-failure destination → `job-failed` handler), `status`, `uploads`, `owner` (`/me`), `chat` (async, 2 min, started by `owner`), `account` (`/account/*`), `report`. SES email identity (`senderEmail` in domainless mode, `<domain>` with DKIM in domain mode, sender `no-reply@<domain>`). `submit` also serves `POST /jobs/{id}/answers`. Post-MVP: `contact`, `ses-events`, `digest`, `domains`, `wa-*`.
 - HTTP API on `api.<domain>`: `POST /generate`, `GET /jobs/{id}`, `POST /jobs/{id}/publish`, `POST /uploads`, `/me/*`, `POST /report/{slug}`. CORS locked to `https://www.<domain>`. Throttling.
 - SNS topic `abuse-reports` with email subscription.
 - IAM: `bedrock:InvokeModel` scoped to the model/profile ARN with the `bedrock:GuardrailIdentifier` condition, plus the image model without it; `bedrock:ApplyGuardrail` on the guardrail; `s3:PutObject`/`DeleteObject` on the sites bucket; DynamoDB RW on the MVP tables; `rekognition:DetectModerationLabels`.
@@ -390,7 +390,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 **MVP line.** Product phase 2 (`PLAN-PHASE2.md`) runs here: WhatsApp creation, contact form, leads on WhatsApp.
 
 ### Phase 7 — Email fallback (SES)
-- [ ] SES identity + DKIM on `notify.<domain>` (in the stack since Phase 5e) + MAIL FROM + DMARC
+- [ ] SES identity + DKIM on `<domain>` (sender `no-reply@<domain>`; in the stack since Phase 5e) + MAIL FROM + DMARC
 - [ ] 👤 Sandbox exit request approved
 - [ ] Owner email add/verify in "Mi sitio"
 - [ ] Email branch in the `contact` Lambda (built in product phase 2)
@@ -424,7 +424,7 @@ Built in product phase 2 (Flow C). WhatsApp delivery first; SES email (phase 7) 
 
 ### Email delivery via SES (phase 7)
 - Owner email is added and verified in "Mi sitio" (one-click link). Unverified → no sends.
-- `SendEmail` structured API, plain text. From `no-reply@notify.<domain>` (SES `EmailIdentity`, DKIM records in Route 53 via CDK), To owner, Reply-To visitor. Body includes a prefilled `wa.me/<visitor>?text=...` link when the visitor left a phone.
+- `SendEmail` structured API, plain text. From `no-reply@<domain>` (SES `EmailIdentity`, DKIM records in Route 53 via CDK), To owner, Reply-To visitor. Body includes a prefilled `wa.me/<visitor>?text=...` link when the visitor left a phone.
 - Cost ≈ $0.10 per 1,000 messages. Exit the SES sandbox with a one-time support request.
 - `contact` Lambda gets `ses:SendEmail` scoped to the identity. CloudWatch alarm on SES bounce/complaint rate.
 
@@ -433,7 +433,7 @@ AWS reviews accounts at 5% bounces / 0.1% complaints and pauses them at 10% / 0.
 - **Verified recipients only**: double opt-in. The verification email is the only unverified send. If it bounces → address marked `invalid`.
 - **Event handling**: SES `ConfigurationSet` → SNS → `ses-events` Lambda. Hard bounce → `sites.ownerEmailStatus = bounced`, sending stops until re-verified. Complaint → address added to `suppression` permanently. The SES account-level suppression list stays on as a backstop.
 - **Easy opt-out**: every email has `List-Unsubscribe` + `List-Unsubscribe-Post` headers and a signed one-click "Pausar notificaciones" link (`GET /notifications/{slug}/pause?token=`), so owners pause instead of marking spam.
-- **Isolated identity**: `notify.<domain>` with DKIM, custom MAIL FROM `mail.notify.<domain>` (SPF-aligned), DMARC `p=quarantine`. User sites are on a different registrable domain, so their reputation never affects mail.
+- **Identity**: `<domain>` with DKIM (sender `no-reply@<domain>`), custom MAIL FROM `mail.<domain>` (SPF-aligned), DMARC `p=quarantine`. A separate sending subdomain would isolate this mail's reputation from the brand domain; for now the sender is the brand domain itself. User sites are on a different registrable domain, so their reputation never affects mail.
 - **Content hygiene**: fixed subject (`Nuevo mensaje desde tu sitio: {businessName}`), fixed template, visitor text quoted as plain text, URLs de-linked (`hxxp://`), no attachments, length caps. Visitor content never goes in the subject or From.
 - **Flood → digest**: more than 5 messages/hour for one slug switches to an hourly digest (EventBridge scheduled Lambda drains `messages` with `pendingDigest=true`). The 30/day per-slug cap still applies.
 - **Kill switch**: CloudWatch alarms on `Reputation.BounceRate` > 3% and `Reputation.ComplaintRate` > 0.05% (5-min period) → a Lambda sets SSM `/coyote/email/paused=true`. The `contact` Lambda checks the flag (cached 60 s) and stores messages without sending. SNS email to the admin.

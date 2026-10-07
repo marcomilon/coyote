@@ -57,7 +57,7 @@ export function createUrls(config: UrlConfig): Urls {
       draftOrigin,
       siteUrl: (slug) => `${siteOrigin(slug)}/`,
       draftUrl: (draftId) => `${draftOrigin}/${draftId}/`,
-      mailFrom: `no-reply@notify.${config.domainName}`,
+      mailFrom: `no-reply@${config.domainName}`,
     });
   }
 

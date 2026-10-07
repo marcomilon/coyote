@@ -50,7 +50,7 @@ export interface CoyoteStackProps extends StackProps {
   sitesHostedZoneName?: string;
   /**
    * Domainless mode: the address our emails come from, verified in SES (👤 click the verification email). Unset =
-   * no email ("Mis sitios" sign-in answers 503). Domain mode sends from no-reply@notify.<domainName> instead.
+   * no email ("Mis sitios" sign-in answers 503). Domain mode sends from no-reply@<domainName> instead.
    */
   senderEmail?: string;
 }
@@ -335,7 +335,9 @@ export class CoyoteStack extends Stack {
     if (domain) {
       const mailDomain = domain.urls.mailFrom!.split('@')[1]!;
       mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', { identity: ses.Identity.domain(mailDomain) });
-      mailIdentity.dkimRecords.forEach((record, i) => new route53.CnameRecord(this, `MailDkim${i}`, { zone: domain.zone, recordName: record.name, domainName: record.value }));
+      // SES gives full names; they are tokens at synth, so CDK can't see they already end in the zone and would
+      // append it again. The trailing dot marks them as fully qualified.
+      mailIdentity.dkimRecords.forEach((record, i) => new route53.CnameRecord(this, `MailDkim${i}`, { zone: domain.zone, recordName: `${record.name}.`, domainName: record.value }));
     } else if (props.senderEmail) {
       mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', { identity: ses.Identity.email(props.senderEmail) });
     }

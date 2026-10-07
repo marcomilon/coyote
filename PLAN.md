@@ -268,8 +268,9 @@ The owner looks at the draft on a computer and asks for changes from their phone
 
 ## Drafts (nothing is published yet)
 - Every version is a draft at `_draft/<draftId>/` (random 128-bit ID), served by the sites distribution with `X-Robots-Tag: noindex` and the sites CSP (inline scripts and the listed CDNs, no network access); `frame-ancestors` lets the app show it. `/{slug}/` is not served until the publishing plan.
+- Drafts show only inside the app's pages, so a draft link is useless for phishing. The sites rewrite returns 404 when `Sec-Fetch-Dest` is `document` (the link opened in a tab) or missing (old browsers); `frame-ancestors` stops other sites from framing it. "Abrir en otra pestaña" opens `/ver#token=…` (`/pt/ver`): the draft full screen under a "Borrador privado" bar that is always shown.
 - Drafts do not expire; old versions beyond the last 5 are deleted.
-- Each site also has a **preview**, `_draft/<previewId>/`: a stable URL that follows `currentDraftId` (a copy made whenever the pointer moves: new draft, undo, `refill-all`), served with `no-cache` so a reload always shows the current version. "Abrir en otra pestaña" and "Mis sitios" link to it; the versioned drafts stay for undo.
+- Each site also has a **preview**, `_draft/<previewId>/`: a stable URL that follows `currentDraftId` (a copy made whenever the pointer moves: new draft, undo, `refill-all`), served with `no-cache` so a reload always shows the current version. The `/ver` page shows it; the versioned drafts stay for undo.
 - 👤 Later plan: publishing, admin review, and the go-live email.
 
 ## Privacy and legal

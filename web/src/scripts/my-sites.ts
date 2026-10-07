@@ -17,6 +17,7 @@ interface Strings {
   lang: 'es' | 'pt';
   chatPath: string;
   mySitePath: string;
+  previewPath: string;
   sent: Note;
   badLink: Note;
   unavailable: string;
@@ -71,7 +72,7 @@ function select(site: Site, session: Session, button: HTMLButtonElement) {
   const hash = `#token=${encodeURIComponent(`${site.slug}.${session.token}`)}`;
   const chatLink = `${location.origin}${strings.chatPath}${hash}`;
   $('[data-detail-name]').textContent = site.businessName;
-  $<HTMLAnchorElement>('[data-open]').href = site.previewUrl;
+  $<HTMLAnchorElement>('[data-open]').href = `${strings.previewPath}${hash}`;
   $<HTMLAnchorElement>('[data-mysite]').href = `${strings.mySitePath}${hash}`;
   $<HTMLAnchorElement>('[data-chat-open]').href = chatLink;
   $('[data-qr]').replaceChildren(qrCode(chatLink, strings.qr.title));

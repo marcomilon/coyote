@@ -4,7 +4,7 @@ export type Lang = 'es' | 'pt';
 const es = {
   htmlLang: 'es-419',
   otherLang: { code: 'pt' as Lang, label: 'Português' },
-  paths: { home: '/', create: '/crear', mySite: '/mi-sitio', mySites: '/mis-sitios', chat: '/chat', terms: '/terminos', privacy: '/privacidad' },
+  paths: { home: '/', create: '/crear', mySite: '/mi-sitio', mySites: '/mis-sitios', chat: '/chat', preview: '/ver', terms: '/terminos', privacy: '/privacidad' },
   brandTagline: 'Sitios web para negocios de barrio',
   nav: { create: 'Crear mi sitio', mySites: 'Mis sitios' },
   home: {
@@ -107,6 +107,14 @@ const es = {
     qr: { title: 'Pide cambios desde tu celular', text: 'Escanea este código con la cámara de tu celular y escribe qué quieres cambiar. Lo verás aquí en segundos.', open: 'Abrir el chat aquí', updated: 'Tu sitio se actualizó.' },
     another: 'Pedir otro enlace',
   },
+  preview: {
+    title: 'Vista previa — Coyote',
+    description: 'Tu sitio en pantalla completa.',
+    badge: 'Borrador privado',
+    note: 'Solo tú lo ves, con tu enlace. Todavía no está publicado.',
+    back: 'Volver a Mi sitio',
+    frame: 'Tu sitio',
+  },
   chat: {
     title: 'Chat — Coyote',
     description: 'Pide cambios a tu sitio desde tu celular.',
@@ -163,7 +171,7 @@ const es = {
 const pt: typeof es = {
   htmlLang: 'pt-BR',
   otherLang: { code: 'es', label: 'Español' },
-  paths: { home: '/pt/', create: '/pt/criar', mySite: '/pt/meu-site', mySites: '/pt/meus-sites', chat: '/pt/chat', terms: '/pt/termos', privacy: '/pt/privacidade' },
+  paths: { home: '/pt/', create: '/pt/criar', mySite: '/pt/meu-site', mySites: '/pt/meus-sites', chat: '/pt/chat', preview: '/pt/ver', terms: '/pt/termos', privacy: '/pt/privacidade' },
   brandTagline: 'Sites para negócios de bairro',
   nav: { create: 'Criar meu site', mySites: 'Meus sites' },
   home: {
@@ -265,6 +273,14 @@ const pt: typeof es = {
     mySite: 'Meu site',
     qr: { title: 'Peça mudanças pelo celular', text: 'Aponte a câmera do celular para este código e escreva o que quer mudar. Você vê aqui em segundos.', open: 'Abrir o chat aqui', updated: 'Seu site foi atualizado.' },
     another: 'Pedir outro link',
+  },
+  preview: {
+    title: 'Pré-visualização — Coyote',
+    description: 'O seu site em tela cheia.',
+    badge: 'Rascunho privado',
+    note: 'Só você vê, com o seu link. Ainda não está publicado.',
+    back: 'Voltar para Meu site',
+    frame: 'O seu site',
   },
   chat: {
     title: 'Chat — Coyote',

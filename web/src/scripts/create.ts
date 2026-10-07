@@ -16,6 +16,7 @@ interface Strings {
   submit: string;
   mySitePath: string;
   chatPath: string;
+  previewPath: string;
   qr: { title: string; updated: string };
   copied: string;
   question: QuestionStrings & { invalid: string };
@@ -112,8 +113,8 @@ function showDone(jobId: string, job: JobView) {
   // The link points at this app's own Mi sitio page (localhost in development).
   const link = `${location.origin}${strings.mySitePath}${new URL(magic.miSitioUrl).hash}`;
   $<HTMLIFrameElement>('[data-view="done"] iframe').src = job.draftUrl;
-  // The stable URL: a tab opened with it shows every later change on reload.
-  $<HTMLAnchorElement>('[data-draft-link]').href = job.previewUrl ?? job.draftUrl;
+  // Drafts open only inside the app: the full-screen page shows every later change on reload.
+  $<HTMLAnchorElement>('[data-draft-link]').href = `${strings.previewPath}${new URL(magic.miSitioUrl).hash}`;
   const box = $<HTMLAnchorElement>('[data-magic-link]');
   box.href = link;
   box.textContent = link.replace(/^https?:\/\//, '').replace(/#token=.{12}.*$/, '#token=…');

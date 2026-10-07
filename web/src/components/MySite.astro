@@ -10,7 +10,7 @@ const s = t(lang);
 const m = s.mySite;
 const f = m.fields;
 const other = t(s.otherLang.code);
-const clientStrings = { ...m, question: s.questions };
+const clientStrings = { ...m, question: s.questions, previewPath: s.paths.preview };
 ---
 
 <Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig>

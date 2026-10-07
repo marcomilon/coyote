@@ -33,6 +33,7 @@ interface Strings {
   empty: string;
   deleteConfirm: string;
   question: QuestionStrings & { invalid: string };
+  previewPath: string;
 }
 
 const root = document.getElementById('mysite') as HTMLElement;
@@ -69,7 +70,7 @@ function fill(view: View) {
   $('[data-business]').textContent = view.businessName ?? strings.heading;
   const frame = $<HTMLIFrameElement>('.device iframe');
   if (frame.src !== view.draftUrl) frame.src = view.draftUrl;
-  $<HTMLAnchorElement>('[data-draft-link]').href = view.previewUrl ?? view.draftUrl;
+  $<HTMLAnchorElement>('[data-draft-link]').href = `${strings.previewPath}${location.hash}`;
   $<HTMLButtonElement>('[data-undo]').disabled = !view.canUndo;
   for (const field of CONTACT_FIELDS) {
     const input = contactForm.elements.namedItem(field) as HTMLInputElement;

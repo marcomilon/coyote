@@ -42,6 +42,7 @@ interface Strings {
   noToken: Note;
   badToken: Note;
   question: QuestionStrings & { invalid: string };
+  previewPath: string;
 }
 
 const root = document.getElementById('chat') as HTMLElement;
@@ -127,8 +128,8 @@ function render(follow = false) {
 function merge(view: Pick<View, 'messages' | 'canUndo' | 'draftUrl' | 'previewUrl'>, follow = false) {
   for (const m of view.messages) messages.set(m.at, m);
   canUndo = view.canUndo;
-  const link = view.previewUrl ?? view.draftUrl;
-  if (link) $<HTMLAnchorElement>('[data-draft-link]').href = link;
+  // Drafts open only inside the app (cf-rewrite.js), so "Ver sitio" goes to the full-screen page.
+  if (view.previewUrl ?? view.draftUrl) $<HTMLAnchorElement>('[data-draft-link]').href = `${strings.previewPath}${location.hash}`;
   render(follow);
 }
 

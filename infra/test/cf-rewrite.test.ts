@@ -7,7 +7,8 @@ function load(file: string, replacements: Record<string, string> = {}) {
   let source = readFileSync(new URL(`../lib/${file}`, import.meta.url), 'utf8');
   for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
   const handler = new Function(`${source}; return handler;`)() as (event: unknown) => Result;
-  return (uri: string, host = 'd111.cloudfront.test') => handler({ request: { uri, headers: { host: { value: host } } } });
+  return (uri: string, host = 'd111.cloudfront.test', dest: string | null = 'iframe') =>
+    handler({ request: { uri, headers: { host: { value: host }, ...(dest ? { 'sec-fetch-dest': { value: dest } } : {}) } } });
 }
 
 const DRAFT = '0123456789abcdef0123456789abcdef';
@@ -30,6 +31,13 @@ describe('sites rewrite, domainless mode', () => {
     }
   });
 
+  it('serves drafts only inside a frame, not opened from a shared link', () => {
+    expect(run(`/_draft/${DRAFT}/`, undefined, 'document').statusCode).toBe(404);
+    expect(run(`/_draft/${DRAFT}`, undefined, 'document').statusCode).toBe(404);
+    expect(run(`/_draft/${DRAFT}/`, undefined, null).statusCode).toBe(404);
+    expect(run(`/_draft/${DRAFT}/assets/hero.jpg`, undefined, 'image').uri).toBe(`/_draft/${DRAFT}/assets/hero.jpg`);
+  });
+
   it('sends the root to the app', () => {
     expect(run('/')).toMatchObject({ statusCode: 302, headers: { location: { value: 'https://app.test' } } });
   });
@@ -44,6 +52,8 @@ describe('sites rewrite, domain mode', () => {
     expect(run(`/${DRAFT}`, 'draft.sites.test')).toMatchObject({ statusCode: 301, headers: { location: { value: `/${DRAFT}/` } } });
     expect(run('/', 'draft.sites.test').statusCode).toBe(404);
     expect(run('/_src/luna/x.html', 'draft.sites.test').statusCode).toBe(404);
+    expect(run(`/${DRAFT}/`, 'draft.sites.test', 'document').statusCode).toBe(404);
+    expect(run(`/${DRAFT}/`, 'draft.sites.test', null).statusCode).toBe(404);
   });
 
   it('sends the apex and www to the app', () => {

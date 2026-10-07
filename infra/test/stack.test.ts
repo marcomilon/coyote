@@ -204,8 +204,12 @@ describe('CoyoteStack, domain mode', () => {
     template.resourceCountIs('AWS::Route53::RecordSet', 13); // 10 aliases (A + AAAA for www, the bare domain, sites, *.sites, api) + 3 DKIM records
   });
 
-  it('sends email from notify.<domain> with DKIM', () => {
-    template.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'notify.brand.test' });
+  it('sends email from no-reply@<domain> with DKIM', () => {
+    template.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'brand.test' });
+    // The DKIM names SES gives are full names: the zone must not be appended to them again.
+    const dkim = Object.values(template.findResources('AWS::Route53::RecordSet', { Properties: { Type: 'CNAME' } }));
+    expect(dkim).toHaveLength(3);
+    for (const record of dkim) expect(JSON.stringify(record.Properties.Name)).not.toContain('brand.test');
   });
 
   it('uses exact origins in the CSPs and the rewrite function', () => {

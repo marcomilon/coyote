@@ -5,6 +5,7 @@ import { normalizeAnswers } from '../../../services/generator/src/core/answers';
 import { api, apiUrl, sendAnswers, waitForJob, type JobView } from './jobs';
 import { fullNumber, setUpCountryPicker } from './phone';
 import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
+import { readSession } from './session';
 import { uploadImages } from './upload';
 
 type State = 'form' | 'working' | 'questions' | 'message';
@@ -318,5 +319,21 @@ function validEmail(email: string) {
 
 strings.errors.noApi = strings.noApi;
 strings.errors.photos = strings.uploadFailed;
+/** Signed in to "Mis sitios" in this browser: the email field starts with that account's email. */
+async function emailFromSession() {
+  const session = readSession();
+  const field = form.elements.namedItem('ownerEmail') as HTMLInputElement;
+  if (!session || !apiUrl || field.value) return;
+  try {
+    const { status, body } = await api<{ email?: string }>('/account', { headers: { authorization: `Bearer ${session.token}` } });
+    if (status !== 200 || !body.email || field.value) return;
+    field.value = body.email;
+    $<HTMLElement>('[data-signed-in]').hidden = false;
+  } catch {
+    // Offline or a stale session: the field stays empty.
+  }
+}
+void emailFromSession();
+
 const resumed = /^#job=([0-9a-f-]{36})$/.exec(location.hash)?.[1];
 if (resumed && apiUrl) void follow(resumed);

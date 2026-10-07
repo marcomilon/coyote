@@ -104,6 +104,7 @@ const clientStrings = {
           <label class="q" for="ownerEmail"><i>4</i>{c.email.label}</label>
           <p class="hint" id="ownerEmail-hint">{c.email.hint}</p>
           <input type="email" id="ownerEmail" name="ownerEmail" maxlength="120" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" aria-describedby="ownerEmail-hint" placeholder={c.email.placeholder} required />
+          <p class="hint" data-signed-in hidden>{c.email.signedIn}</p>
           <p class="error" data-error="ownerEmail" role="alert"></p>
         </fieldset>
 

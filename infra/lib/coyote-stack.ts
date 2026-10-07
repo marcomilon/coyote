@@ -256,8 +256,15 @@ export class CoyoteStack extends Stack {
             },
             ...commonSecurityHeaders,
           },
-          // Nothing is published yet: every page served here is a private draft.
-          customHeadersBehavior: { customHeaders: [{ header: 'X-Robots-Tag', value: 'noindex, nofollow', override: true }] },
+          // Nothing is published yet: every page served here is a private draft. Vary: a draft loaded in the app's
+          // frame must not be reused by the browser cache when the same URL is opened in a tab (cf-rewrite.js
+          // refuses top-level loads, but only for requests that reach CloudFront).
+          customHeadersBehavior: {
+            customHeaders: [
+              { header: 'X-Robots-Tag', value: 'noindex, nofollow', override: true },
+              { header: 'Vary', value: 'Sec-Fetch-Dest', override: true },
+            ],
+          },
         }),
       },
     });

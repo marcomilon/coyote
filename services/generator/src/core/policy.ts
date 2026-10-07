@@ -1,7 +1,4 @@
-import { parseDocument } from 'htmlparser2';
-import type { ChildNode, Element } from 'domhandler';
 import { findBrand, normalizeForMatch } from './brands';
-import type { ModelContent, SiteContent } from './content';
 
 export interface Violation {
   code:
@@ -25,7 +22,7 @@ export class PolicyRejection extends Error {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Content JSON
+// Text checks (page-check.ts runs them on the finished page; the questions and the chat on their text)
 // ---------------------------------------------------------------------------------------------
 
 const URL_LIKE = /\b(?:https?:\/\/|www\.)\S+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|info|xyz|top|click|link|site|online|app|io|co|mx|br|ar|cl|pe|ec|uy|py|bo|ve)(?:\.[a-z]{2})?(?:\/\S*)?/gi;
@@ -72,30 +69,6 @@ export function scrubText(text: string): string {
     .replace(/\s{2,}/g, ' ').replace(/\s+([.,;:])/g, '$1').trim();
 }
 
-/** Removes URLs from every text field the model wrote. Run before validation. */
-export function scrubModelContent(content: ModelContent): ModelContent {
-  return {
-    ...content,
-    title: scrubText(content.title),
-    description: scrubText(content.description),
-    headline: scrubText(content.headline),
-    subhead: scrubText(content.subhead),
-    about: scrubText(content.about),
-    ctaText: scrubText(content.ctaText),
-    services: content.services.map((s) => ({ name: scrubText(s.name), detail: s.detail && scrubText(s.detail) })),
-  };
-}
-
-export function checkContent(content: SiteContent): Violation[] {
-  const texts = [
-    content.businessName, content.title, content.description, content.headline, content.subhead, content.about,
-    content.ctaText, content.contact.address ?? '',
-    ...content.services.flatMap((s) => [s.name, s.detail ?? '']),
-    ...(content.hours ?? []).flatMap((h) => [h.days, h.time]),
-  ];
-  return checkTexts(texts, { businessName: content.businessName, headlines: [content.title, content.headline] });
-}
-
 const EMAIL_LIKE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
 
 /**
@@ -116,7 +89,7 @@ export function contactInText(text: string): string[] {
  * impersonation (the business name, the title, the h1); every text is checked for scam phrases,
  * credential requests, and card numbers.
  */
-export function checkTexts(texts: string[], named: { businessName?: string; headlines?: string[] } = {}): Violation[] {
+export function checkTexts(texts: string[], named: { businessName?: string; headlines?: string[] } = {}, ownerNumbers: string[] = []): Violation[] {
   const violations: Violation[] = [];
 
   if (named.businessName) {
@@ -141,152 +114,11 @@ export function checkTexts(texts: string[], named: { businessName?: string; head
 
     for (const run of text.match(DIGIT_RUN) ?? []) {
       const digits = run.replace(/\D/g, '');
+      // The owner's own phone numbers can pass the card checksum by chance (a 13-digit Argentine mobile).
+      if (ownerNumbers.some((n) => n.endsWith(digits) || digits.endsWith(n))) continue;
       if (digits.length >= 13 && luhn(digits)) violations.push({ code: 'card-number', detail: `${digits.length} digits` });
     }
   }
 
-  return violations;
-}
-
-// ---------------------------------------------------------------------------------------------
-// Rendered HTML (renderer invariants; catches theme bugs)
-// ---------------------------------------------------------------------------------------------
-
-export interface HtmlPolicyOptions {
-  /** Origins the platform itself links to: the app (report, privacy) and the site's own origin. */
-  platformOrigins: string[];
-  /** Exact `action` of the theme contact form. Unset (MVP) = no form allowed at all. */
-  contactFormAction?: string;
-  /** The owner's WhatsApp number: every wa.me link must point to it. */
-  whatsapp?: string;
-  /** Inline scripts the page may carry, exactly (the themes' own scripts). Any other script is a violation. */
-  scripts?: string[];
-}
-
-/** The one iframe a page may carry: the renderer's keyless Google Maps embed (render.ts mapEmbedUrl). */
-export const MAP_EMBED = /^https:\/\/maps\.google\.com\/maps\?q=[^&"<>\s]+&z=16&output=embed$/;
-
-const FORBIDDEN_ELEMENTS = new Set(['iframe', 'frame', 'object', 'embed', 'applet', 'base', 'portal', 'noscript']);
-const FORM_FIELD_TYPES = new Set(['text', 'tel', 'email', 'hidden', 'submit']);
-const LINK_HOSTS = new Set([
-  'wa.me', 'api.whatsapp.com', 'instagram.com', 'www.instagram.com', 'facebook.com', 'www.facebook.com',
-  'maps.google.com',
-]);
-const RESOURCE_HOSTS = new Set(['fonts.googleapis.com', 'fonts.gstatic.com']);
-const LINK_RELS = new Set(['stylesheet', 'preconnect', 'canonical', 'icon', 'apple-touch-icon']);
-
-const isRelative = (url: string) => /^(?![a-z][a-z0-9+.-]*:|\/\/)/i.test(url) && !url.startsWith('/');
-
-function urlAllowed(url: string, kind: 'link' | 'resource', platformOrigins: string[]): boolean {
-  if (url.startsWith('#') || isRelative(url)) return true;
-  if (kind === 'resource' && url.startsWith('data:image/svg+xml,')) return true; // the generated favicon
-  if (kind === 'link' && /^(tel|mailto):/i.test(url)) return true;
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== 'https:' && !platformOrigins.includes(parsed.origin)) return false;
-  if (platformOrigins.includes(parsed.origin)) return true;
-  if (kind === 'resource') return RESOURCE_HOSTS.has(parsed.host);
-  if (parsed.host === 'goo.gl') return parsed.pathname.startsWith('/maps');
-  return LINK_HOSTS.has(parsed.host);
-}
-
-function cssViolations(css: string, where: string): Violation[] {
-  const violations: Violation[] = [];
-  if (/@import/i.test(css)) violations.push({ code: 'forbidden-css', detail: `${where}: @import` });
-  for (const match of css.matchAll(/url\(\s*(['"]?)([^'")]*)/gi)) {
-    const target = match[2] ?? '';
-    if (!/^data:image\//i.test(target) && !isRelative(target)) {
-      violations.push({ code: 'forbidden-css', detail: `${where}: url(${target.slice(0, 60)})` });
-    }
-  }
-  return violations;
-}
-
-export function checkHtml(page: string, options: HtmlPolicyOptions): Violation[] {
-  const violations: Violation[] = [];
-  const { platformOrigins, contactFormAction, whatsapp, scripts = [] } = options;
-  let maps = 0;
-
-  const visit = (node: ChildNode, insideContactForm: boolean): void => {
-    if (node.type === 'script' || node.type === 'style' || node.type === 'tag') {
-      const el = node as Element;
-      const tag = el.name.toLowerCase();
-      const attr = (name: string) => el.attribs[name];
-      let inForm = insideContactForm;
-
-      const isMap = tag === 'iframe' && 'data-coyote-map' in el.attribs && MAP_EMBED.test(attr('src') ?? '') && ++maps === 1;
-      if (FORBIDDEN_ELEMENTS.has(tag) && !isMap) violations.push({ code: 'forbidden-element', detail: `<${tag}>` });
-      if (tag === 'script') {
-        const code = el.children.map((child) => ('data' in child ? child.data : '')).join('');
-        if (attr('src') !== undefined || !scripts.includes(code)) violations.push({ code: 'forbidden-element', detail: '<script> that is not a theme script' });
-      }
-
-      for (const [name, value] of Object.entries(el.attribs)) {
-        if (/^on/i.test(name)) violations.push({ code: 'forbidden-attribute', detail: `${tag}[${name}]` });
-        if (name === 'style') violations.push(...cssViolations(value, `${tag}[style]`));
-        if (name === 'srcdoc' || name === 'formaction') violations.push({ code: 'forbidden-attribute', detail: `${tag}[${name}]` });
-      }
-
-      if (tag === 'meta' && attr('http-equiv')?.toLowerCase() === 'refresh') {
-        violations.push({ code: 'forbidden-element', detail: '<meta http-equiv="refresh">' });
-      }
-
-      if (tag === 'a' || tag === 'area') {
-        const href = attr('href');
-        if (href !== undefined && !urlAllowed(href.trim(), 'link', platformOrigins)) {
-          violations.push({ code: 'forbidden-url', detail: `a[href]: ${href.slice(0, 80)}` });
-        }
-        if (href !== undefined && whatsapp !== undefined && /^https:\/\/wa\.me\//i.test(href.trim()) && !new RegExp(`^https://wa\\.me/${whatsapp}(\\?|$)`).test(href.trim())) {
-          violations.push({ code: 'forbidden-url', detail: 'a[href]: wa.me link to another number' });
-        }
-      }
-
-      if (tag === 'link') {
-        const rels = (attr('rel') ?? '').toLowerCase().split(/\s+/);
-        if (!rels.every((rel) => LINK_RELS.has(rel))) violations.push({ code: 'forbidden-element', detail: `<link rel="${attr('rel')}">` });
-        if (!urlAllowed((attr('href') ?? '').trim(), 'resource', platformOrigins)) {
-          violations.push({ code: 'forbidden-url', detail: `link[href]: ${attr('href')?.slice(0, 80)}` });
-        }
-      }
-
-      for (const name of ['src', 'srcset', 'poster', 'data', 'background'] as const) {
-        const value = attr(name);
-        if (value === undefined || (isMap && name === 'src')) continue;
-        const targets = name === 'srcset' ? value.split(',').map((part) => part.trim().split(/\s+/)[0] ?? '') : [value.trim()];
-        if (!targets.every(isRelative)) violations.push({ code: 'forbidden-url', detail: `${tag}[${name}]: ${value.slice(0, 80)}` });
-      }
-
-      if (tag === 'form') {
-        const allowed =
-          contactFormAction !== undefined &&
-          'data-coyote-contact' in el.attribs &&
-          attr('action') === contactFormAction &&
-          attr('method')?.toLowerCase() === 'post';
-        if (allowed) inForm = true;
-        else violations.push({ code: 'forbidden-form', detail: `<form action="${attr('action') ?? ''}">` });
-      }
-
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button') {
-        const type = (attr('type') ?? (tag === 'input' ? 'text' : '')).toLowerCase();
-        const typeOk = tag !== 'input' || FORM_FIELD_TYPES.has(type);
-        if (!inForm || !typeOk || tag === 'select') {
-          violations.push({ code: 'forbidden-form', detail: `<${tag} type="${type}">` });
-        }
-      }
-
-      if (tag === 'style') {
-        const css = el.children.map((child) => ('data' in child ? child.data : '')).join('');
-        violations.push(...cssViolations(css, '<style>'));
-      }
-
-      el.children.forEach((child) => visit(child, inForm));
-    }
-  };
-
-  parseDocument(page).children.forEach((child) => visit(child, false));
   return violations;
 }

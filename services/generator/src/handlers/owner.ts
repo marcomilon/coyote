@@ -43,7 +43,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         emitMetrics({ Edited: 1 });
         return json(202, { jobId: result.jobId });
       }
-      if (result.status === 200) return json(200, await ownerView((await stores.getSite(site.slug))!, deps));
+      if (result.status === 200) return json(200, { ...(await ownerView((await stores.getSite(site.slug))!, deps)), missing: result.missing });
       return json(result.status, { error: ERRORS[result.status], ...(result.status === 400 ? { fields: result.fields } : {}) });
     }
     case 'POST /me/undo': {

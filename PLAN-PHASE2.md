@@ -5,7 +5,7 @@ Companion to `PLAN.md`. Phase 2 code starts after MVP phases 0–6 are live. Its
 ## Why
 Competing with Wix/Squarespace/Hostinger on generation quality is a losing axis. For LatAm small businesses the advantage is low friction: they run the business on WhatsApp, won't learn an editor, and don't have USD cards. Phase 2 makes WhatsApp the main interface: create the site by chat, edit by chat, receive leads as WhatsApp messages. The MVP web form stays as a second entry point.
 
-- **Reused unchanged from the MVP**: theme library, design brief, content generation with follow-up questions, renderer, `edit_content`, safety layers, slug/hosting, drafts and the magic link.
+- **Reused unchanged from the MVP**: the page writer with its follow-up questions, the chat for changes, safety layers, slug/hosting, drafts and the magic link.
 - **Added**: a conversational front end, the contact form (designed in `PLAN.md`, built here), and WhatsApp as the first lead-delivery channel. SES email follows as the fallback (`PLAN.md` phase 7).
 - **URLs**: as in `PLAN.md` (sites at `{slug}.<sites-domain>`, app at `app.<domain>`, API at `api.<domain>`). All URLs in messages come from `urls.ts`, so the flows also run in domainless mode during development. Sending site links to real users requires the final domains: a `cloudfront.net/{slug}/` link looks like spam and would change later.
 
@@ -60,7 +60,7 @@ Entry: the user taps a `wa.me/<number>?text=Hola` link (site, Instagram bio, QR 
 - The edited copy passes the pre-screen (on the message), the policy checks, and `ApplyGuardrail`, exactly as a web edit.
 
 ### C. Contact form + leads to WhatsApp
-Builds the contact form from `PLAN.md` ("Post-MVP: Contact form": theme slot, `contact` Lambda, spam controls, `messages` table) with WhatsApp delivery. Existing sites get the form on their next re-render once the owner opts in.
+Builds the contact form from `PLAN.md` ("Post-MVP: Contact form": a form block on the page, `contact` Lambda, spam controls, `messages` table) with WhatsApp delivery. Existing sites get the form on their next re-render once the owner opts in.
 
 Submission → if the owner opted in (`wa_optins`), send utility template `nuevo_mensaje`:
 > Nuevo mensaje desde tu sitio {{business}}: {{name}} — {{message_excerpt}}. Contacto: {{contact}}
@@ -125,7 +125,7 @@ Tick a box (`[x]`) only when the item is done and its check passed. 👤 = needs
 - [ ] Fixture conversations as tests (recorded SNS payloads)
 
 ### Step 4 — Flow C (contact form + leads)
-- [ ] Theme contact slot + `contact` Lambda + spam controls + `messages` table (`PLAN.md` "Post-MVP: Contact form")
+- [ ] Contact form block on the page + `contact` Lambda + spam controls + `messages` table (`PLAN.md` "Post-MVP: Contact form")
 - [ ] Opt-in at step 3 and from "Mi sitio" (`ACTIVAR {slug}`); `wa_optins`
 - [ ] `nuevo_mensaje` with variable sanitising; free-form inside the 24 h window
 - [ ] "Mi sitio" inbox (last 30 days); form rendered only with a delivery channel

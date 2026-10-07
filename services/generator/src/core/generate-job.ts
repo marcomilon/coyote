@@ -1,13 +1,13 @@
 import { issueLogin, linkSite } from './account';
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
-import type { Media, SiteContent } from './content';
-import { docMedia, loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
+import type { Media } from './content';
+import { loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
 import type { Job, Stores } from './jobs';
-import { checkPage, maskContact, replaceContact } from './page-check';
+import { checkPage } from './page-check';
 import { parsePage, pickLook, type PageEffort, type PagePhoto, type PageRequest, type WritePage } from './page-writer';
-import { checkContent, PolicyRejection, type Violation } from './policy';
+import { PolicyRejection, type Violation } from './policy';
 import { isRejected, prescreen } from './prescreen';
-import { editContent, planSite } from './site-writer';
+import { planSite } from './site-writer';
 import { readyEmail, type SendEmail } from './mail';
 import { issueToken, TOKEN_TTL_SECONDS } from './token';
 import { processUploads } from './uploads';
@@ -27,12 +27,14 @@ export interface GenerateJobDeps {
   moderate(key: string): Promise<string[]>;
   now(): number;
   newDraftId?: () => string;
-  /** The page writer: Opus with the frontend-design skill. */
+  /** The page writer: Opus (or Haiku, see `pageModel`) with the frontend-design skill. */
   writePage: WritePage;
   /** For the look nudge (tests pass a fixed one). */
   random?: () => number;
   /** Effort for new pages; edits run one level lower. */
   pageEffort?: PageEffort;
+  /** The page writer's model ID (page-writer.ts `pageModel`). Unset: the writer's default. */
+  pageModel?: string;
   /** The "your site is ready" email. Undefined when no sender is set up. */
   sendEmail?: SendEmail;
 }
@@ -73,12 +75,7 @@ type PageResult = { page: string } | { problem: 'failed' | 'policy' | 'guardrail
 async function writeCheckedPage(request: PageRequest, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
   const effort = deps.pageEffort ?? 'high';
   const { answers } = request;
-  const masked = maskContact(answers.contact);
-  const ask = (photos: PagePhoto[]) =>
-    deps.writePage(
-      { ...request, photos, answers: { ...answers, contact: masked }, current: request.current && replaceContact(request.current, answers.contact, masked) },
-      { effort: request.current !== undefined ? LOWER[effort] : effort },
-    );
+  const ask = (photos: PagePhoto[]) => deps.writePage({ ...request, photos }, { effort: request.current !== undefined ? LOWER[effort] : effort, model: deps.pageModel });
   let reply;
   try {
     reply = await ask(request.photos).catch((error: unknown) => {
@@ -90,9 +87,8 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
     return { problem: 'failed', detail: String(error).slice(0, 300) };
   }
   usage.push(reply.usage);
-  const parsed = parsePage(reply.text);
-  if (!parsed) return { problem: 'failed', detail: `no HTML page in the reply (stop: ${reply.stopReason})` };
-  const page = replaceContact(parsed, masked, answers.contact);
+  const page = parsePage(reply.text);
+  if (!page) return { problem: 'failed', detail: `no HTML page in the reply (stop: ${reply.stopReason})` };
   const checked = checkPage(page, { contact: answers.contact, ownerText: ownerText({ answers, notes: request.notes, requests }), businessName: answers.businessName, lang: answers.lang, ...deps.urls.pageLinks(slug, answers.lang) });
   if (checked.violations.length > 0) return { problem: 'policy', detail: JSON.stringify(checked.violations).slice(0, 300), violations: checked.violations };
   if (!(await deps.outputAllowed(checked.texts.join('\n')))) return { problem: 'guardrail', detail: 'page text' };
@@ -100,21 +96,10 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
   return { page };
 }
 
-/** Every text a visitor can read. */
-export function visibleText(content: SiteContent): string {
-  return [
-    content.businessName, content.title, content.description, content.headline, content.subhead, content.about,
-    content.ctaText,
-    ...content.services.flatMap((s) => [s.name, s.detail ?? '']),
-    ...(content.hours ?? []).flatMap((h) => [h.days, h.time]),
-  ].filter(Boolean).join('\n');
-}
-
 /**
  * Runs one PENDING job. Clarify stage: the model may ask the owner questions (→ NEEDS_INPUT); the answers
  * route puts the job back to PENDING at the write stage. Write stage: Opus writes the page (or, for an edit,
- * changes the current one) → page checks → output guardrail → new draft (→ DONE). Themed drafts from before
- * the page writer are edited with edit_content. REJECTED on a policy or guardrail stop, FAILED on our error
+ * changes the current one) → page checks → output guardrail → new draft (→ DONE). REJECTED on a policy or guardrail stop, FAILED on our error
  * (the page writer failing included). A new site that never got a draft gives its slug back; an edit never touches the slug.
  */
 export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Promise<GenerateOutcome> {
@@ -137,7 +122,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     if (kind === 'edit') {
       if (!site.currentDraftId || !job.instruction) throw new Error(`edit job ${jobId} has no draft or no request`);
       current = await loadDraft(slug, site.currentDraftId, stores);
-      media = docMedia(current);
+      media = current.media;
       if (stage === 'clarify') {
         const screening = await prescreen(job.answers, { callTool: deps.callTool, modelId: deps.prescreenModelId }, job.instruction);
         usage.push(screening.usage);
@@ -169,27 +154,17 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       await stores.updateJob(jobId, { stage: 'write' });
     }
 
-    let doc: SiteDoc;
-    if (current && current.page === undefined) {
-      // A themed draft (made before the page writer): the model changes the copy; the theme and brief stay.
-      const content = await editContent(current.content!, job.answers, notes, job.instruction!, deps, usage);
-      const violations = checkContent(content);
-      if (violations.length > 0) throw new PolicyRejection(violations);
-      if (!(await deps.outputAllowed(visibleText(content)))) throw new GuardrailBlocked();
-      doc = { ...current, content, notes };
-    } else {
-      // Opus writes the page (a new site), or changes the current one (an edit).
-      const photos = await pagePhotos(slug, media, stores);
-      const request = current ? { answers: job.answers, notes, photos, current: current.page, instruction: job.instruction } : { answers: job.answers, notes, photos, look: pickLook(deps.random) };
-      const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
-      const written = await writeCheckedPage(request, requests, slug, deps, usage);
-      if ('problem' in written) {
-        if (written.problem === 'policy') throw new PolicyRejection(written.violations!);
-        if (written.problem === 'guardrail') throw new GuardrailBlocked();
-        throw new Error(`page writer failed: ${written.detail}`);
-      }
-      doc = current ? { ...current, notes, page: written.page, requests } : { answers: job.answers, notes, media, page: written.page };
+    // Opus writes the page (a new site), or changes the current one (an edit).
+    const photos = await pagePhotos(slug, media, stores);
+    const request = current ? { answers: job.answers, notes, photos, current: current.page, instruction: job.instruction } : { answers: job.answers, notes, photos, look: pickLook(deps.random) };
+    const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
+    const written = await writeCheckedPage(request, requests, slug, deps, usage);
+    if ('problem' in written) {
+      if (written.problem === 'policy') throw new PolicyRejection(written.violations!);
+      if (written.problem === 'guardrail') throw new GuardrailBlocked();
+      throw new Error(`page writer failed: ${written.detail}`);
     }
+    const doc: SiteDoc = current ? { ...current, notes, page: written.page, requests } : { answers: job.answers, notes, media, page: written.page };
 
     const draftId = await saveDraft(site, doc, deps);
     site = (await stores.getSite(slug)) ?? site;

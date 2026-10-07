@@ -22,7 +22,7 @@ Design and progress live in [`PLAN.md`](PLAN.md) (MVP) and [`PLAN-PHASE2.md`](PL
 
 ## Layout
 - `infra/` — CDK app, one stack (`Coyote`)
-- `services/generator/` — Lambda code, themes, local scripts
+- `services/generator/` — Lambda code and local scripts
 - `web/` — our frontend (Astro from Phase 5): landing, form, "Mi sitio", legal pages
 
 ## Runbook
@@ -38,7 +38,8 @@ All commands use the AWS profile `coyote` (override with `COYOTE_AWS_PROFILE`).
 | Investigate an alarm | `./coyote.sh abuse-report`: requests per visitor (hashed IP), rejections with the layer that stopped them, and the newest drafts. Open them and look at them. |
 | Take a site down for good | `./coyote.sh unpublish <slug>`. Deletes the pages and blocklists the slug. |
 | Bring back a quarantined site | `./coyote.sh restore <slug>`. Three distinct visitors reporting a site quarantine it automatically; each report emails the admin. |
-| Re-render every site | `./coyote.sh refill-all`, after changing a theme, the renderer, or the domains. Renders each site's current draft again from its stored record, with no model call. |
+| Switch the page writer | `./coyote.sh page-model haiku` while testing the workflow (cheap, plain designs), `./coyote.sh page-model opus` for real designs, `./coyote.sh page-model` to see which is on. Applies to the whole stack from the next job and survives deploys. |
+| Re-render every site | `./coyote.sh refill-all`, after changing the page checks or the domains. Finishes each site's current draft again from its stored page, with no model call. |
 | Change the model | Edit `DEFAULT_MODEL_ID` (content writer) or `DEFAULT_PRESCREEN_MODEL_ID` in `services/generator/src/core/models.ts` (or deploy with `-c modelId=…` / `-c prescreenModelId=…`), then deploy. The IAM permissions follow them. |
 | Check Bedrock quota or throttling | Service Quotas → Amazon Bedrock, and the `GenerationFailures` alarm. |
 | Stop paying anything while away | `./coyote.sh destroy`. Deletes the whole stack and all its data after you type `destroy <account id>`. `./coyote.sh deploy` brings back a fresh stack with new URLs; then run `subscribe-alerts` again. |

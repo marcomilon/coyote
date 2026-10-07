@@ -3,6 +3,7 @@
 // Mi sitio, and the chat work with it as they do with the link shown at creation.
 import { api as apiCall, apiUrl } from './jobs';
 import { followDraft, qrCode } from './live-preview';
+import { forgetOwnerTokens } from './owner-token';
 
 interface Site {
   slug: string;
@@ -55,6 +56,7 @@ function readSession(): Session | undefined {
 }
 
 function saveSession(session: Session | undefined) {
+  if (!session) forgetOwnerTokens('sessions'); // the sites opened with it, kept by owner-token.ts
   try {
     if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     else localStorage.removeItem(SESSION_KEY);

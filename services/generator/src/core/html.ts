@@ -1,4 +1,4 @@
-/** HTML that is already safe to emit. Only `html` and `raw` create it. */
+/** HTML that is already safe to emit. Only `html` creates it. */
 export class SafeHtml {
   constructor(readonly value: string) {}
   toString(): string {
@@ -34,9 +34,4 @@ export function html(strings: TemplateStringsArray, ...values: Interpolation[]):
     out += toHtml(value) + (strings[i + 1] ?? '');
   });
   return new SafeHtml(out);
-}
-
-/** Trusted markup only: static theme CSS, validated tokens, sanitized signatureCss. Never model or user text. */
-export function raw(trusted: string): SafeHtml {
-  return new SafeHtml(trusted);
 }

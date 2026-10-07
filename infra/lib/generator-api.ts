@@ -16,12 +16,18 @@ import {
   aws_secretsmanager as secretsmanager,
   type aws_ses as ses,
   aws_sns as sns,
+  aws_ssm as ssm,
 } from 'aws-cdk-lib';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Construct } from 'constructs';
 
 /** The Anthropic API key for the page writer, created by hand (👤) so it never passes through CDK. */
 export const ANTHROPIC_SECRET_NAME = 'coyote/anthropic-api-key';
+/**
+ * Which model writes the pages: opus or haiku (page-writer.ts `PAGE_MODELS`), set by `./coyote.sh page-model`.
+ * CloudFormation writes the value only on create (or when this default changes), so the switch survives deploys.
+ */
+export const PAGE_MODEL_PARAMETER = '/coyote/page-model';
 import type { CoyoteGuardrail } from './guardrail';
 
 export interface GeneratorApiProps {
@@ -91,9 +97,6 @@ export class GeneratorApi extends Construct {
           externalModules: [],
           minify: true,
           sourceMap: false,
-          // css-tree's ESM entry loads its data with createRequire(import.meta.url), which is undefined in a
-          // CommonJS bundle. Its dist build is self-contained.
-          esbuildArgs: { '--alias:css-tree': 'css-tree/dist/csstree.esm' },
         },
         logGroup: new logs.LogGroup(this, `${name}Logs`, {
           retention: logs.RetentionDays.ONE_MONTH,
@@ -103,14 +106,20 @@ export class GeneratorApi extends Construct {
       });
 
     const jobFailed = fn('JobFailed', 'job-failed');
+    const pageModel = new ssm.StringParameter(this, 'PageModel', {
+      parameterName: PAGE_MODEL_PARAMETER,
+      stringValue: 'opus',
+      description: 'Page writer model: opus or haiku. Set with ./coyote.sh page-model',
+    });
     const generate = fn('Generate', 'generate', {
-      environment: { ...environment, ANTHROPIC_SECRET_NAME },
+      environment: { ...environment, ANTHROPIC_SECRET_NAME, PAGE_MODEL_PARAMETER },
       memorySize: 1024,
       timeout: Duration.minutes(10), // the page writer takes 3–4 minutes
       retryAttempts: 0, // a retry would pay for the model calls twice
       onFailure: new destinations.LambdaDestination(jobFailed),
     });
     this.generate = generate;
+    pageModel.grantRead(generate);
     // Not a secret: it only keeps raw IPs out of the tables. The stack ID is unique per deployment.
     const ipSalt = Fn.select(2, Fn.split('/', stack.stackId));
     const submit = fn('Submit', 'submit', {

@@ -1,0 +1,40 @@
+---
+// The chat with the site (scripts/chat-thread.ts): full-page on the phone (Chat.astro) and in Mi sitio's "Cambiar" tab.
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+  /** The thread scrolls inside its card instead of the page. */
+  boxed?: boolean;
+}
+const { lang, boxed = false } = Astro.props;
+const s = t(lang);
+const c = s.chat;
+---
+
+<div class:list={['chat-thread', { boxed }]} data-chat data-state="chat">
+  <div data-chat-view="chat">
+    <ol class="thread" data-thread aria-live="polite"></ol>
+    <div class="examples" data-examples>
+      {c.examples.map((example) => <button type="button" class="chip">{example}</button>)}
+    </div>
+    <form class="composer" data-composer novalidate>
+      <textarea name="text" rows="2" maxlength="500" placeholder={c.placeholder} aria-label={c.placeholder}></textarea>
+      <button class="btn small" type="submit">{c.send}</button>
+    </form>
+    <p class="notice" data-chat-notice role="status" aria-live="polite"></p>
+  </div>
+  <div data-chat-view="questions">
+    <form class="ticket" data-chat-questions novalidate>
+      <header>
+        <h2>{c.questionsTitle}</h2>
+        <p>{s.questions.intro}</p>
+      </header>
+      <div data-chat-question-list></div>
+      <div class="submit-row">
+        <button class="btn" type="submit">{c.questionsSubmit}</button>
+        <button class="btn ghost" type="button" data-chat-skip>{s.questions.skip}</button>
+      </div>
+    </form>
+  </div>
+</div>

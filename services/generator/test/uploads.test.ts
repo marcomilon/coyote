@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
-import { heroPrompt } from '../src/core/images';
 import { editSite } from '../src/core/owner';
 import { submit } from '../src/core/submit';
 import { createUploads, processUploads } from '../src/core/uploads';
-import { brief } from './fixtures';
 import { memoryStores } from './memory-stores';
 import { body as formBody, harness } from './harness';
 
 const UPLOAD = '3f2b8c1e-7a4d-4e9b-9c1a-5d6e7f8a9b0c';
-const SCENE = brief.heroScene;
 
 function setup(model: Parameters<typeof harness>[0] = {}) {
   const t = harness(model);

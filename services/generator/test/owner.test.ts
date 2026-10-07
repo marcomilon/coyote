@@ -45,7 +45,7 @@ describe('edits', () => {
     const t = await withDraft();
     const calls = t.calls.length;
     const writes = t.writer.requests.length;
-    expect(await editSite(t.site(), { contact: { whatsapp: '+57 311 999 8877', email: 'hola@luna.test', address: '' } }, t.ownerDeps)).toEqual({ status: 200 });
+    expect(await editSite(t.site(), { contact: { whatsapp: '+57 311 999 8877', email: 'hola@luna.test', address: '' } }, t.ownerDeps)).toEqual({ status: 200, missing: ['email'] }); // the page had no email to swap
     expect(t.calls.length).toBe(calls);
     expect(t.writer.requests.length).toBe(writes);
     expect(t.site()).toMatchObject({ currentDraftId: 'draft2', drafts: ['draft1', 'draft2'] });
@@ -87,7 +87,7 @@ describe('edits', () => {
     const edit = t.writer.requests.at(-1)!;
     expect(edit.instruction).toBe('cambia el horario del sábado a 9–13');
     expect(edit.current).toContain('<h1>Panadería Luna</h1>'); // the current page, as written
-    expect(edit.current).not.toContain('573001234567'); // with the stand-in number
+    expect(edit.current).toContain('573001234567'); // the page as it is, with the owner's number
     expect(t.jobs.get('job-2')!.usage.at(-1)!.step).toBe('edit_page');
     expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE', draftUrl: urls.draftUrl('draft2') });
     expect(t.jobs.get('job-2')!.ownerToken).toBeUndefined(); // no second magic link
@@ -102,7 +102,7 @@ describe('edits', () => {
     expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE' });
     expect(t.objects.get('_draft/draft2/index.html')).toContain('+57 601 555 1234');
     // A contact change renders the page again with no model call: the number from the edit is still the owner's.
-    expect(await editSite(t.site(), { contact: { address: 'Calle 61 # 9-12' } }, t.ownerDeps)).toEqual({ status: 200 });
+    expect(await editSite(t.site(), { contact: { address: 'Calle 61 # 9-12' } }, t.ownerDeps)).toMatchObject({ status: 200 });
     expect(t.site().currentDraftId).toBe('draft3');
   });
 
@@ -122,7 +122,7 @@ describe('edits', () => {
     const t = await withDraft();
     for (let i = 0; i < EDITS_PER_DAY; i++) expect((await editSite(t.site(), { instruction: `cambio ${i}` }, t.ownerDeps)).status).toBe(202);
     expect(await editSite(t.site(), { instruction: 'uno más' }, t.ownerDeps)).toEqual({ status: 429 });
-    expect(await editSite(t.site(), { contact: { instagram: 'otra' } }, t.ownerDeps)).toEqual({ status: 200 }); // contact edits cost nothing
+    expect(await editSite(t.site(), { contact: { instagram: 'otra' } }, t.ownerDeps)).toMatchObject({ status: 200 }); // contact edits cost nothing
   });
 
   it('"Deshacer" goes back to the previous version and deletes the newer one', async () => {

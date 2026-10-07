@@ -14,7 +14,7 @@ export function sitesCsp(options: { formAction: string; frameAncestors: string[]
     `style-src 'unsafe-inline' ${https(options.styleHosts)}`,
     `font-src data: ${https(options.fontHosts)}`,
     "img-src 'self' data: blob:",
-    // The renderer's Google map of the address (Google may redirect between the two hosts).
+    // A Google map of the address (page-check allows the embed) (Google may redirect between the two hosts).
     'frame-src https://maps.google.com https://www.google.com',
     `form-action ${options.formAction}`,
     `frame-ancestors ${options.frameAncestors.join(' ')}`,

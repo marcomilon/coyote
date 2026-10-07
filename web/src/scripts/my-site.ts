@@ -1,20 +1,18 @@
-// "Mi sitio": the owner's page. The magic-link token arrives in the URL hash and is sent as a Bearer token.
-// Shows the current draft, takes free-text change requests (with the model's questions when it asks),
-// contact changes, undo, and delete.
-import { api as apiCall, apiUrl, sendAnswers, waitForJob } from './jobs';
-import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
-
-const CONTACT_FIELDS = ['whatsapp', 'phone', 'email', 'address', 'instagram', 'facebook'] as const;
-type Contact = Partial<Record<(typeof CONTACT_FIELDS)[number], string>>;
+// "Mi sitio": the owner's page. The magic-link token arrives in the URL hash (owner-token.ts keeps it and takes it
+// out of the address) and is sent as a Bearer token.
+// Two tabs: the current draft, and the chat that changes it (texts, contact details, undo, a redesign), with the
+// QR that opens the same chat on the owner's phone. The preview follows every change live. And delete.
+import { api as apiCall, apiUrl } from './jobs';
+import { startChat, type ChatStrings } from './chat-thread';
+import { qrCode } from './live-preview';
+import { forgetOwnerTokens, ownerHash, ownerToken, tokenHash } from './owner-token';
 
 interface View {
   slug: string;
   status: string;
   draftUrl?: string;
   previewUrl?: string;
-  canUndo: boolean;
   businessName?: string;
-  contact?: Contact;
 }
 type Message = { title: string; text: string };
 interface Strings {
@@ -22,27 +20,18 @@ interface Strings {
   badToken: Message;
   deleted: Message;
   heading: string;
-  saved: string;
-  contactSaved: string;
-  changed: string;
-  undone: string;
-  rejected: string;
-  invalid: string;
   error: string;
-  limit: string;
-  empty: string;
   deleteConfirm: string;
-  question: QuestionStrings & { invalid: string };
   previewPath: string;
+  chatPath: string;
+  qr: { title: string; updated: string };
+  chat: ChatStrings;
 }
 
 const root = document.getElementById('mysite') as HTMLElement;
 const strings = JSON.parse(root.dataset.strings ?? '{}') as Strings;
 const $ = <T extends Element>(selector: string) => root.querySelector(selector) as T;
-const editForm = $<HTMLFormElement>('form[data-edit]');
-const contactForm = $<HTMLFormElement>('form[data-contact]');
-const questionsForm = $<HTMLFormElement>('form[data-questions]');
-const token = decodeURIComponent(/^#token=(.+)$/.exec(location.hash)?.[1] ?? '');
+const token = ownerToken();
 
 const show = (state: string) => (root.dataset.state = state);
 
@@ -52,10 +41,8 @@ function showMessage(message: Message) {
   show('message');
 }
 
-function notice(text: string, kind: 'ok' | 'error' = 'ok') {
-  const el = $<HTMLElement>('[data-notice]');
-  el.textContent = text;
-  el.dataset.kind = kind;
+function notice(text: string) {
+  $<HTMLElement>('[data-notice]').textContent = text;
 }
 
 const api = <T>(path: string, method = 'GET', body?: unknown) =>
@@ -68,21 +55,49 @@ const api = <T>(path: string, method = 'GET', body?: unknown) =>
 function fill(view: View) {
   if (!view.draftUrl) return showMessage(strings.badToken);
   $('[data-business]').textContent = view.businessName ?? strings.heading;
+  $('[data-chrome-name]').textContent = view.businessName ?? view.slug;
   const frame = $<HTMLIFrameElement>('.device iframe');
   if (frame.src !== view.draftUrl) frame.src = view.draftUrl;
-  $<HTMLAnchorElement>('[data-draft-link]').href = `${strings.previewPath}${location.hash}`;
-  $<HTMLButtonElement>('[data-undo]').disabled = !view.canUndo;
-  for (const field of CONTACT_FIELDS) {
-    const input = contactForm.elements.namedItem(field) as HTMLInputElement;
-    const value = view.contact?.[field] ?? '';
-    input.value = value && (field === 'whatsapp' || field === 'phone') ? `+${value}` : value;
-  }
+  $<HTMLAnchorElement>('[data-draft-link]').href = `${strings.previewPath}${ownerHash()}`;
+  showChatHandoff();
   $<HTMLButtonElement>('[data-delete]').onclick = async () => {
     if (window.prompt(`${strings.deleteConfirm} ${view.slug}`) !== view.slug) return;
     const { status } = await api('/me', 'DELETE');
-    if (status === 200) showMessage(strings.deleted);
+    if (status !== 200) return;
+    forgetOwnerTokens({ slug: view.slug });
+    showMessage(strings.deleted);
   };
   show('editor');
+}
+
+/** The QR code opens the same chat on the owner's phone. */
+function showChatHandoff() {
+  const chatLink = `${location.origin}${strings.chatPath}${tokenHash()}`;
+  $<HTMLElement>('[data-qr]').replaceChildren(qrCode(chatLink, strings.qr.title));
+  $<HTMLAnchorElement>('[data-chat-open]').href = chatLink;
+}
+
+/**
+ * The chat in the second tab. Its polls carry the current draft, so the preview follows every change made here
+ * or on the phone.
+ */
+function startSiteChat() {
+  let current = '';
+  startChat($('[data-chat]'), {
+    token,
+    strings: strings.chat,
+    scroll: 'box',
+    onView(view) {
+      if (!view.draftUrl || view.draftUrl === current) return;
+      const first = !current;
+      current = view.draftUrl;
+      if (first) return;
+      $<HTMLIFrameElement>('.device iframe').src = current;
+      notice(strings.qr.updated);
+    },
+    // Mi sitio checks the token itself (GET /me) and shows its own message.
+    onNote() {},
+  });
 }
 
 async function load() {
@@ -91,96 +106,39 @@ async function load() {
     const { status, body } = await api<View>('/me');
     if (status !== 200) return showMessage(strings.badToken);
     fill(body);
+    startSiteChat();
   } catch {
     showMessage({ title: strings.error, text: '' });
   }
 }
 
-/** Follows an edit job to the end: questions when the model asks, then the new draft. */
-async function followEdit(jobId: string) {
-  show('working');
-  const job = await waitForJob(jobId);
-  if (job.status === 'NEEDS_INPUT') {
-    renderQuestions($<HTMLElement>('[data-question-list]'), job.questions ?? [], strings.question);
-    const answer = async (body: Parameters<typeof sendAnswers>[1]) => {
-      const { status, body: result } = await sendAnswers(jobId, body);
-      if (status === 400) return markInvalid($<HTMLElement>('[data-question-list]'), result.fields ?? [], strings.question.invalid);
-      if (status === 202 || status === 409) return void followEdit(jobId);
-      await load();
-      notice(status === 422 ? strings.rejected : strings.error, 'error');
-    };
-    questionsForm.onsubmit = (event) => {
-      event.preventDefault();
-      void answer({ answers: readAnswers($<HTMLElement>('[data-question-list]')) });
-    };
-    $<HTMLButtonElement>('[data-skip]').onclick = () => void answer({ skip: true });
-    show('questions');
-    return;
+// Tabs: the preview gets the whole width; the chat has its own tab.
+const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+function showTab(name: string, focus = false) {
+  for (const tab of tabs) {
+    const selected = tab.dataset.tab === name;
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    $<HTMLElement>(`[data-panel="${tab.dataset.tab}"]`).hidden = !selected;
+    if (selected && focus) tab.focus();
   }
-  await load();
-  if (job.status === 'DONE') {
-    editForm.reset();
-    notice(strings.changed);
-  } else notice(job.status === 'REJECTED' ? strings.rejected : strings.error, 'error');
+  $<HTMLElement>('[data-viewport]').hidden = name !== 'preview';
 }
-
-editForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const instruction = (editForm.elements.namedItem('instruction') as HTMLTextAreaElement).value.trim();
-  if (instruction.length < 3) return notice(strings.empty, 'error');
-  const button = editForm.querySelector('button[type="submit"]') as HTMLButtonElement;
-  button.disabled = true;
-  try {
-    const { status, body } = await api<{ jobId?: string }>('/me/edit', 'POST', { instruction });
-    if (status === 202 && body.jobId) return void followEdit(body.jobId);
-    notice(status === 429 ? strings.limit : strings.error, 'error');
-  } catch {
-    notice(strings.error, 'error');
-  } finally {
-    button.disabled = false;
-  }
-});
-
-contactForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const data = Object.fromEntries(new FormData(contactForm)) as Record<string, string>;
-  const contact = Object.fromEntries(CONTACT_FIELDS.map((field) => [field, (data[field] ?? '').trim()]));
-  const button = contactForm.querySelector('button[type="submit"]') as HTMLButtonElement;
-  button.disabled = true;
-  contactForm.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
-  try {
-    const { status, body } = await api<View & { fields?: string[] }>('/me/edit', 'POST', { contact });
-    if (status === 200) {
-      fill(body);
-      notice(strings.contactSaved);
-    } else if (status === 400) {
-      for (const field of body.fields ?? []) (contactForm.elements.namedItem(field.split('.').pop() ?? '') as HTMLElement | null)?.setAttribute('aria-invalid', 'true');
-      contactForm.querySelector<HTMLElement>('[aria-invalid]')?.focus();
-      notice(strings.invalid, 'error');
-    } else {
-      notice(status === 422 ? strings.rejected : strings.error, 'error');
-    }
-  } catch {
-    notice(strings.error, 'error');
-  } finally {
-    button.disabled = false;
-  }
-});
-
-$<HTMLButtonElement>('[data-undo]').onclick = async () => {
-  const { status, body } = await api<View>('/me/undo', 'POST');
-  if (status === 200) {
-    fill(body);
-    notice(strings.undone);
-  } else notice(strings.error, 'error');
-};
-
-root.querySelectorAll<HTMLButtonElement>('.viewport button').forEach((button) => {
-  button.onclick = () => {
-    root.querySelectorAll<HTMLButtonElement>('.viewport button').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
-    $<HTMLElement>('.device').dataset.width = button.dataset.width;
+tabs.forEach((tab, i) => {
+  tab.onclick = () => showTab(tab.dataset.tab!);
+  tab.onkeydown = (event) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    if (step) showTab(tabs[(i + step + tabs.length) % tabs.length]!.dataset.tab!, true);
   };
 });
+
+function setViewport(width: string) {
+  root.querySelectorAll<HTMLButtonElement>('.viewport button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.width === width)));
+  $<HTMLElement>('.device').dataset.width = width;
+}
+root.querySelectorAll<HTMLButtonElement>('.viewport button').forEach((button) => (button.onclick = () => setViewport(button.dataset.width!)));
+// Phone width first on small screens, where the desktop preview would not fit.
+if (window.matchMedia('(max-width: 48rem)').matches) setViewport('phone');
 
 void load();
 

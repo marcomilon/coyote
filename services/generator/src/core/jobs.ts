@@ -104,6 +104,8 @@ export interface ChatMessage {
   status: 'pending' | 'done' | 'failed';
   /** The draft this reply made, when it changed the page. */
   draftId?: string;
+  /** The owner undid that draft ("Deshacer"): the change is no longer on the page. */
+  undone?: boolean;
   /** A change too big for the chat: the request to hand to the page writer ("Rediseñar"). */
   redesign?: string;
   /** DynamoDB TTL, seconds since epoch. */

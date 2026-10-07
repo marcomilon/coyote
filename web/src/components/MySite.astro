@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import ChatThread from './ChatThread.astro';
 import { t, type Lang } from '../i18n/strings';
 
 interface Props {
@@ -8,9 +9,8 @@ interface Props {
 const { lang } = Astro.props;
 const s = t(lang);
 const m = s.mySite;
-const f = m.fields;
 const other = t(s.otherLang.code);
-const clientStrings = { ...m, question: s.questions, previewPath: s.paths.preview };
+const clientStrings = { ...m, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, question: s.questions } };
 ---
 
 <Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig>
@@ -22,79 +22,51 @@ const clientStrings = { ...m, question: s.questions, previewPath: s.paths.previe
       <p data-message-text></p>
     </section>
 
-    <section data-view="working" class="panel" aria-live="polite">
-      <h2>{m.working.title}</h2>
-      <div class="paint" aria-hidden="true"></div>
-      <p class="hint">{m.working.note}</p>
-    </section>
-
-    <section data-view="questions">
-      <form class="ticket" data-questions novalidate>
-        <header>
-          <h2>{m.questionsTitle}</h2>
-          <p>{s.questions.intro}</p>
-        </header>
-        <div data-question-list></div>
-        <div class="submit-row">
-          <button class="btn" type="submit">{m.questionsSubmit}</button>
-          <button class="btn ghost" type="button" data-skip>{s.questions.skip}</button>
-        </div>
-      </form>
-    </section>
-
     <section data-view="editor">
       <header>
         <h1 data-business>{m.heading}</h1>
-        <div class="viewport" role="group" aria-label={m.viewport.label}>
-          <button type="button" data-width="phone" aria-pressed="true">{m.viewport.phone}</button>
-          <button type="button" data-width="desktop" aria-pressed="false">{m.viewport.desktop}</button>
-        </div>
       </header>
-      <p class="notice" data-notice role="status" aria-live="polite"></p>
-
-      <div class="layout">
-        <div>
-          <div class="device" data-width="phone"><iframe title={m.heading} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></div>
-          <p class="hint">{m.private} <a data-draft-link target="_blank" rel="noopener">{m.open}</a></p>
-        </div>
-
-        <div>
-          <form class="ticket" data-edit novalidate>
-            <fieldset>
-              <label class="q" for="instruction">{m.change.label}</label>
-              <p class="hint" id="instruction-hint">{m.change.hint}</p>
-              <textarea id="instruction" name="instruction" maxlength="1000" aria-describedby="instruction-hint" placeholder={m.change.placeholder}></textarea>
-            </fieldset>
-            <div class="submit-row">
-              <button class="btn" type="submit">{m.change.submit}</button>
-              <button class="btn ghost" type="button" data-undo>{m.undo}</button>
-            </div>
-          </form>
-
-          <form class="ticket" data-contact novalidate style="margin-top: 2rem">
-            <fieldset>
-              <legend class="q">{f.title}</legend>
-              <label class="sub" for="whatsapp">{f.whatsapp}</label>
-              <input type="tel" id="whatsapp" name="whatsapp" maxlength="40" inputmode="tel" autocomplete="tel" />
-              <label class="sub" for="phone">{f.phone}</label>
-              <input type="tel" id="phone" name="phone" maxlength="40" inputmode="tel" />
-              <label class="sub" for="email">{f.email}</label>
-              <input type="email" id="email" name="email" maxlength="120" autocapitalize="none" autocomplete="email" />
-              <label class="sub" for="address">{f.address}</label>
-              <input type="text" id="address" name="address" maxlength="160" autocomplete="street-address" />
-              <div class="two">
-                <div><label class="sub" for="instagram">{f.instagram}</label><input type="text" id="instagram" name="instagram" maxlength="200" autocapitalize="none" placeholder="@" /></div>
-                <div><label class="sub" for="facebook">{f.facebook}</label><input type="text" id="facebook" name="facebook" maxlength="200" autocapitalize="none" /></div>
-              </div>
-            </fieldset>
-            <div class="submit-row"><button class="btn small" type="submit">{m.saveContact}</button></div>
-          </form>
-
-          <div class="danger">
-            <div class="line"><button class="linkbtn" type="button" data-delete>{m.delete}</button></div>
-          </div>
+      <div class="tabs" role="tablist" aria-label={m.tabs.label}>
+        <button type="button" role="tab" id="tab-preview" aria-controls="panel-preview" aria-selected="true" data-tab="preview">{m.tabs.preview}</button>
+        <button type="button" role="tab" id="tab-change" aria-controls="panel-change" aria-selected="false" tabindex="-1" data-tab="change">{m.tabs.change}</button>
+      </div>
+      <!-- Under the tabs on every tab; the Celular/Computador switch only on Vista previa. -->
+      <div class="site-bar">
+        <p class="hint">{m.private} <a data-draft-link target="_blank" rel="noopener">{m.open}</a></p>
+        <div class="viewport" role="group" aria-label={m.viewport.label} data-viewport>
+          <button type="button" data-width="phone" aria-pressed="false">{m.viewport.phone}</button>
+          <button type="button" data-width="desktop" aria-pressed="true">{m.viewport.desktop}</button>
         </div>
       </div>
+      <p class="notice" data-notice role="status" aria-live="polite"></p>
+
+      <div class="tabpanel" role="tabpanel" id="panel-preview" aria-labelledby="tab-preview" data-panel="preview">
+        <div class="device" data-width="desktop">
+          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i><span data-chrome-name></span></div>
+          <iframe title={m.heading} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe>
+        </div>
+      </div>
+
+      <div class="tabpanel" role="tabpanel" id="panel-change" aria-labelledby="tab-change" data-panel="change" hidden>
+        <div class="change-layout">
+        <div>
+        <ChatThread lang={lang} boxed />
+        </div>
+        <div class="handoff" data-handoff>
+          <div class="qr" data-qr></div>
+          <div>
+            <h3>{m.qr.title}</h3>
+            <p>{m.qr.text}</p>
+            <a class="linkbtn" data-chat-open target="_blank" rel="noopener">{m.qr.open}</a>
+          </div>
+        </div>
+        </div>
+        {/* Delete: hidden for now (remove `hidden` to show it again). */}
+        <div class="danger" hidden>
+          <div class="line"><button class="linkbtn" type="button" data-delete>{m.delete}</button></div>
+        </div>
+      </div>
+
     </section>
   </div>
 </Layout>

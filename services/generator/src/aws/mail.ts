@@ -8,7 +8,7 @@ export function sesSendEmail(from: string | undefined): SendEmail | undefined {
   return async ({ to, subject, text }) => {
     await ses.send(
       new SendEmailCommand({
-        FromEmailAddress: `Coyote <${from}>`,
+        FromEmailAddress: `ventas314.com <${from}>`,
         Destination: { ToAddresses: [to] },
         Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } },
       }),

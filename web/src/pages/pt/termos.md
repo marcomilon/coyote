@@ -2,11 +2,11 @@
 layout: ../../layouts/Legal.astro
 lang: pt
 title: Termos de uso
-description: As regras para criar um site com o Coyote.
+description: As regras para criar um site com ventas314.com.
 alternate: /terminos
 ---
 
-Ao criar um site com o Coyote você aceita estas regras.
+Ao criar um site com ventas314.com você aceita estas regras.
 
 ## O que oferecemos
 
@@ -28,4 +28,4 @@ O link para Meu site é a chave do seu site. Guarde-o: quem o tiver pode editar 
 
 ## Limites
 
-Há um limite de sites por dia e de novas versões por site. Todos os sites exibem no rodapé «Site criado com Coyote».
+Há um limite de sites por dia e de novas versões por site. Todos os sites exibem no rodapé «Site criado com ventas314.com».

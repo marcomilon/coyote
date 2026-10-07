@@ -22,6 +22,8 @@ const s = t(lang);
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="alternate" hreflang={s.otherLang.code} href={alternate} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -34,7 +36,7 @@ const s = t(lang);
   <body>
     <div class="awning" aria-hidden="true"></div>
     <header class="site-header wrap">
-      <a class="brand" href={s.paths.home}><b>Coyote</b><span>{s.brandTagline}</span></a>
+      <a class="brand" href={s.paths.home}><img src="/logo.png" alt="ventas314.com" width="668" height="132" /><span>{s.brandTagline}</span></a>
       <nav>
         <a href={alternate} lang={s.otherLang.code}>{s.otherLang.label}</a>
         <a href={s.paths.mySites}>{s.nav.mySites}</a>

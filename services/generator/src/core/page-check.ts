@@ -2,8 +2,9 @@ import render from 'dom-serializer';
 import { Element, Text, type AnyNode, type Document } from 'domhandler';
 import { parseDocument } from 'htmlparser2';
 import type { Contact } from './content';
-import { html as h } from './html';
+import { escapeHtml, html as h } from './html';
 import { strings } from './i18n';
+import { countryOf } from './phones';
 import { checkTexts, type Violation } from './policy';
 
 /**
@@ -211,7 +212,7 @@ export function checkPage(page: string, { contact, ownerText = '', businessName,
   }
 
   // The text a visitor reads: the content policy, and contact details the owner never gave.
-  violations.push(...checkTexts(texts, { businessName, headlines }));
+  violations.push(...checkTexts(texts, { businessName, headlines }, known.numbers));
   for (const text of texts) {
     for (const [number] of text.matchAll(PHONE_LIKE)) {
       // Phone-shaped: 9+ digits. Year ranges ("2019 – 2024") and prices are shorter or look different.
@@ -246,13 +247,58 @@ function dedupe(violations: Violation[]): Violation[] {
   return violations.filter((v) => (seen.has(v.detail) ? false : (seen.add(v.detail), true)));
 }
 
+/** The ways a number can be written without its country code, longest first (an Argentine mobile with or without the 9). */
+function localForms(n: string): string[] {
+  const country = countryOf(n);
+  if (!country) {
+    const local = n.replace(/^(1|2\d|3\d|4\d|5[1-8]|59\d|6\d|7|8\d|9\d)/, '');
+    return local !== n ? [local] : [];
+  }
+  const local = n.slice(country.dial.length);
+  return country.iso === 'AR' && local.startsWith('9') ? [local, local.slice(1)] : [local];
+}
+
 /**
- * The contact details the page writer sees: phone numbers are stand-ins of the same length and country code
- * (the privacy page promises the models never get them). replaceContact swaps the real ones back in.
+ * A phone number in any formatting: its digits with spaces, dots, dashes, or parentheses between them, including
+ * the non-breaking kinds the page writer uses so a number doesn't wrap (as characters or as HTML entities).
  */
-export function maskContact(contact: Contact): Contact {
-  const mask = (n: string | undefined, fill: string) => n && (n.slice(0, 2) + fill.repeat(2)).slice(0, n.length);
-  return { ...contact, whatsapp: mask(contact.whatsapp, '3125550147')!, phone: mask(contact.phone, '2045550188') };
+const NUMBER_GAP = '(?:[\\s().\\u2010-\\u2015\\u2212-]|&nbsp;|&#160;|&#x0*a0;|&#8209;|&#x0*2011;)*';
+const numberPattern = (n: string) => new RegExp(n.split('').join(NUMBER_GAP), 'gi');
+
+/** Puts `next`'s digits into a matched number, keeping the page's formatting when the two numbers have the same length. */
+const swapDigits = (next: string) => (match: string) => {
+  // Digits inside an entity (&#160;) are not the number's.
+  const parts = match.split(/(&#?\w+;)/);
+  if (parts.filter((_, k) => k % 2 === 0).join('').replace(/\D/g, '').length !== next.length) return next;
+  let i = 0;
+  return parts.map((part, k) => (k % 2 === 1 ? part : part.replace(/\d/g, () => next[i++]!))).join('');
+};
+
+const ACCENTED: Record<string, string> = { a: 'aáàâäã', e: 'eéèêë', i: 'iíìîï', o: 'oóòôöõ', u: 'uúùûü', n: 'nñ', c: 'cç' };
+
+/**
+ * An address as the page writer may have written it: any capitals and accents, any punctuation, spaces, or line
+ * breaks between its words ("av. bolivar 244, pueblo libre" finds "Av. Bolívar 244<br>Pueblo Libre"). Only for
+ * addresses of two words or more, so a one-word address doesn't match ordinary text.
+ */
+function addressPattern(address: string): RegExp | undefined {
+  const words = address.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().match(/[a-z0-9]+/g);
+  if (!words || words.length < 2) return undefined;
+  const word = (w: string) => [...w].map((ch) => (ACCENTED[ch] ? `[${ACCENTED[ch]}]` : ch)).join('');
+  const between = '(?:[\\s,.;:·•#º°/&-]|&nbsp;|&amp;|<br\\s*/?>)+';
+  return new RegExp(`(?<![\\p{L}\\p{N}])${words.map(word).join(between)}(?![\\p{L}\\p{N}])`, 'giu');
+}
+
+/** Contact details that changed but aren't on the page after the swap (the page wrote the old one some other way). */
+export function contactMissing(page: string, before: Contact, after: Contact): (keyof Contact)[] {
+  const fields = ['whatsapp', 'phone', 'email', 'address', 'instagram', 'facebook'] as const;
+  return fields.filter((field) => {
+    const next = after[field];
+    if (!next || next === before[field]) return false;
+    if (field === 'whatsapp' || field === 'phone') return !numberPattern(next).test(page) && !localForms(next).some((local) => local.length >= 7 && numberPattern(local).test(page));
+    if (field === 'address') return !page.includes(escapeHtml(next)) && !addressPattern(next)?.test(page);
+    return !page.toLowerCase().includes(next.toLowerCase());
+  });
 }
 
 /**
@@ -261,19 +307,26 @@ export function maskContact(contact: Contact): Contact {
  */
 export function replaceContact(page: string, before: Contact, after: Contact): string {
   let out = page;
-  const numberPattern = (n: string) => new RegExp(n.split('').map((d) => d.replace(/\d/, '$&')).join('[\\s().-]*'), 'g');
   for (const field of ['whatsapp', 'phone'] as const) {
     const old = before[field];
     const next = after[field];
     if (!old || !next || old === next) continue;
-    out = out.replace(numberPattern(old), next); // digits in links and scripts, and formatted numbers in text
-    const local = old.replace(/^(1|2\d|3\d|4\d|5[1-8]|59\d|6\d|7|8\d|9\d)/, ''); // the number without its country code
-    if (local.length >= 7 && local !== old) out = out.replace(numberPattern(local), next.slice(next.length - local.length));
+    out = out.replace(numberPattern(old), swapDigits(next)); // digits in links and scripts, and formatted numbers in text
+    for (const local of localForms(old)) {
+      if (local.length >= 7) out = out.replace(numberPattern(local), swapDigits(next.slice(next.length - local.length)));
+    }
   }
-  for (const field of ['email', 'address', 'instagram', 'facebook'] as const) {
+  for (const field of ['email', 'instagram', 'facebook'] as const) {
     const old = before[field];
     const next = after[field];
     if (old && next && old !== next) out = out.split(old).join(next);
+  }
+  const { address: oldAddress } = before;
+  const { address: newAddress } = after;
+  if (oldAddress && newAddress && oldAddress !== newAddress) {
+    out = out.split(escapeHtml(oldAddress)).join(escapeHtml(newAddress));
+    const loose = addressPattern(oldAddress);
+    if (loose) out = out.replace(loose, escapeHtml(newAddress));
   }
   return out;
 }

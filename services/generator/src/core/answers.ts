@@ -17,6 +17,7 @@ export interface RawAnswers {
   businessName: string;
   about: string;
   whatsapp: string;
+  email?: string;
   address?: string;
   instagram?: string;
   facebook?: string;
@@ -64,6 +65,7 @@ export function normalizeAnswers(raw: RawAnswers): Answers {
     lang: raw.lang ?? 'es',
     contact: {
       whatsapp: cleanContact('whatsapp', raw.whatsapp) ?? '',
+      email: cleanContact('email', raw.email),
       address: cleanContact('address', raw.address),
       instagram: cleanContact('instagram', raw.instagram),
       facebook: cleanContact('facebook', raw.facebook),

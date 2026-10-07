@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHAT_MESSAGES_PER_DAY, chatView, postChat, runChatTurn } from '../src/core/chat';
 import { runGenerateJob } from '../src/core/generate-job';
-import { authenticate, deleteSite, editSite, POLL_CAP } from '../src/core/owner';
+import { authenticate, deleteSite, editSite, POLL_CAP, undo } from '../src/core/owner';
 import { submit } from '../src/core/submit';
 import { body, harness, NOW, urls } from './harness';
 
@@ -25,7 +25,7 @@ async function withDraft(model: Parameters<typeof harness>[0] = {}) {
 }
 
 describe('chat', () => {
-  it('a text change: Haiku gets an outline with stand-in numbers, its changes make a new draft', async () => {
+  it('a text change: Haiku gets an outline of the page, its changes make a new draft', async () => {
     const t = await withDraft({ chat: { action: 'edit', reply: 'Listo, agregué los domingos.', changes: [{ find: ABOUT, replace: `${ABOUT} Abrimos también los domingos.` }] } });
     const { posted, outcome, reply } = await t.send('abrimos también los domingos');
     expect(posted).toMatchObject({ status: 202, messages: [{ role: 'owner', status: 'done' }, { role: 'coyote', status: 'pending' }] });
@@ -34,7 +34,7 @@ describe('chat', () => {
     const request = t.requests.at(-1)!;
     expect(request.guarded).toContain('<request>abrimos también los domingos</request>');
     expect(request.user).toContain('<h1>Panadería Luna</h1>');
-    expect(request.user).not.toContain('573001234567');
+    expect(request.user).toContain('573001234567');
     expect(reply).toMatchObject({ role: 'coyote', status: 'done', text: 'Listo, agregué los domingos.', draftId: 'draft2' });
     expect(t.site()).toMatchObject({ currentDraftId: 'draft2' });
     const page = t.objects.get('_draft/draft2/index.html')!;
@@ -42,6 +42,17 @@ describe('chat', () => {
     expect(page).toContain('https://wa.me/573001234567'); // the real number is back
     expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!).requests).toEqual(['abrimos también los domingos']);
     expect(t.writer.requests).toHaveLength(1); // no page writer call
+  });
+
+  it('an undone change is marked, so the next reply is told it is no longer on the page', async () => {
+    const t = await withDraft({ chat: { action: 'edit', reply: 'Listo, agregué los domingos.', changes: [{ find: ABOUT, replace: `${ABOUT} Abrimos también los domingos.` }] } });
+    const { reply } = await t.send('abrimos también los domingos');
+    expect(await undo(t.site(), t.ownerDeps)).toEqual({ status: 200 });
+    expect(t.chat.find((m) => m.at === reply.at)).toMatchObject({ draftId: 'draft2', undone: true });
+    expect((await chatView(t.site(), undefined, t.ownerDeps)).messages.at(-1)).toMatchObject({ changed: true, undone: true });
+    t.ownerDeps.now = () => NOW + 60_000; // a later message
+    await t.send('gracias');
+    expect(t.requests.at(-1)!.guarded).toContain('Coyote (changed the page, then the owner undid it): Listo, agregué los domingos.');
   });
 
   it('a new number the owner wrote goes through the contact change; one the model made up is dropped', async () => {
@@ -123,7 +134,7 @@ describe('chat', () => {
     const t = await withDraft();
     await postChat(t.site(), { text: 'hola' }, t.ownerDeps);
     const first = await chatView(t.site(), undefined, t.ownerDeps);
-    expect(first).toMatchObject({ businessName: 'Panadería Luna', lang: 'es', canChat: true, draftUrl: urls.draftUrl('draft1'), canUndo: false });
+    expect(first).toMatchObject({ businessName: 'Panadería Luna', lang: 'es', draftUrl: urls.draftUrl('draft1'), canUndo: false });
     expect(first.messages.map((m) => m.status)).toEqual(['done', 'pending']);
     const poll = await chatView(t.site(), NOW, t.ownerDeps);
     expect(poll).not.toHaveProperty('businessName');

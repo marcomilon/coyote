@@ -1,7 +1,7 @@
 # Coyote — AI website generator for LatAm small businesses
 
 ## Goal
-A public web form asks 3 questions. A model writes the content (asking the owner a few follow-up questions when the answers are thin), a renderer fills a hand-built theme, and the site is published at `{slug}.<sites-domain>`. Everything runs on AWS. Until the publishing plan, every site is a private draft seen only through the owner's magic link.
+A public web form asks 3 questions. Opus writes the page (a model first asks the owner a few follow-up questions when the answers are thin), checks finish it, and the site is published at `{slug}.<sites-domain>`. Everything runs on AWS. Until the publishing plan, every site is a private draft seen only through the owner's magic link.
 
 ## Decisions
 - **LLM**: Claude Opus 5.5 through Anthropic's API (the user's key) writes each page; Claude Haiku 4.5 on Amazon Bedrock asks the follow-up questions; Nova 2 Lite pre-screens.
@@ -11,9 +11,9 @@ A public web form asks 3 questions. A model writes the content (asking the owner
 - **One environment.** A single stack, `Coyote`, in this AWS account, which is the development sandbox: `localhost:5173` may call the API, `cdk destroy` deletes all data, and the rate limit is relaxed. No dev/prod split in code, names, or URLs. If a real production environment is ever needed, it is a **separate AWS account** running the same stack (`COYOTE_AWS_PROFILE=<prod profile> ./coyote.sh deploy`). Real users only ever go on that account; nothing in this one is meant to survive.
 - **IaC**: every AWS resource is defined in CDK. Manual one-offs are marked 👤 in the phases.
 - **Region**: us-east-1 for everything. One stack, no cross-region references. Bedrock, Route 53 Domains, CloudFront SaaS Manager, and ACM for CloudFront are native there. CloudFront edges in São Paulo, Bogotá, Santiago, Buenos Aires, and Mexico City serve the sites. Only the API round-trip (~100 ms per submission) is slower than sa-east-1.
-- **Opus 5.5 writes each page, with the frontend-design skill as its system prompt** and a request written like a chat message. Rules in the prompt made the designs worse, so the rules are checks on the finished page (`page-check.ts`): what can be repaired is repaired; a page that fails a content check is rejected, and one that never arrives fails the job. There is no themed fallback and no generated photo: Opus draws what the page needs as SVG, and uses the owner's photos when there are any. Pages may use inline JavaScript, Tailwind and libraries from a few CDNs; the sites CSP gives scripts no network access. Contact edits swap the new details into the page with no model call; free-text edits in Mi sitio send the current page back to Opus. Chat messages (the QR chat, below) are answered by Haiku 4.5 with text changes on an outline of the page; a change that needs design work is offered as an Opus edit. Drafts made before the page writer still render and edit with their theme (`edit_content`).
+- **Opus 5.5 writes each page, with the frontend-design skill as its system prompt** and a request written like a chat message. Rules in the prompt made the designs worse, so the rules are checks on the finished page (`page-check.ts`): what can be repaired is repaired; a page that fails a content check is rejected, and one that never arrives fails the job. There is no fallback and no generated photo: Opus draws what the page needs as SVG, and uses the owner's photos when there are any. Pages may use inline JavaScript, Tailwind and libraries from a few CDNs; the sites CSP gives scripts no network access. Changes go through the chat (Mi sitio and the QR chat, below): Haiku 4.5 answers with text changes on an outline of the page, contact changes are swapped into the page with no model call, and a change that needs design work is offered as an Opus edit ("Rediseñar"), which sends the current page back to Opus.
 - **MVP sites have only the WhatsApp CTA.** The contact form and SES email are post-MVP. They are built with WhatsApp lead delivery first (`PLAN-PHASE2.md`), email second.
-- **Our frontend is Astro, built to static files.** Generated business sites are not Astro: they are rendered in Lambda by `render.ts`, where no build step can run.
+- **Our frontend is Astro, built to static files.** Generated business sites are not Astro: Opus writes them and `page-check.ts` finishes them in Lambda.
 - **Local toolchain**: Node 24, CDK CLI, SAM (not used).
 
 ## Domains
@@ -31,15 +31,15 @@ Domains arrive in stages. The `cdk.json` context (`domainName`, `sitesDomainName
 Context keys: `domainName`, `sitesDomainName`, and optionally `hostedZoneName` / `sitesHostedZoneName` when a name lives in a parent zone (stage 2: `sitesDomainName = sites.consideralohecho.com`, `sitesHostedZoneName = consideralohecho.com`).
 
 Switching stage = change the context, redeploy, run `./coyote.sh refill-all`. To keep it that simple:
-- No domain literal in code, themes, or tests.
+- No domain literal in code, prompts, or tests.
 - `urls.ts` (`siteUrl(slug)`, `draftUrl(draftId)`, `appUrl`, `apiUrl`, the map URLs) is the only code that knows the mode. CSP, CORS, and Origin checks derive from it.
-- Themes reference assets with relative URLs, so a page works at `/_draft/{id}/`, at `/{slug}/`, and at a subdomain root. Drafts in domain mode live at `draft.<sites-domain>/{draftId}/`.
+- Pages reference their images with relative URLs, so a page works at `/_draft/{id}/`, at `/{slug}/`, and at a subdomain root. Drafts in domain mode live at `draft.<sites-domain>/{draftId}/`.
 
 ## AWS profile
 The project uses the AWS CLI profile **`coyote`** (account `887799775985`, IAM user `coyote`, default region us-east-1).
 - Root npm scripts pass `--profile coyote` to `cdk`. Local scripts set `AWS_PROFILE=coyote`. Never fall back to the default profile.
 - CI only builds, tests, and synths; it never touches AWS.
-- Without the profile: no `cdk deploy`, no Bedrock calls from `local-generate`. `cdk synth` still works in domainless mode (no `fromLookup`).
+- Without the profile: no `cdk deploy`, no model calls from the local scripts. `cdk synth` still works in domainless mode (no `fromLookup`).
 
 ## Architecture
 
@@ -49,17 +49,17 @@ browser ──(form, es/pt)──> CloudFront #1 [app.<domain>] ──> S3 appBu
    └── POST /generate ──> API Gateway HTTP API [api.<domain>] ──> submit Lambda ──> DynamoDB jobs (PENDING)
                                      (rate limit → pre-screen → slug claim)  │ async invoke (failure → job FAILED)
                                                         v
-                                                 generate Lambda ──> Bedrock (Claude Haiku 4.5): plan_site → questions? → brief → content JSON
-                                                        │              ──> policy → render(theme, content) ──> S3 _draft/{draftId}/index.html
+                                                 generate Lambda ──> Bedrock (Claude Haiku 4.5): plan_site → questions?
+                                                        │              ──> Opus 5.5 writes the page ──> page checks + guardrail ──> S3 _draft/{draftId}/index.html
                                                         └──> DynamoDB sites (currentDraftId, drafts) + jobs (NEEDS_INPUT | DONE, draftUrl)
-   browser polls GET /jobs/{id} ──> {status, questions?, draftUrl?, magic link once}; answers → POST /jobs/{id}/answers
+   browser polls GET /jobs/{id} ──> {status, questions?, draftUrl?, magic link once → Mi sitio}; answers → POST /jobs/{id}/answers
 
-visitor ──> https://{slug}.<sites-domain> ──> CloudFront #2 (wildcard alias, CSP script-src = theme script hashes)
+visitor ──> https://{slug}.<sites-domain> ──> CloudFront #2 (wildcard alias, sites CSP: inline scripts and a few CDNs, no network access)
               CloudFront Function: Host → path rewrite  /{slug}/index.html  ──> S3 sitesBucket (OAC, private)
 ```
 
 - **Async + polling**: generation takes 20–60 s; API Gateway caps sync responses at 30 s.
-- **Two distributions**: CloudFront picks the cache behavior (and its response-headers policy) from the original path, before the viewer-request function rewrites by Host. One distribution cannot give sites their own script policy (only theme scripts, by hash) while the generator UI runs its own JS.
+- **Two distributions**: CloudFront picks the cache behavior (and its response-headers policy) from the original path, before the viewer-request function rewrites by Host. One distribution cannot give sites their own script policy (scripts without network access) while the generator UI runs its own JS.
 
 ## Repo layout
 
@@ -75,27 +75,22 @@ coyote/
     src/handlers/submit.ts
     src/handlers/generate.ts
     src/handlers/status.ts
-    src/core/prompt.ts    # brief, content, plan_site, and edit_content prompts
-    src/core/pipeline.ts  # design_brief → publish_content
-    src/core/site-writer.ts     # plan_site (follow-up questions) and edit_content (free-text edits)
+    src/core/prompt.ts    # plan_site prompts
+    src/core/site-writer.ts     # plan_site (follow-up questions)
+    src/core/page-writer.ts     # Opus writes the page (frontend-design skill + a chat-like request)
+    src/core/page-check.ts      # checks, repairs, and the footer on the finished page; contact swaps
     src/core/chat.ts      # the QR chat: messages, Haiku text edits on the page
     src/core/page-outline.ts    # the page with placeholders for the chat model, find/replace changes
     src/core/bedrock.ts   # Converse tool call, effort, caching, images
-    src/core/content.ts   # content JSON schema (zod) + patch function
-    src/core/render.ts    # render(theme, content, brief) → HTML; escapes every interpolation
-    src/core/drafts.ts    # draft storage (_draft/, _src/, _media/), re-render
+    src/core/content.ts   # contact details and media schemas (zod)
+    src/core/drafts.ts    # draft storage (_draft/, _src/, _media/), refill
     src/core/questions.ts # the model's follow-up questions and the owner's answers
-    src/core/css.ts       # signatureCss sanitizer (parser-based allowlist)
-    src/core/policy.ts    # safety checks on content JSON + rendered HTML
-    src/core/quality.ts   # slop lint + brief repair
+    src/core/policy.ts    # text checks: scam phrases, credential requests, card numbers, brands
     src/core/slug.ts      # slugify, reserved/brand list, atomic claim
     src/core/urls.ts      # all URLs, domainless + domain modes
     src/core/ratelimit.ts # per-IP daily counter in DynamoDB
-    themes/               # theme templates + CSS + metadata
-    logos/                # SVG logo templates
-    scripts/local-generate.ts   # fixed businesses through the real model → out/sites/ + the sites sheet
-    scripts/theme-sheet.ts      # every theme with sample content, no model call
-    test/                 # vitest: flows, owner, render escaping, css sanitizer, policy, prompt snapshot
+    scripts/opus-sites.ts       # fixed businesses through the real page writer → out/opus/skill.html
+    test/                 # vitest: flows, owner, chat, page checks, policy, prompt snapshot
   web/                    # Astro workspace: landing, form, "Mi sitio", reportar, terms, privacy
     src/pages/            # es at /, pt at /pt/ (Astro i18n routing)
     src/layouts/, src/components/, src/i18n/
@@ -122,24 +117,18 @@ coyote/
 A language selector (es / pt) sets the site's language. The owner's **email is required**: it links the site to "Mis sitios" and gets the "ready" email. It is not an answer: it never reaches a model or the page.
 
 ## Generation (`services/generator/src/core`)
-- **Page writer** (`page-writer.ts`, `page-check.ts`): Claude Opus 5.5 (`claude-opus-5-5`, `PAGE_MODEL` overrides; effort `PAGE_EFFORT`, default high, one level lower for edits) through Anthropic's API, streaming, with the frontend-design skill (`frontend-design.ts`, Apache-2.0, bundled verbatim) as the system prompt. Each request starts from nothing, so Opus converged on one look per kind of business; a new site's request adds one sentence offering 3 random tones from the skill's own list and a light or dark page (`pickLook`). The request is worded like the chat request that gave the best designs (business, owner's answers, contact details, photo file names, "don't invent facts"), with the photos attached as images; no tags, notes, or rules in it: safety is the checks on the finished page. The contact answers' phone numbers are sent as stand-ins of the same shape and swapped back afterwards; numbers the owner writes in the description or answers go as written. Measured: $0.40–0.60 and 3–4 minutes per page; an edit about $0.50. The API key is the Secrets Manager secret `coyote/anthropic-api-key` (👤 created by hand), readable only by `generate`. Opus goes through Anthropic's API because the Bedrock account refuses it.
+- **Page writer** (`page-writer.ts`, `page-check.ts`): Claude Opus 5.5 (`claude-opus-5-5`, `PAGE_MODEL` overrides; effort `PAGE_EFFORT`, default high, one level lower for edits) through Anthropic's API, streaming, with the frontend-design skill (`frontend-design.ts`, Apache-2.0, bundled verbatim) as the system prompt. Each request starts from nothing, so Opus converged on one look per kind of business; a new site's request adds one sentence offering 3 random tones from the skill's own list and a light or dark page (`pickLook`). The request is worded like the chat request that gave the best designs (business, owner's answers, contact details, photo file names, "don't invent facts"), with the photos attached as images; no tags, notes, or rules in it: safety is the checks on the finished page. The owner's contact details are sent as they are (phone numbers included), so the page shows them exactly. Measured: $0.40–0.60 and 3–4 minutes per page; an edit about $0.50. The API key is the Secrets Manager secret `coyote/anthropic-api-key` (👤 created by hand), readable only by `generate`. Opus goes through Anthropic's API because the Bedrock account refuses it. `./coyote.sh page-model haiku|opus` switches the page writer for the whole stack (SSM parameter `/coyote/page-model`, default opus, read by `generate` for each job): Claude Haiku 4.5, without the effort setting, makes testing the workflow cheap.
 - **Checks on a written page**: links only to the owner's WhatsApp, phone, email, Instagram, Facebook, or Google Maps (others become `#`); no outside images, other iframes than the Google map, scripts or stylesheets from other hosts, `<base>`, or form actions (all removed); no redirects in scripts, meta refresh, or phone numbers and emails the owner never wrote (the page is rejected; numbers and emails in the description, the answers to the questions, and edit requests count as the owner's, so a second branch or an orders email is fine); the visible text passes `checkTexts` and the output guardrail. Then the overflow guard and the platform footer are added. The checks run again on every render.
-- **Models**: Claude Haiku 4.5 writes the follow-up questions (and edits of old themed drafts); the pre-screen stays on Amazon Nova 2 Lite. Both defaults live only in `src/core/models.ts`; `BEDROCK_MODEL_ID` and `PRESCREEN_MODEL_ID` override them. ≈ $0.003 per site on Haiku. Claude models get `toolChoice: auto` with the tool named in the prompt (newer models reject a forced tool); effort is sent only to models that accept it.
+- **Models**: Claude Haiku 4.5 writes the follow-up questions and answers the chat; the pre-screen stays on Amazon Nova 2 Lite. Both defaults live only in `src/core/models.ts`; `BEDROCK_MODEL_ID` and `PRESCREEN_MODEL_ID` override them. ≈ $0.003 per site on Haiku. Claude models get `toolChoice: auto` with the tool named in the prompt (newer models reject a forced tool); effort is sent only to models that accept it.
 - **Follow-up questions**: before writing, `plan_site` returns ready or up to 4 typed questions. With questions the job becomes `NEEDS_INPUT`; the owner answers or skips ("Saltar preguntas y continuar") through `POST /jobs/{id}/answers`, and the job resumes. One round only. Free-text answers go to the model inside `<answers>` after the input guardrail and the pre-screen; contact answers (phone, email, address, social) are validated like the form and go into the contact details, never to the model.
-- **Token budget** (Haiku, measured ≈ 7k in / 1–1.5k out per site with questions): brief ≈ 2k in / 0.5k out; content ≈ 3k in / 1–1.5k out (`maxTokens` 3k); pre-screen ≈ 1.5k in / 0.1k out. Log `usage` from every call into `jobs` and expose cost per site as a CloudWatch metric.
-- **No prompt caching**: Haiku 4.5's minimum cacheable prefix is ~4k tokens (verify) and the seeded theme candidates change the prefix, so hits would be rare.
+- **Token budget**: the Opus page is most of the cost (above); `plan_site` and the pre-screen are a few thousand tokens each. Log `usage` from every call into `jobs` and expose cost per site as a CloudWatch metric.
 - **Model call**: `BedrockRuntimeClient` + `ConverseCommand`, explicit `maxTokens`, `retryMode: "adaptive"`. Model IDs from env `BEDROCK_MODEL_ID` / `PRESCREEN_MODEL_ID`. Use the `us.` inference profile; check IDs with `aws bedrock list-inference-profiles --region us-east-1 --profile coyote`.
-- **Structured content via tool use**: force a `publish_content` tool whose schema is the content model (`content.ts`, zod → JSON Schema):
-  `{ title, description, headline, subhead, about, services: [{ name, detail? }], hours?: [{ days, time }], location: { neighborhood?, city? }, ctaText, signatureCss? }`
-- **Contact details are never model output.** WhatsApp number, social handles, and address are copied from the form into the content record (`SiteContent = ModelContent + businessName, lang, contact, media`), so the model cannot invent a phone number. The phone number is not even sent to the model.
-- **Renderer** (`render.ts`): each theme is a TS template function. Every interpolated value is HTML-escaped. Links are built only from typed fields (`wa.me/<number>`, `instagram.com/<handle>`, maps query). The theme guarantees: single HTML file, inline CSS, mobile-first, no JS, no external assets except Google Fonts, `<meta>` for SEO and Open Graph.
-- **System prompt** (copy only): language/locale from the answers; no invented facts (prices, reviews, addresses); the sections the theme expects; a natural WhatsApp CTA.
-- **`signatureCss`** (optional; the only code the model writes): parsed with a real CSS parser (`css-tree`/`postcss`). Allowlisted properties only; no `url()`, `@import`, `position: fixed`, or selectors outside `.signature`. Dropped on any parse error. The sites CSP is the second line of defense.
-- **Stored state**: per draft, the record (answers, content, brief, notes, and the written page when there is one) under `_src/<slug>/`, the rendered page and its images under `_draft/<draftId>/`. The `sites` item holds `currentDraftId` and the last 5 drafts. Re-rendering is a pure function of the record.
+- **Contact details are never model output.** WhatsApp number, social handles, address, and email come from the owner (form, questions, chat) into `answers.contact`; the page writer gets them as they are, and the page checks reject any number or email the owner never wrote.
+- **Stored state**: per draft, the record (answers, notes, edit requests, the written page) under `_src/<slug>/`, the finished page and its images under `_draft/<draftId>/`. The `sites` item holds `currentDraftId` and the last 5 drafts. Finishing a page again (`refill-all`) is a pure function of the record.
 - **Slug**: slugify(business name). Claimed atomically in `submit` with a conditional put on `sites` (`attribute_not_exists(slug)`). Clean slug first; 4-char random suffix only on collision. Refused before claiming: reserved words (`www`, `api`, `app`, `mail`, `preview`, `draft`, `admin`, `static`, anything starting with `_`), the `blocklist` table, and the brand-impersonation list (`bancolombia.<sites-domain>` is the likeliest phishing vector).
 - **Rate limit** (ships with the API in phase 4): API GW route throttling (e.g. 5 rps / burst 10) + per-IP DynamoDB counter with TTL (e.g. 3 sites/IP/day). Checked before the pre-screen call, so a blocked request spends no Bedrock money. WAF deferred.
 - **Guardrail on the input**: only the requester's text is sent as `guardContent`. Our own prompts name the banned categories and would otherwise trip the topic filters on every request.
-- **Bundling**: Lambdas are bundled to CommonJS with the AWS SDK included. `css-tree` is aliased to its self-contained build (its ESM entry breaks when bundled). `./coyote.sh deploy` loads every bundle before deploying, because unit tests run unbundled code and cannot see this kind of failure.
+- **Bundling**: Lambdas are bundled to CommonJS with the AWS SDK included. `./coyote.sh deploy` loads every bundle before deploying, because unit tests run unbundled code and cannot see this kind of failure.
 - **Failures**: the `generate` async invoke has an on-failure destination that marks the job `FAILED` and frees the slug of a site with no draft. `status` also reports `FAILED` for any job `PENDING` longer than 12 min (counted from when the job last became PENDING). `generate` runs up to 10 minutes; the page writer stops at 9 (retries included) and the job becomes `FAILED`.
 
 ## Content safety
@@ -163,19 +152,19 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
    - Runs in `submit` after the rate limit, so rejected requests never reach generation or S3. Returns HTTP 422 with "No podemos crear este sitio". Runs again on the owner's free-text answers to the model's questions and on every edit request.
 
 3. **Policy checks** (`policy.ts`, pure functions, unit-tested)
-   - On the content JSON: URLs are removed from every text the model wrote (a legit owner may mention their website; it must not become a way to send visitors elsewhere). Then scan all text, including the business name and address, for scam phrases, credential requests (a credential word plus a request verb in one sentence, so "la clave de nuestro pan" passes), and card numbers (Luhn). Match → `REJECTED`.
+   - On the text a visitor can read (`checkTexts`, run by the page checks on the finished page): scam phrases, credential requests (a credential word plus a request verb in one sentence, so "la clave de nuestro pan" passes), and card numbers (Luhn). Match → `REJECTED`.
    - Brand impersonation (`brands.ts`), two scopes. Business name and slug: banks, payment companies, couriers, government agencies, big platforms (Bancolombia, BBVA, Itaú, Nubank, Mercado Pago, SAT, AFIP, Correios, DHL, WhatsApp, …). Title and headline: only banks, payment companies, and couriers, so an accountant can write "declaraciones ante el SAT" and anyone can write "pide por WhatsApp".
-   - On the rendered HTML (catches theme bugs): no `<script>`, `<iframe>`, `<object>`, `<meta http-equiv="refresh">`, inline event handlers, or `javascript:` URLs; no `<form>` except the theme's `data-coyote-contact` form (post-MVP); no password/card inputs; outbound links only to `wa.me`, `api.whatsapp.com`, `instagram.com`, `facebook.com`, `maps.google.com`/`goo.gl/maps`, `tel:`, `mailto:`; external resources only from `fonts.googleapis.com`/`fonts.gstatic.com`.
+   - On the page's markup: the page checks (`page-check.ts`, "Generation" above).
    - Any failure → `REJECTED`, nothing uploaded.
 
 4. **After publication**
-   - Every page has a footer "Sitio creado con Coyote · Reportar · Privacidad", added by the renderer, not the theme. Sites have no JS or forms, so "Reportar" links to the app page `/reportar?sitio={slug}`, which calls `POST /report/{slug}`. Reports go to an SNS topic (email to the admin). Auto-unpublish only after N reports from distinct IP hashes (otherwise anonymous reports can be used against competitors). Quarantine moves the S3 prefix to `_quarantine/`, is reversible, and shows on the owner's "Mi sitio" page.
+   - Every page has a footer "Sitio creado con ventas314.com · Reportar · Privacidad", added by the page checks, not by the page writer. Sites have no forms, so "Reportar" links to the app page `/reportar?sitio={slug}`, which calls `POST /report/{slug}`. Reports go to an SNS topic (email to the admin). Auto-unpublish only after N reports from distinct IP hashes (otherwise anonymous reports can be used against competitors). Quarantine moves the S3 prefix to `_quarantine/`, is reversible, and shows on the owner's "Mi sitio" page.
    - `jobs` stores the 3 answers, IP hash, guardrail outcome, and classifier decision for 90 days.
    - `./coyote.sh unpublish <slug>`: removes the pages and adds the slug to `blocklist` so it cannot be claimed again. `./coyote.sh restore <slug>` undoes a quarantine.
    - CloudWatch metric + alarm on `REJECTED` rate (a spike means probing).
 
 **Detecting abuse.** Every alarm emails the admin through one SNS topic (`alerts`).
-- Lambdas emit metrics with CloudWatch EMF (no extra API calls): `Submitted`, `RateLimited` (429s), `Rejected`, `NeedsInput`, `Generated`, `Edited`, `Failed`, `TokensIn`/`TokensOut`, `HeroImages`.
+- Lambdas emit metrics with CloudWatch EMF (no extra API calls): `Submitted`, `RateLimited` (429s), `Rejected`, `NeedsInput`, `Generated`, `Edited`, `Failed`, `TokensIn`/`TokensOut`.
 - Alarms: sites generated per hour above normal; `RateLimited` spike (someone hitting the cap repeatedly); `REJECTED` rate spike (probing); tokens per day above budget; API Gateway 4xx/5xx and throttle count; `generate` errors.
 - Money: AWS Budget alert plus AWS Cost Anomaly Detection (free) on the account.
 - One CloudWatch dashboard with the metrics above.
@@ -185,64 +174,24 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
 Policy text (es/pt) lives in the terms page, linked from the form. The submit button states acceptance.
 
 ## Design quality
-A model left alone produces the same page every time: purple-to-blue gradient hero, "Bienvenidos a…", three centered icon cards, Inter/Roboto, generic copy. Countermeasures, highest impact first:
+A model left alone produces the same page every time: purple-to-blue gradient hero, "Bienvenidos a…", three centered icon cards, Inter/Roboto, generic copy. The page writer is the answer: Opus 5.5 with the frontend-design skill as its system prompt, a request worded like a chat message, and one sentence offering 3 random tones and a light or dark page so pages don't converge (`pickLook`). Rules in the prompt made the designs worse; safety is in the page checks. Review design changes with `npm run opus:sites -w services/generator` (real Opus calls, about $0.50 a page), which writes `out/opus/skill.html`. (Hand-built themes filled by Haiku came first; they looked dated and were deleted. `PLAN-MODEL-SITES.md` has an earlier attempt at model-written pages.)
 
-The page writer (Opus 5.5 with the frontend-design skill) is the design now. What follows describes the themed pages, which are no longer generated; the code stays only to render and edit drafts made before the page writer, and can be deleted with them.
-
-1. **Hand-built theme library** (`services/generator/themes/`), designed with Claude Opus 5.5 in chat: the user asks Opus for each theme as one static HTML/CSS page built around the content slots, and it is converted into a theme file. This replaces the first nine themes, which looked dated. (Model-written pages were tried and parked: see `PLAN-MODEL-SITES.md`.)
-   - 8–12 themes (editorial/serif, warm artisan, bold poster, dark luxury, playful pastel, brutalist/raw, tropical/vibrant, clean clinical, …). Each = CSS foundation + template function (hero variant, section rhythm, texture/grain, motion on load) + tokens (`--ink`, `--paper`, `--accent`, font pairing, radius, spacing scale).
-   - Theme metadata: suited industries, mood words, light/dark. The model picks and fills; it never writes layout. Quality is bounded by the worst theme, not by the model's taste.
-   - The model may add `signatureCss` for one signature element so pages don't look templated.
-   - Layout rules (no three-equal-card row, not everything centered, no glassmorphism) are enforced in theme review, not at runtime.
-
-2. **Two-step generation**
-   - Step A, `design_brief` tool: `{ theme, palette (3 colors from the business, not the industry cliché), fontPairing (allowlist of ~20 Google Fonts pairings; no Inter/Roboto/Arial/Space Grotesk/Poppins), tone, signatureElement (giant type hero, diagonal split, hand-drawn divider, menu board layout, …), headline (max 6 words, no "Bienvenidos") }`.
-   - Step B, `publish_content` tool: the content JSON, given the brief and the theme's slot descriptions. Deciding first and writing second keeps the model from falling back to defaults.
-
-3. **Variety seed**: a seed from the slug hash pre-selects 3 candidate themes and 3 font pairings; the model chooses among them. Log the choice in `jobs`. A weekly query shows the histogram and flags any theme above ~25%.
-
-4. **Negative list in the system prompt** (`prompt.ts`, snapshot-tested)
-   - Copy: no "Bienvenidos a", "Soluciones integrales", "Calidad y compromiso", "Tu satisfacción es nuestra prioridad", "Somos una empresa dedicada a…" (es + pt lists). No invented testimonials, prices, or awards. No emoji as icons. Concrete headlines ("Pan de masa madre, cada mañana en Chapinero").
-   - Palette: no purple/indigo/blue-on-white gradient.
-   - Do: one dominant color + one sharp accent; real local detail from the answers (neighborhood, hours, city); tuteo/voseo/você per country; local currency symbol; natural WhatsApp CTA.
-
-5. **Slop lint before publish** (`quality.ts`, pure functions), on the brief + content JSON
-   - Font pairing in the allowlist; palette hues outside purple/indigo; no banned phrases; headline ≤ 8 words; no emoji in headline or service names; `signatureCss` passes the sanitizer.
-   - Fail → regenerate once with the lint messages. A second miss ships as it is: the lint is about taste, and the policy check is what guards safety. (Fallback model on a second miss: later, with Claude.)
-   - The brief is repaired deterministically instead of regenerated: see `fixBrief`. Renderer token `--on-accent` picks ink or paper, whichever reads better on the accent.
-
-6. **Critic pass** (flag, off by default): a Haiku call scores the content 1–5 (distinctive vs generic, copy specificity). Below 3 → regenerate once with the critique.
-
-7. **Sites sheet**: `npm run generate:local` runs 10 fixed businesses through the real model and writes `out/sites/index.html` (every page at phone and desktop width, with theme, cost, and questions). `npm run themes:sheet` shows every theme with sample content and no model call. Review them after every prompt or theme change.
-
-Trade-off: less surprise per site than free-form output, in exchange for a guaranteed floor. Themes can be added without touching the prompt.
-
-## Images and logo
-MVP uses all three.
-
-1. **Logo = SVG from templates** (`services/generator/logos/`)
-   - ~10 templates: monogram in circle/shield/badge, wordmark, icon + name lockup, stamp/seal, split-color initials. Parameters: `{ text, initials, icon, colors, font }`.
-   - Icon from an allowlisted inline set (Lucide or Phosphor, MIT), chosen in the brief (`logo: { template, icon, text }`). Fonts from the page's pairing allowlist.
-   - At publish, render with `sharp`/`resvg`: `favicon.ico`/`icon.png` and a 1200×630 Open Graph image (logo on theme background) under `/{slug}/assets/`.
-   - Diffusion rejected: garbled text, no vector, colors don't match the theme.
-
-
-2. **User uploads** (optional 4th step: "Sube tu logo y hasta 3 fotos")
+## Images
+1. **User uploads** (optional 4th step: "Sube tu logo y hasta 3 fotos")
    - `POST /uploads` returns S3 presigned POST URLs (max 5 MB, `image/*`, key under `_uploads/{jobId}/`). The form uploads before submitting.
    - The browser resizes (logo ≤ 512 px PNG, photos ≤ 1600 px JPEG), which also strips EXIF. `generate` moderates and copies the files to `_media/<slug>/assets/`; every draft gets its own copy next to the page. No image library runs in the Lambdas. The images go to the models as image blocks: to Haiku when it plans its questions, and to Opus, which places them in the page by their file names.
    - Moderation: Rekognition `DetectModerationLabels` on every upload (~$0.001/image). Any explicit/violent/hate label → job `REJECTED`, uploads deleted.
    - `_uploads/` has a 1-day lifecycle rule. Pages must look good with zero photos.
 
-3. **No generated photos.** Opus draws the images a page needs as SVG. (The Stability hero photo was removed: it cost $0.04 and 10 s, and invented a shop that does not exist.)
+2. **No generated photos.** Opus draws the images a page needs as SVG. (The Stability hero photo was removed: it cost $0.04 and 10 s, and invented a shop that does not exist.)
 
-Infra: an `uploads` Lambda with `s3:PutObject` on `_uploads/*` (it signs the POST); `rekognition:DetectModerationLabels` for `generate`; `bedrock:InvokeModel` on the us-west-2 image model for `generate` (image models take no guardrail, so this statement has no guardrail condition); `s3:DeleteObject` on `_media/*` for `generate` (a flagged generated photo); bucket CORS for browser POSTs. Refused moderation categories: explicit and non-explicit nudity, violence, visually disturbing, hate symbols, drugs and tobacco, gambling. Alcohol and swimwear pass (restaurants and beachwear shops exist).
+Infra: an `uploads` Lambda with `s3:PutObject` on `_uploads/*` (it signs the POST); `rekognition:DetectModerationLabels` for `generate`; bucket CORS for browser POSTs. Refused moderation categories: explicit and non-explicit nudity, violence, visually disturbing, hate symbols, drugs and tobacco, gambling. Alcohol and swimwear pass (restaurants and beachwear shops exist).
 
 ## Site ownership (magic link)
 No passwords, no Cognito. Whoever has the link owns the site. The email given in the form is the recovery channel: "Mis sitios" (below) sends a sign-in link to it. The owner's phone (product phase 2) comes later.
-- When the first draft of a new site is ready, the create page shows the link once: `https://app.<domain>/mi-sitio#token=<slug>.<secret>` (the first `GET /jobs/{id}` after `DONE` takes it off the job). The token is in the fragment so it never reaches logs or referrers. Token = random 32 bytes, stored hashed in `sites`, 1-year expiry.
-- Buttons: "Copiar", "Guardar en mi WhatsApp" (`wa.me/<ownerNumber>?text=<link>`; the owner messages the link to themselves), "Abrir Mi sitio".
+- When the first draft of a new site is ready, the create page goes straight to the link: `https://app.<domain>/mi-sitio#token=<slug>.<secret>` (the first `GET /jobs/{id}` after `DONE` takes it off the job). The token is in the fragment so it never reaches logs or referrers; the page then keeps it in the browser (localStorage) and leaves only `#sitio=<slug>` in the address, so a shared or screenshotted address does not hand over the site (the QR still carries the token, for the phone). Token = random 32 bytes, stored hashed in `sites`, 1-year expiry. The link is not shown for saving; the owner comes back through "Mis sitios".
 - A lost link is recovered through "Mis sitios" (email). WhatsApp re-issue (template `enlace_mi_sitio` to `sites.ownerPhone`) comes with product phase 2.
-- "Mi sitio" page: the current draft in an iframe at phone and desktop width; "¿Qué quieres cambiar?" (free text → an edit job: pre-screen, optional questions, `edit_content` on the copy, the content policy and the output guardrail, a new draft); the contact fields (refill, no model call); "Deshacer" (back to the previous draft; the last 5 are kept); delete my data. Post-MVP: last 30 days of messages, pause notifications, add/verify email, buy a domain.
+- "Mi sitio" page, in tabs: "Vista previa" (the current draft at phone and desktop width, following every change live); "Actualizar tu página" (the chat, the same one the QR opens on the owner's phone: text and contact changes, undo, and a "Rediseñar" offer that starts an edit job (pre-screen, optional questions, Opus on the current page, the page checks and the output guardrail, a new draft); a site made before the chat can no longer be changed there); "Deshacer" (back to the previous draft; the last 5 are kept); delete my data. Post-MVP: last 30 days of messages, pause notifications, add/verify email, buy a domain.
 - API: `GET /me`, `POST /me/edit { instruction?, contact? }`, `POST /me/undo`, `DELETE /me`, `GET /me/chat`, `POST /me/chat { text }`, all with `Authorization: Bearer <token>`, 60 requests per site per day (`GET /me/chat` has its own cap of 3000, for polling), 5 free-text edits per site per day, 30 chat messages per site per day. `POST /jobs/{id}/answers` answers the model's questions (the job ID is the credential). Unpublish and republish come back with the publishing plan.
 
 ## Mis sitios (email sign-in)
@@ -296,7 +245,7 @@ The owner looks at the draft on a computer and asks for changes from their phone
   - `Host == {slug}.<sites-domain>` → `/{slug}/<path or index.html>` (after the publishing plan)
   - apex → redirect to `https://app.<domain>`
   - domainless (`Host` is the `cloudfront.net` name): no host rewrite; `/_draft/{id}` → 301 `/_draft/{id}/`; `/_draft/{id}/` → `/_draft/{id}/index.html`; `/` → redirect to the app. Until the publishing plan, `/{slug}/` (and `{slug}.<sites-domain>`) answer 404.
-  - ResponseHeadersPolicy: `default-src 'none'; script-src <sha256 of each theme script, from themeScriptHashes()>; frame-src https://maps.google.com https://www.google.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action https://api.<domain>; frame-ancestors https://app.<domain>`. HSTS. `X-Robots-Tag: noindex, nofollow` while every page is a private draft.
+  - ResponseHeadersPolicy: `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' <the CDNs in page-check.ts>, with no `connect-src` so scripts have no network access; frame-src https://maps.google.com https://www.google.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action https://api.<domain>; frame-ancestors https://app.<domain>`. HSTS. `X-Robots-Tag: noindex, nofollow` while every page is a private draft.
   - Domainless CSP: `frame-ancestors` uses the app distribution URL. Where an exact URL would make the distributions and the API depend on each other in a circle, a wildcard is used instead: sites `form-action https://*.execute-api.<region>.amazonaws.com`, app `connect-src` the same, app `frame-src https://*.cloudfront.net`. Domain mode uses exact origins everywhere.
   - Cache: default TTL 5 min, so an owner's edit shows up without an invalidation. Missing pages (S3 answers 403) return a small 404 page from `_errors/`.
 - `BucketDeployment` of `web/dist/` (the Astro build) plus the generated `config.js` → `appBucket`.
@@ -384,7 +333,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 
 ### Phase 5b — Magic link + preview
 - [x] Preview iframe, "Publicar", "Genera otra versión" (`POST /jobs/{id}/regenerate`), cap of 2 regenerations per site. A regeneration varies the variety seed, so it offers other themes. Generation results live on the job; the site record and the live page change only on publish
-- [x] Magic link: token `<slug>.<secret>`, only the sha256 of the secret stored, 1-year expiry, returned once by the first publish, shown with "Copiar", "Guardar en mi WhatsApp", "Abrir Mi sitio"
+- [x] Magic link: token `<slug>.<secret>`, only the sha256 of the secret stored, 1-year expiry, returned once when the draft is ready; the create page opens Mi sitio with it
 - [x] "Mi sitio" page (`/mi-sitio`, `/pt/meu-site`) + one `owner` Lambda for `GET /me`, `POST /me/content|regenerate|unpublish|republish`, `DELETE /me`. An edit goes patch → policy → `ApplyGuardrail` → re-render, with no model call. 60 owner requests per site per day. "Delete my data" removes the pages and the site record and redacts the text of every job of that site. Publish, edit, unpublish, republish, and delete invalidate the CDN cache, so they show at once. Verified end to end on the deployed stack
 - [x] Privacy and terms pages (es/pt, Markdown), linked from the footer
 - [x] `reportar` page (es/pt). Generated pages link to the report and privacy pages in their own language (`urls.pageLinks`)
@@ -405,10 +354,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Look nudge against same-looking sites: each new site's request offers 3 random tones from the skill's list and a light or dark page; Opus picks the tone that suits the business (`pickLook`). `opus:sites --repeat 3` shows the spread on one business
 - [x] Fewer ticker strips: Opus put a scrolling ticker/marquee on 10 of 12 pages; 3 in 4 new-site requests now ask for a page without one (`pickLook` `noTicker`), the rest say nothing
 - [ ] Deploy and check a written page live (CSP, map, photos, Mi sitio edit)
-- [ ] Delete the theme pipeline (themes, render, brief, content prompts, Tailwind build, sheets) once no themed draft is left
-- [ ] New themes for health and trades; each checked on `themes:sheet` and `generate:local`
-- [ ] Route each business family to its theme (today the model picks among 3 seeded candidates)
-- [ ] Themes show phone and email when the owner gives them (`links.phone`, `links.email`)
+- [x] Delete the theme pipeline (themes, render, brief, content prompts, Tailwind build, sheets, hero images); every draft is a written page
 - [ ] Deploy and live checks, including `verify:live`
 - [ ] 👤 AWS Support case: Claude Opus 5.5 and Sonnet 5 refused on the account ("not available for this account")
 - [ ] 👤 Later plan: publishing, admin review, and the go-live email
@@ -418,7 +364,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Chat page (`/chat`, `/pt/chat`), QR code on the create page (`uqr`), preview follows the chat's changes
 - [ ] Deploy and check live: scan the QR, a text change, a new number, undo, a redesign, the desktop preview updating
 - [x] Stable preview URL per site (`refreshPreview`): a tab opened on the computer shows the phone's changes on reload
-- [ ] QR and live preview on Mi sitio too
+- [x] QR and live preview on Mi sitio too
 
 ### Phase 5e — Mis sitios (email sign-in)
 - [x] Required email in the form, `accounts` table, sites linked on their first draft, "ready" email with a sign-in link, "you may close this page" once no questions are left
@@ -463,9 +409,9 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 ## Post-MVP: Contact form
 Built in product phase 2 (Flow C). WhatsApp delivery first; SES email (phase 7) is the fallback. Plain HTML form → our API → owner. No JS, no paid CAPTCHA.
 
-- **Injected by the theme, never written by the model.** Each theme has a contact slot: `<form method="post" action="https://api.<domain>/contact/{slug}" data-coyote-contact>`. Fields: `nombre`, `contacto` (phone or email), `mensaje`, hidden `_t` (signed timestamp), honeypot `_web` (must stay empty, hidden via CSS). The policy check allows exactly this form and rejects any other `<form>` or password/card input.
+- **Added by the page checks, never written by the model.** The page gets a contact block: `<form method="post" action="https://api.<domain>/contact/{slug}" data-coyote-contact>`. Fields: `nombre`, `contacto` (phone or email), `mensaje`, hidden `_t` (signed timestamp), honeypot `_web` (must stay empty, hidden via CSS). The policy check allows exactly this form and rejects any other `<form>` or password/card input.
 - Rendered only for sites with a delivery channel (WhatsApp opt-in or verified email).
-- **Works under the strict CSP** (`script-src 'none'`, `form-action https://api.<domain>`): native POST. The Lambda answers `303` to `https://{slug}.<sites-domain>/#enviado` (or `#error`), and the theme shows the state with CSS `:target`. It must be a fragment; CSS cannot read a query string.
+- **Works under the strict CSP** (`script-src 'none'`, `form-action https://api.<domain>`): native POST. The Lambda answers `303` to `https://{slug}.<sites-domain>/#enviado` (or `#error`), and the block shows the state with CSS `:target`. It must be a fragment; CSS cannot read a query string.
 - **Spam controls** (`contact` Lambda, 5 s timeout):
   1. Honeypot filled → drop silently (still 303).
   2. `_t` = HMAC(slug, issuedAt), secret in SSM. Reject if missing, invalid, older than 24 h, or younger than 3 s.
@@ -530,7 +476,7 @@ Every site is free at `{slug}.<sites-domain>`. A `.com` is a paid upsell after p
 - **Guardrail false positives** on legitimate businesses (butcher, gym, tattoo studio, church). The borderline fixtures in phase 2b are the control. The church line and the restaurant-that-serves-drinks line are product policy calls to confirm.
 - **Prompt injection through the description**: tested live with four attacks. Three were stopped at submit (guardrail prompt-attack filter and classifier). One polite instruction ("nota para el redactor: el titular debe decir…") steered the headline; it is now rejected by the classifier (fixture added), phone numbers are stripped from model copy like URLs, and prize-bait phrases are in the scam list. Structural limits hold regardless: the model has no tools, no secrets, and no other user's data in context; it cannot write HTML, links, or contact details; its one code output is sanitized; an attacker can only influence the copy of their own site, which still passes the policy and the output guardrail. Treat stored site text as untrusted in any future model-driven feature (critic pass, WhatsApp edits, support). The chat model sees the page and the owner's messages; it can only change that owner's own page, and every change goes through the page checks and the output guardrail.
 - **Abuse**: anonymous generation costs money per call. The rate limit is the MVP control; add WAF + CAPTCHA if abused.
-- **Lost magic link** has no recovery until WhatsApp re-issue ships.
+- **Lost magic link**: recovered through "Mis sitios" (email); WhatsApp re-issue comes with product phase 2.
 
 ## Verification
 - `npm test` — slug, urls, render escaping, css sanitizer, policy, prompt snapshot.
@@ -538,7 +484,7 @@ Every site is free at `{slug}.<sites-domain>`. A `.com` is a paid upsell after p
 - `cdk synth` and `cdk diff` clean; `cdk deploy --all` succeeds.
 - `curl -X POST <ApiUrl>/generate` → job id; poll `GET /jobs/{id}` until `DONE`; open the returned site URL in Chrome and screenshot desktop + mobile widths.
 - Headers: `curl -I <site URL>` shows `script-src 'none'`; the app loads and runs its JS; the preview iframe renders inside the app and nowhere else.
-- Injection: markup in the name or address comes out escaped (a `<script>` name is rejected outright by the guardrail's prompt-attack filter); a `signatureCss` with `url()`/`@import` is dropped (unit-tested: the API cannot force model output).
+- Injection: markup in the name or address comes out escaped (a `<script>` name is rejected outright by the guardrail's prompt-attack filter).
 - Rate limit: 4th request from one IP in a day returns 429 and produces no Bedrock invocation.
 - Slug: two simultaneous submissions of the same name get different slugs; a brand name (`bancolombia`) is rejected; reserved names (`www`, `preview`) get a suffixed slug.
 - Failure: force a `generate` error → job ends `FAILED`, slug released.

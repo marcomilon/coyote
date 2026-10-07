@@ -101,7 +101,7 @@ export async function accountView(id: string, { stores, urls }: Pick<AccountDeps
   for (const link of account?.sites ?? []) {
     const site = await stores.getSite(link.slug);
     if (!site?.currentDraftId || site.ownerEmailId !== id) continue;
-    sites.push({ ...link, draftUrl: urls.draftUrl(site.currentDraftId), previewUrl: site.previewId ? urls.draftUrl(site.previewId) : urls.draftUrl(site.currentDraftId) });
+    sites.push({ ...link, draftUrl: urls.draftUrl(site.currentDraftId), previewUrl: site.previewId ? urls.draftUrl(site.previewId) : undefined });
   }
   sites.sort((a, b) => b.createdAt - a.createdAt);
   return { email: account?.email, sites };

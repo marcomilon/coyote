@@ -21,7 +21,7 @@ Commands:
   page-model [opus|haiku]        Show or set the model that writes the pages, for the whole stack, from the next job.
                                  haiku is cheap, for testing the workflow; opus makes the real designs. Survives deploys
   refill-all                     Finish every site's current draft again (after page-check or domain changes; no model call)
-  subscribe-alerts <email>       Email alarms, visitor reports, and cost alerts to this address (then confirm-alerts)
+  subscribe-alerts <email>       Email alarms, visitor reports, site notices (new and rejected), and cost alerts to this address (then confirm-alerts)
   protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
                                  AWS sends new confirmation emails; confirm each with confirm-alerts, never by clicking
   confirm-alerts '<link>'        Confirm an SNS email subscription so that only the AWS account can undo it.

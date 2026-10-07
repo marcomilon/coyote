@@ -45,6 +45,7 @@ export interface GeneratorApiProps {
   sitesDistribution: cloudfront.IDistribution;
   guardrail: CoyoteGuardrail;
   abuseReports: sns.ITopic;
+  siteNotices: sns.ITopic;
   /** Bedrock inference profile or model ID that writes the sites. Also scopes the IAM permission. */
   modelId: string;
   /** Bedrock inference profile or model ID of the pre-screen classifier. */
@@ -112,7 +113,7 @@ export class GeneratorApi extends Construct {
       description: 'Page writer model: opus or haiku. Set with ./coyote.sh page-model',
     });
     const generate = fn('Generate', 'generate', {
-      environment: { ...environment, ANTHROPIC_SECRET_NAME, PAGE_MODEL_PARAMETER },
+      environment: { ...environment, ANTHROPIC_SECRET_NAME, PAGE_MODEL_PARAMETER, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
       memorySize: 1024,
       timeout: Duration.minutes(10), // the page writer takes 3–4 minutes
       retryAttempts: 0, // a retry would pay for the model calls twice
@@ -123,7 +124,7 @@ export class GeneratorApi extends Construct {
     // Not a secret: it only keeps raw IPs out of the tables. The stack ID is unique per deployment.
     const ipSalt = Fn.select(2, Fn.split('/', stack.stackId));
     const submit = fn('Submit', 'submit', {
-      environment: { ...environment, GENERATE_FUNCTION_NAME: generate.functionName, RATE_LIMIT_PER_DAY: String(props.rateLimitPerDay), IP_HASH_SALT: ipSalt },
+      environment: { ...environment, GENERATE_FUNCTION_NAME: generate.functionName, RATE_LIMIT_PER_DAY: String(props.rateLimitPerDay), IP_HASH_SALT: ipSalt, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
     });
     // Takes the magic link off a finished job, so it needs write access to jobs.
     const status = fn('Status', 'status', { memorySize: 256 });
@@ -179,6 +180,8 @@ export class GeneratorApi extends Construct {
     props.sitesBucket.grantReadWrite(report);
     props.sitesBucket.grantDelete(report);
     props.abuseReports.grantPublish(report);
+    props.siteNotices.grantPublish(generate);
+    props.siteNotices.grantPublish(submit);
     for (const f of [owner, report]) props.sitesDistribution.grantCreateInvalidation(f);
     props.rateLimitTable.grantReadWriteData(owner);
 

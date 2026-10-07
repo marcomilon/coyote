@@ -3,6 +3,7 @@ import { normalizeAnswers, type Answers } from './answers';
 import { GuardrailBlocked, type CallTool } from './bedrock';
 import { findBrand } from './brands';
 import { JOB_TTL_SECONDS, type Job, type Stores } from './jobs';
+import { announceRejection, type Announce } from './notices';
 import { isRejected, prescreen } from './prescreen';
 import { hashIp, rateLimitKey } from './ratelimit';
 import { rejectSlug, slugify, withSuffix } from './slug';
@@ -28,6 +29,8 @@ export interface SubmitDeps {
   modelId: string;
   rateLimitPerDay: number;
   ipSalt: string;
+  /** Notices for the admin (notices.ts). */
+  announce?: Announce;
   /** Starts the generate Lambda asynchronously. */
   startGenerate(jobId: string): Promise<void>;
   now(): number;
@@ -80,6 +83,7 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
   };
   const reject = async (rejectedBy: Job['rejectedBy'], rejectDetail: string): Promise<SubmitResult> => {
     await stores.putJob({ ...job, status: 'REJECTED', rejectedBy, rejectDetail });
+    await announceRejection(deps.announce, job, rejectedBy ?? 'unknown', rejectDetail);
     return { status: 422 };
   };
 

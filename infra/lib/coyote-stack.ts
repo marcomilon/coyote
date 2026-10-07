@@ -70,6 +70,8 @@ export class CoyoteStack extends Stack {
   readonly api: apigwv2.HttpApi;
   readonly guardrail: CoyoteGuardrail;
   readonly abuseReports: sns.Topic;
+  /** Admin notices: every new site and every rejection (notices.ts; `./coyote.sh subscribe-alerts` subscribes to it too). */
+  readonly siteNotices: sns.Topic;
   /** Env vars every Lambda needs to build URLs (see urls.ts `urlConfigFromEnv`). */
   readonly urlEnv: Record<string, string>;
 
@@ -302,6 +304,7 @@ export class CoyoteStack extends Stack {
     // ---------------------------------------------------------------------------------------
     this.guardrail = new CoyoteGuardrail(this, 'Guardrail');
     this.abuseReports = new sns.Topic(this, 'AbuseReports', { displayName: 'Coyote abuse reports' });
+    this.siteNotices = new sns.Topic(this, 'SiteNotices', { displayName: 'Coyote site notices' });
 
     // ---------------------------------------------------------------------------------------
     // DNS (domain mode only)
@@ -355,6 +358,7 @@ export class CoyoteStack extends Stack {
       sitesDistribution,
       guardrail: this.guardrail,
       abuseReports: this.abuseReports,
+      siteNotices: this.siteNotices,
       modelId: props.modelId ?? DEFAULT_MODEL_ID,
       prescreenModelId: props.prescreenModelId ?? DEFAULT_PRESCREEN_MODEL_ID,
       rateLimitPerDay: 100, // sandbox account; production uses 3

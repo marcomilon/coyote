@@ -3,7 +3,7 @@
  *   unpublish <slug>    take a site down for good and blocklist the slug
  *   restore <slug>      bring a quarantined site back
  *   abuse-report        who did what in the last 24 h
- *   refill-all          re-render every site's current draft (after a theme, renderer, or domain change); no model call
+ *   refill-all          finish every site's current draft again (after a page-check or domain change); no model call
  */
 import { readFileSync } from 'node:fs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -88,12 +88,18 @@ switch (command) {
   }
   case 'refill-all': {
     const sites = (await scan<SiteRecord>(config.sitesTable)).filter((site) => site.currentDraftId);
+    let failed = 0;
     for (const site of sites) {
-      await refillDraft(site, { stores, urls });
-      await stores.invalidatePaths([`/_draft/${site.currentDraftId}/*`]);
-      console.log(`${site.slug}: refilled ${urls.draftUrl(site.currentDraftId!)}`);
+      try {
+        await refillDraft(site, { stores, urls });
+        await stores.invalidatePaths([`/_draft/${site.currentDraftId}/*`]);
+        console.log(`${site.slug}: refilled ${urls.draftUrl(site.currentDraftId!)}`);
+      } catch (error) {
+        failed++;
+        console.error(`${site.slug}: FAILED (${error instanceof Error ? error.message.slice(0, 200) : error})`);
+      }
     }
-    console.log(`${sites.length} site(s) done.`);
+    console.log(`${sites.length - failed} site(s) done${failed ? `, ${failed} failed` : ''}.`);
     break;
   }
   default:

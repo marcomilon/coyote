@@ -9,27 +9,44 @@ const { lang } = Astro.props;
 const s = t(lang);
 const h = s.home;
 const other = t(s.otherLang.code);
-const sign =
+// Example shop signs on the home page; they swing in one after another (CSS only).
+const signs =
   lang === 'es'
-    ? { top: 'Desde 1998', name: 'Panadería Luna', items: ['Pan de masa madre', 'Croissants', 'Café del Huila'], wa: 'Pide por WhatsApp', stamp: 'Abierto' }
-    : { top: 'Desde 1998', name: 'Padaria Lua', items: ['Fermentação natural', 'Croissants', 'Café especial'], wa: 'Peça pelo WhatsApp', stamp: 'Aberto' };
+    ? [
+        { top: 'Desde 1998', name: 'Panadería Luna', items: ['Pan de masa madre', 'Croissants', 'Café del Huila'], wa: 'Pide por WhatsApp', stamp: 'Abierto', color: 'azul' },
+        { top: 'Mecánica desde 1985', name: 'Taller Ruiz', items: ['Frenos y suspensión', 'Cambio de aceite', 'Diagnóstico'], wa: 'Agenda por WhatsApp', stamp: 'Abierto', color: 'rojo' },
+        { top: 'Peluquería', name: 'Salón Mía', items: ['Cortes', 'Color y mechas', 'Peinados para eventos'], wa: 'Reserva por WhatsApp', stamp: 'Nuevo', color: 'morado' },
+        { top: 'Frutas y verduras', name: 'La Cosecha', items: ['Fruta de temporada', 'Verduras frescas', 'Jugos naturales'], wa: 'Pide por WhatsApp', stamp: 'Envíos', color: 'verde' },
+        { top: 'Cocina casera', name: 'Doña Rosa', items: ['Menú del día', 'Empanadas', 'Postres'], wa: 'Pide por WhatsApp', stamp: 'Abierto', color: 'turquesa' },
+      ]
+    : [
+        { top: 'Desde 1998', name: 'Padaria Lua', items: ['Fermentação natural', 'Croissants', 'Café especial'], wa: 'Peça pelo WhatsApp', stamp: 'Aberto', color: 'azul' },
+        { top: 'Mecânica desde 1985', name: 'Oficina Ruiz', items: ['Freios e suspensão', 'Troca de óleo', 'Diagnóstico'], wa: 'Agende pelo WhatsApp', stamp: 'Aberto', color: 'rojo' },
+        { top: 'Salão de beleza', name: 'Studio Mia', items: ['Cortes', 'Coloração e mechas', 'Penteados para festas'], wa: 'Reserve pelo WhatsApp', stamp: 'Novo', color: 'morado' },
+        { top: 'Hortifrúti', name: 'A Colheita', items: ['Frutas da estação', 'Verduras frescas', 'Sucos naturais'], wa: 'Peça pelo WhatsApp', stamp: 'Entrega', color: 'verde' },
+        { top: 'Comida caseira', name: 'Dona Rosa', items: ['Prato do dia', 'Salgados', 'Sobremesas'], wa: 'Peça pelo WhatsApp', stamp: 'Aberto', color: 'turquesa' },
+      ];
 ---
 
 <Layout lang={lang} title={h.title} description={h.description} alternate={other.paths.home}>
   <section class="hero wrap">
     <div>
-      <p class="script">{h.kicker}</p>
+      <p class="kicker">{h.kicker}</p>
       <h1>{h.headline.map((line) => <span>{line}</span>)}</h1>
       <p class="lead">{h.lead}</p>
       <a class="btn" href={s.paths.create}>{h.cta}</a>
       <span class="cta-note">{h.ctaNote}</span>
     </div>
-    <div class="rotulo" aria-hidden="true">
-      <span class="stamp">{sign.stamp}</span>
-      <p class="top">{sign.top}</p>
-      <p class="name">{sign.name}</p>
-      <ul>{sign.items.map((item) => <li>{item}</li>)}</ul>
-      <span class="wa">{sign.wa}</span>
+    <div class="signs" aria-hidden="true">
+      {signs.map((sign, i) => (
+        <div class={`rotulo ${sign.color}`} style={`--i: ${i}`}>
+          <span class="stamp">{sign.stamp}</span>
+          <p class="top">{sign.top}</p>
+          <p class="name">{sign.name}</p>
+          <ul>{sign.items.map((item) => <li>{item}</li>)}</ul>
+          <span class="wa">{sign.wa}</span>
+        </div>
+      ))}
     </div>
   </section>
 

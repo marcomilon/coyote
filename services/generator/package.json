@@ -13,32 +13,21 @@
     "@aws-sdk/client-secrets-manager": "^3.1141.0",
     "@aws-sdk/client-sesv2": "^3.1141.0",
     "@aws-sdk/client-sns": "^3.1136.0",
+    "@aws-sdk/client-ssm": "^3.1147.0",
     "@aws-sdk/lib-dynamodb": "^3.1136.0",
     "@aws-sdk/s3-presigned-post": "^3.1137.0",
-    "css-select": "^6.0.0",
-    "css-tree": "^3.2.1",
     "dom-serializer": "^3.1.1",
     "domhandler": "^6.0.1",
-    "domutils": "^4.0.2",
     "htmlparser2": "^12.0.0",
-    "lucide": "^1.48.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@smithy/types": "^4.18.0",
-    "@tailwindcss/cli": "^4.3.3",
-    "@types/css-tree": "^3.2.0",
-    "tailwindcss": "^4.3.3"
+    "@smithy/types": "^4.18.0"
   },
   "scripts": {
-    "build": "tsx scripts/build-tailwind.ts && tsc --noEmit",
-    "generate:local": "tsx scripts/local-generate.ts",
+    "build": "tsc --noEmit",
     "prescreen:fixtures": "tsx scripts/prescreen-fixtures.ts",
     "verify:live": "tsx scripts/verify-live.ts",
-    "sites:sheet": "tsx scripts/sites-sheet.ts",
-    "themes:sheet": "tsx scripts/theme-sheet.ts",
-    "fonts:check": "tsx scripts/check-fonts.ts",
-    "themes:tailwind": "tsx scripts/build-tailwind.ts",
     "opus:sites": "tsx scripts/opus-sites.ts"
   }
 }

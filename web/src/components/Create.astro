@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { t, type Lang } from '../i18n/strings';
+import { countries, countryLabel } from '../scripts/phone';
 
 interface Props {
   lang: Lang;
@@ -11,14 +12,14 @@ const c = s.create;
 const other = t(s.otherLang.code);
 // The script is language-agnostic: it reads the strings it needs from here.
 const clientStrings = {
+  lang, // The site is written in the language of the form.
   errors: c.errors,
   uploading: c.photos.uploading,
   uploadFailed: c.photos.failed,
+  tooManyPhotos: c.photos.tooMany,
+  notImage: c.photos.notImage,
   submit: c.submit,
   mySitePath: s.paths.mySite,
-  chatPath: s.paths.chat,
-  qr: c.qr,
-  copied: c.done.copied,
   question: s.questions,
   rejected: c.rejected,
   rateLimited: c.rateLimited,
@@ -40,6 +41,7 @@ const clientStrings = {
         <fieldset>
           <label class="q" for="businessName"><i>1</i>{c.q1.label}</label>
           <input type="text" id="businessName" name="businessName" maxlength="80" autocomplete="organization" placeholder={c.q1.placeholder} required />
+          <p class="count" data-count-for="businessName" aria-hidden="true"></p>
           <p class="error" data-error="businessName" role="alert"></p>
         </fieldset>
 
@@ -47,32 +49,48 @@ const clientStrings = {
           <label class="q" for="about"><i>2</i>{c.q2.label}</label>
           <p class="hint" id="about-hint">{c.q2.hint}</p>
           <textarea id="about" name="about" maxlength="1000" aria-describedby="about-hint" placeholder={c.q2.placeholder} required></textarea>
+          <p class="count" data-count-for="about" aria-hidden="true"></p>
           <p class="error" data-error="about" role="alert"></p>
         </fieldset>
 
         <fieldset>
           <legend class="q"><i>3</i>{c.q3.label}</legend>
-          <label class="sub" for="whatsapp">{c.q3.whatsapp}</label>
-          <input type="tel" id="whatsapp" name="whatsapp" maxlength="40" autocomplete="tel" inputmode="tel" placeholder={c.q3.whatsappPlaceholder} required />
+          <div class="two">
+            <div>
+              <label class="sub" for="country">{c.q3.country}</label>
+              <select id="country" name="country" data-fallback={lang === 'pt' ? 'BR' : ''}>
+                <option value="">{c.q3.countryPick}</option>
+                {countries(lang).map((country) => <option value={country.iso}>{countryLabel(country, lang)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label class="sub" for="whatsapp">{c.q3.whatsapp}</label>
+              <input type="tel" id="whatsapp" name="whatsapp" maxlength="24" autocomplete="tel-national" inputmode="tel" required />
+            </div>
+          </div>
           <p class="error" data-error="contact.whatsapp" role="alert"></p>
+          <label class="sub" for="email">{c.q3.email}</label>
+          <input type="email" id="email" name="email" maxlength="120" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" placeholder={c.q3.emailPlaceholder} />
+          <p class="error" data-error="contact.email" role="alert"></p>
           <label class="sub" for="address">{c.q3.address}</label>
           <input type="text" id="address" name="address" maxlength="160" autocomplete="street-address" />
           <p class="error" data-error="contact.address" role="alert"></p>
           <div class="two">
             <div>
               <label class="sub" for="instagram">{c.q3.instagram}</label>
-              <input type="text" id="instagram" name="instagram" maxlength="200" placeholder="@" autocapitalize="none" />
+              <input type="text" id="instagram" name="instagram" maxlength="200" placeholder={c.q3.instagramPlaceholder} autocapitalize="none" autocorrect="off" spellcheck="false" />
               <p class="error" data-error="contact.instagram" role="alert"></p>
             </div>
             <div>
               <label class="sub" for="facebook">{c.q3.facebook}</label>
-              <input type="text" id="facebook" name="facebook" maxlength="200" autocapitalize="none" />
+              <input type="text" id="facebook" name="facebook" maxlength="200" placeholder={c.q3.facebookPlaceholder} autocapitalize="none" autocorrect="off" spellcheck="false" />
               <p class="error" data-error="contact.facebook" role="alert"></p>
             </div>
           </div>
         </fieldset>
 
-        <fieldset>
+        {/* Logo and photos: hidden for now (remove `hidden` to show it again). */}
+        <fieldset hidden>
           <legend class="q"><i>+</i>{c.photos.label}</legend>
           <p class="hint">{c.photos.hint}</p>
           <div class="two">
@@ -85,16 +103,8 @@ const clientStrings = {
         <fieldset>
           <label class="q" for="ownerEmail"><i>4</i>{c.email.label}</label>
           <p class="hint" id="ownerEmail-hint">{c.email.hint}</p>
-          <input type="email" id="ownerEmail" name="ownerEmail" maxlength="120" autocomplete="email" autocapitalize="none" inputmode="email" aria-describedby="ownerEmail-hint" placeholder={c.email.placeholder} required />
+          <input type="email" id="ownerEmail" name="ownerEmail" maxlength="120" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" aria-describedby="ownerEmail-hint" placeholder={c.email.placeholder} required />
           <p class="error" data-error="ownerEmail" role="alert"></p>
-        </fieldset>
-
-        <fieldset>
-          <legend class="sub">{c.siteLang}</legend>
-          <div class="langs">
-            <label><input type="radio" name="lang" value="es" checked={lang === 'es'} /><span>Español</span></label>
-            <label><input type="radio" name="lang" value="pt" checked={lang === 'pt'} /><span>Português</span></label>
-          </div>
         </fieldset>
 
         <div class="submit-row">
@@ -126,41 +136,10 @@ const clientStrings = {
       </form>
     </section>
 
-    <section data-view="done" class="storefront">
-      <div class="bar">
-        <div class="title">
-          <p class="script">Coyote</p>
-          <h2>{c.done.title}</h2>
-          <p>{c.done.text}</p>
-        </div>
-        <a class="btn small ghost" data-draft-link target="_blank" rel="noopener">{c.done.open}</a>
-      </div>
-      <div class="handoff" data-handoff hidden>
-        <div class="qr" data-qr></div>
-        <div>
-          <h3>{c.qr.title}</h3>
-          <p>{c.qr.text}</p>
-          <a class="linkbtn" data-chat-open target="_blank" rel="noopener">{c.qr.open}</a>
-        </div>
-      </div>
-      <div class="magic">
-        <h3>{c.magic.title}</h3>
-        <p>{c.magic.text}</p>
-        <div class="linkbox"><a data-magic-link></a></div>
-        <div class="actions">
-          <button class="btn small blue" type="button" data-magic-copy>{c.magic.copy}</button>
-          <a class="btn small ghost" data-magic-whatsapp target="_blank" rel="noopener">{c.magic.whatsapp}</a>
-          <a class="btn small" data-magic-open>{c.magic.open}</a>
-        </div>
-      </div>
-      <p class="notice updated" data-updated role="status" aria-live="polite"></p>
-      <div class="frame"><iframe title={c.done.title} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></div>
-    </section>
-
     <section data-view="message" class="panel" aria-live="assertive">
       <h2 data-message-title></h2>
       <p data-message-text></p>
-      <div class="actions"><a class="btn ghost" href={s.paths.create}>{c.failed.retry}</a></div>
+      <div class="actions"><button class="btn ghost" type="button" data-back-to-form hidden></button></div>
     </section>
   </div>
 </Layout>

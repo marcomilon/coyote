@@ -22,6 +22,10 @@ function withIndex(uri) {
 
 // "/<draftId>/rest" → the rewritten request, a redirect that adds the root's trailing slash, or 404.
 function draft(request, path) {
+  // A draft shows only inside the app's pages (its frame-ancestors names them), never opened from a shared
+  // link: the browser marks a top-level load "document". No Sec-Fetch-Dest at all (old browsers) is refused too.
+  var dest = request.headers['sec-fetch-dest'];
+  if (!dest || dest.value === 'document') return NOT_FOUND;
   var parts = path.split('/'); // ['', draftId, ...]
   if (!DRAFT_ID.test(parts[1] || '')) return NOT_FOUND;
   // A draft root needs its trailing slash so relative asset URLs resolve.

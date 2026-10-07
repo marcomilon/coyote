@@ -12,6 +12,7 @@ const Body = z.object({
   businessName: z.string().max(200),
   about: z.string().max(2000),
   whatsapp: z.string().max(40),
+  email: z.string().max(200).optional(),
   address: z.string().max(300).optional(),
   instagram: z.string().max(200).optional(),
   facebook: z.string().max(200).optional(),

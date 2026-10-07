@@ -68,6 +68,13 @@ describe('CoyoteStack, domainless', () => {
     template.hasResourceProperties('AWS::Lambda::Function', { Timeout: 600, Environment: { Variables: Match.objectLike({ ANTHROPIC_SECRET_NAME: 'coyote/anthropic-api-key' }) } });
   });
 
+  it('keeps the page-model switch in SSM, starting on Opus, readable only by the generate Lambda', () => {
+    template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-model', Value: 'opus' });
+    template.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PAGE_MODEL_PARAMETER: '/coyote/page-model' }) } });
+    const readers = Object.keys(template.findResources('AWS::IAM::Policy')).filter((id) => JSON.stringify(template.findResources('AWS::IAM::Policy')[id]).includes('ssm:GetParameter'));
+    expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
+  });
+
   it('lets the app run its own scripts only', () => {
     const csp = cspOf(template, 'AppHeaders');
     expect(csp).toContain("script-src 'self'");

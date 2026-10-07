@@ -1,23 +1,24 @@
 // The create flow: form → POST /generate → poll GET /jobs/{id} → (questions → POST /jobs/{id}/answers → poll)
-// → the draft and the magic link. Validation uses the same zod schema as the API, so the two can never disagree.
+// → Mi sitio, opened with the magic link. Validation uses the same zod schema as the API, so the two can never disagree.
 import { ZodError } from 'zod';
 import { normalizeAnswers } from '../../../services/generator/src/core/answers';
 import { api, apiUrl, sendAnswers, waitForJob, type JobView } from './jobs';
-import { followDraft, qrCode } from './live-preview';
+import { fullNumber, setUpCountryPicker } from './phone';
 import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
 import { uploadImages } from './upload';
 
-type State = 'form' | 'working' | 'questions' | 'done' | 'message';
-type Message = { title: string; text: string };
+type State = 'form' | 'working' | 'questions' | 'message';
+/** `action`: a button back to the form, with the owner's answers filled in again. */
+type Message = { title: string; text: string; action?: string };
 interface Strings {
+  lang: 'es' | 'pt';
   errors: Record<string, string>;
   uploading: string;
   uploadFailed: string;
+  tooManyPhotos: string;
+  notImage: string;
   submit: string;
   mySitePath: string;
-  chatPath: string;
-  qr: { title: string; updated: string };
-  copied: string;
   question: QuestionStrings & { invalid: string };
   rejected: Message;
   rateLimited: Message;
@@ -30,8 +31,37 @@ interface Strings {
 const root = document.getElementById('create') as HTMLElement;
 const strings = JSON.parse(root.dataset.strings ?? '{}') as Strings;
 const form = root.querySelector('form[data-form]') as HTMLFormElement;
+setUpCountryPicker(form.elements.namedItem('country') as HTMLSelectElement, form.elements.namedItem('whatsapp') as HTMLInputElement);
+const MAX_PHOTOS = 3; // as in services/generator/src/core/uploads.ts
 const questionsForm = root.querySelector('form[data-questions]') as HTMLFormElement;
 const $ = <T extends Element>(selector: string) => root.querySelector(selector) as T;
+
+// Character counters under the fields with a limit, so a long description isn't cut off without notice.
+form.querySelectorAll<HTMLElement>('[data-count-for]').forEach((counter) => {
+  const field = form.elements.namedItem(counter.dataset.countFor!) as HTMLInputElement | HTMLTextAreaElement;
+  const update = () => {
+    counter.textContent = `${field.value.length}/${field.maxLength}`;
+    counter.classList.toggle('full', field.value.length >= field.maxLength);
+  };
+  field.addEventListener('input', update);
+  update();
+});
+
+// Photos: images only, at most MAX_PHOTOS; extra or non-image files are dropped with a note.
+for (const name of ['logo', 'photos']) {
+  const input = form.elements.namedItem(name) as HTMLInputElement;
+  input.addEventListener('change', () => {
+    const files = [...(input.files ?? [])];
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    const kept = images.slice(0, name === 'photos' ? MAX_PHOTOS : 1);
+    $('[data-error="photos"]').textContent = images.length < files.length ? strings.notImage : kept.length < images.length ? strings.tooManyPhotos : '';
+    if (kept.length < files.length) {
+      const transfer = new DataTransfer();
+      kept.forEach((file) => transfer.items.add(file));
+      input.files = transfer.files;
+    }
+  });
+}
 
 let stepTimer: number | undefined;
 
@@ -45,6 +75,9 @@ function show(state: State) {
 function showMessage(message: Message) {
   $('[data-message-title]').textContent = message.title;
   $('[data-message-text]').textContent = message.text;
+  const back = $<HTMLButtonElement>('[data-back-to-form]');
+  back.textContent = message.action ?? '';
+  back.hidden = !message.action;
   history.replaceState(null, '', location.pathname + location.search);
   show('message');
 }
@@ -57,6 +90,8 @@ function showMessage(message: Message) {
 const STEP_STARTS_MS = [0, 8_000, 25_000, 50_000];
 
 function animateSteps() {
+  // Start the bar again: after the questions the view comes back from display:none, and Chrome can leave it frozen.
+  root.querySelectorAll<HTMLElement>('[data-view="working"] .paint').forEach((bar) => bar.getAnimations().forEach((a) => (a.cancel(), a.play())));
   const items = [...root.querySelectorAll('.worksteps li')];
   const elapsed = $<HTMLElement>('[data-elapsed]');
   const started = Date.now();
@@ -86,61 +121,64 @@ function setErrors(fields: string[]) {
   form.querySelector<HTMLElement>('[aria-invalid]')?.focus();
 }
 
-/** The magic link is handed out once. Kept for this tab, so a reload of the result still shows it. */
+/** The magic link is handed out once. Kept for this tab, so a reload of /crear#job=… still finds it. */
 const magicKey = (jobId: string) => `coyote:magic:${jobId}`;
 function rememberMagic(jobId: string, job: JobView) {
   try {
-    if (job.miSitioUrl) sessionStorage.setItem(magicKey(jobId), JSON.stringify({ miSitioUrl: job.miSitioUrl, ownerWhatsApp: job.ownerWhatsApp }));
-    return JSON.parse(sessionStorage.getItem(magicKey(jobId)) ?? 'null') as { miSitioUrl: string; ownerWhatsApp?: string } | null;
+    if (job.miSitioUrl) sessionStorage.setItem(magicKey(jobId), JSON.stringify({ miSitioUrl: job.miSitioUrl }));
+    return JSON.parse(sessionStorage.getItem(magicKey(jobId)) ?? 'null') as { miSitioUrl: string } | null;
   } catch {
-    return job.miSitioUrl ? { miSitioUrl: job.miSitioUrl, ownerWhatsApp: job.ownerWhatsApp } : null;
+    return job.miSitioUrl ? { miSitioUrl: job.miSitioUrl } : null;
   }
 }
 
-function copyButton(button: HTMLButtonElement, text: string) {
-  button.onclick = async () => {
-    await navigator.clipboard.writeText(text);
-    const label = button.textContent;
-    button.textContent = strings.copied;
-    window.setTimeout(() => (button.textContent = label), 1800);
-  };
+// The owner's answers, kept for this tab until the site is ready, so a rejection or a failure can go back to the
+// form filled in (the photos are not kept: a file input can't be filled from script).
+const ANSWERS_KEY = 'coyote:answers';
+const ANSWER_FIELDS = ['businessName', 'about', 'country', 'whatsapp', 'email', 'address', 'instagram', 'facebook', 'ownerEmail'] as const;
+
+function keepAnswers(data: Record<string, string>) {
+  try {
+    sessionStorage.setItem(ANSWERS_KEY, JSON.stringify(Object.fromEntries(ANSWER_FIELDS.map((f) => [f, data[f] ?? '']))));
+  } catch {
+    // Storage blocked: the button still goes back to the form, empty.
+  }
 }
 
+function forgetAnswers() {
+  try {
+    sessionStorage.removeItem(ANSWERS_KEY);
+  } catch {
+    // Nothing kept.
+  }
+}
+
+function backToForm() {
+  let kept: Record<string, string> = {};
+  try {
+    kept = JSON.parse(sessionStorage.getItem(ANSWERS_KEY) ?? '{}') as Record<string, string>;
+  } catch {
+    // Nothing kept: the form stays as it is.
+  }
+  for (const field of ANSWER_FIELDS) {
+    const el = form.elements.namedItem(field) as HTMLInputElement | HTMLSelectElement | null;
+    if (!el || kept[field] === undefined) continue;
+    el.value = kept[field];
+    el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input')); // placeholder and counters
+  }
+  history.replaceState(null, '', location.pathname + location.search);
+  show('form');
+  (form.elements.namedItem('about') as HTMLTextAreaElement).focus({ preventScroll: true });
+}
+$<HTMLButtonElement>('[data-back-to-form]').onclick = backToForm;
+
+/** The draft is ready: the owner continues on Mi sitio, which the magic link opens. */
 function showDone(jobId: string, job: JobView) {
   const magic = rememberMagic(jobId, job);
-  if (!magic || !job.draftUrl) return showMessage(strings.lostLink);
-  // The link points at this app's own Mi sitio page (localhost in development).
-  const link = `${location.origin}${strings.mySitePath}${new URL(magic.miSitioUrl).hash}`;
-  $<HTMLIFrameElement>('[data-view="done"] iframe').src = job.draftUrl;
-  // The stable URL: a tab opened with it shows every later change on reload.
-  $<HTMLAnchorElement>('[data-draft-link]').href = job.previewUrl ?? job.draftUrl;
-  const box = $<HTMLAnchorElement>('[data-magic-link]');
-  box.href = link;
-  box.textContent = link.replace(/^https?:\/\//, '').replace(/#token=.{12}.*$/, '#token=…');
-  copyButton($<HTMLButtonElement>('[data-magic-copy]'), link);
-  $<HTMLAnchorElement>('[data-magic-whatsapp]').href = `https://wa.me/${magic.ownerWhatsApp ?? ''}?text=${encodeURIComponent(link)}`;
-  $<HTMLAnchorElement>('[data-magic-open]').href = link;
-  showChatHandoff(new URL(magic.miSitioUrl).hash, job.draftUrl);
-  show('done');
-}
-
-let stopFollowing: (() => void) | undefined;
-
-/** The QR code opens the chat on the owner's phone; this page then shows every change the chat makes. */
-function showChatHandoff(hash: string, draftUrl: string) {
-  const token = decodeURIComponent(/^#token=(.+)$/.exec(hash)?.[1] ?? '');
-  if (!token) return;
-  const chatLink = `${location.origin}${strings.chatPath}${hash}`;
-  $<HTMLElement>('[data-qr]').replaceChildren(qrCode(chatLink, strings.qr.title));
-  $<HTMLAnchorElement>('[data-chat-open]').href = chatLink;
-  $<HTMLElement>('[data-handoff]').hidden = false;
-  stopFollowing?.();
-  stopFollowing = followDraft(token, draftUrl, (next) => {
-    $<HTMLIFrameElement>('[data-view="done"] iframe').src = next;
-    const updated = $<HTMLElement>('[data-updated]');
-    updated.textContent = strings.qr.updated;
-    window.setTimeout(() => (updated.textContent = ''), 4000);
-  });
+  forgetAnswers();
+  if (!magic) return showMessage(strings.lostLink);
+  // Mi sitio on this app (localhost in development); replace() keeps this finished page out of Back.
+  location.replace(`${strings.mySitePath}${new URL(magic.miSitioUrl).hash}`);
 }
 
 function showQuestions(jobId: string, job: JobView) {
@@ -181,14 +219,17 @@ function progress(jobId: string, job: JobView) {
   } catch {
     // Storage blocked: the note still makes sense without the address.
   }
-  $('[data-close-note]').textContent = strings.canClose.replace('{email}', email || '✉');
+  const note = $('[data-close-note]');
+  note.textContent = strings.canClose.replace('{email}', email || '✉');
+  note.classList.add('ready');
 }
 
 const waitNote = $('[data-close-note]').textContent;
 
 async function follow(jobId: string) {
   $('[data-close-note]').textContent = waitNote;
-  show('working');
+  $('[data-close-note]').classList.remove('ready');
+  if (root.dataset.state !== 'working') show('working'); // the submit may have shown it already
   const job = await waitForJob(jobId, (current) => progress(jobId, current));
   if (job.status === 'NEEDS_INPUT') showQuestions(jobId, job);
   else if (job.status === 'DONE') showDone(jobId, job);
@@ -204,11 +245,12 @@ form.addEventListener('submit', async (event) => {
   const raw: Record<string, string | undefined> = {
     businessName: data.businessName ?? '',
     about: data.about ?? '',
-    whatsapp: data.whatsapp ?? '',
+    whatsapp: fullNumber(data.country ?? '', data.whatsapp ?? ''),
+    email: data.email || undefined,
     address: data.address || undefined,
     instagram: data.instagram || undefined,
     facebook: data.facebook || undefined,
-    lang: data.lang,
+    lang: strings.lang,
   };
   const ownerEmail = (data.ownerEmail ?? '').trim();
   try {
@@ -219,19 +261,28 @@ form.addEventListener('submit', async (event) => {
   }
   if (!validEmail(ownerEmail)) return setErrors(['ownerEmail']);
   setErrors([]);
+  keepAnswers(data);
 
   const button = form.querySelector('button[type="submit"]') as HTMLButtonElement;
   button.disabled = true;
+  // Show the working view right away: /generate runs the pre-screen first and takes a few seconds.
+  $('[data-close-note]').textContent = waitNote;
+  show('working');
+  // A field the API rejects (or a failed upload) sends the owner back to the form.
+  const formErrors = (fields: string[]) => {
+    show('form');
+    setErrors(fields);
+  };
   try {
     const logo = (form.elements.namedItem('logo') as HTMLInputElement).files?.[0];
-    const photos = [...((form.elements.namedItem('photos') as HTMLInputElement).files ?? [])].slice(0, 3);
+    const photos = [...((form.elements.namedItem('photos') as HTMLInputElement).files ?? [])].slice(0, MAX_PHOTOS);
     if (logo || photos.length > 0) {
       button.textContent = strings.uploading;
       try {
         raw.uploadId = await uploadImages(apiUrl, logo, photos);
       } catch {
         button.textContent = strings.submit;
-        return setErrors(['photos']);
+        return formErrors(['photos']);
       }
     }
     const { status, body } = await api<{ jobId?: string; fields?: string[] }>('/generate', {
@@ -249,7 +300,7 @@ form.addEventListener('submit', async (event) => {
       history.replaceState(null, '', `#job=${body.jobId}`);
       return void follow(body.jobId);
     }
-    if (status === 400) return setErrors(body.fields?.length ? body.fields : ['generic']);
+    if (status === 400) return formErrors(body.fields?.length ? body.fields : ['generic']);
     if (status === 422) return showMessage(strings.rejected);
     if (status === 429) return showMessage(strings.rateLimited);
     showMessage(strings.failed);

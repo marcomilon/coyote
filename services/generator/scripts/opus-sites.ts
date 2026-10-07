@@ -4,13 +4,13 @@
  * request, and the page comes back as one HTML document. (A version with technical notes in the prompt made
  * worse designs and was removed.) The hero photos are the ones earlier runs generated.
  * Writes out/opus/<id>-skill/index.html, chat-prompt.txt (the same request, to paste into a chat for
- * comparison), and out/opus/skill.html side by side with the themed version of the same business.
+ * comparison), and out/opus/skill.html with every page side by side.
  *   npm run opus:sites -w services/generator -- --only panaderia,salon-vago,ferreteria [--effort high]
  * The API key comes from ANTHROPIC_API_KEY or the AWS secret coyote/anthropic-api-key (profile coyote).
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { normalizeAnswers } from '../src/core/answers';
@@ -22,7 +22,6 @@ process.env.AWS_PROFILE ??= 'coyote';
 
 const MODEL = 'claude-opus-5-5';
 const PRICE = { input: 4, output: 20 }; // USD per million tokens, Anthropic list price; thinking bills as output
-const HAIKU_DIR = resolve('out/sites/us.anthropic.claude-haiku-4-5-20251001-v1_0');
 
 const { values } = parseArgs({
   options: {
@@ -110,14 +109,12 @@ for (const { id, n } of runs) {
   writeFileSync(resolve(dir, 'index.html'), html);
   const problems = audit(html, contact.whatsapp);
   console.log(`${folder} [${look ? `${look.tones.join(' / ')}, ${look.dark ? 'dark' : 'light'}` : 'no nudge'}]: ${message.usage.input_tokens} in / ${message.usage.output_tokens} out, $${cost.toFixed(3)}, ${seconds.toFixed(0)} s, stop: ${message.stop_reason}; checks: ${problems.length ? problems.join('; ') : 'clean'}`);
-  const themed = existsSync(resolve(HAIKU_DIR, id, 'index.html')) ? `../sites/us.anthropic.claude-haiku-4-5-20251001-v1_0/${id}/index.html` : '';
   rows.push(`<tr><th>${folder}<br><small>${look ? `${look.tones.join(' / ')} · ${look.dark ? 'dark' : 'light'}<br>` : ''}$${cost.toFixed(2)} · ${seconds.toFixed(0)} s · effort ${values.effort}</small></th>
-<td><p>Opus 5.5, frontend-design skill</p><div class="shot"><iframe src="${folder}/index.html"></iframe></div><a href="${folder}/index.html" target="_blank">open</a> · <a href="${folder}/chat-prompt.txt" target="_blank">chat prompt</a></td>
-<td>${themed ? `<p>Haiku 4.5 + theme</p><div class="shot"><iframe src="${themed}"></iframe></div><a href="${themed}" target="_blank">open</a>` : ''}</td></tr>`);
+<td><p>Opus 5.5, frontend-design skill</p><div class="shot"><iframe src="${folder}/index.html"></iframe></div><a href="${folder}/index.html" target="_blank">open</a> · <a href="${folder}/chat-prompt.txt" target="_blank">chat prompt</a></td></tr>`);
 }
 
 writeFileSync(
   resolve(outDir, 'skill.html'),
-  `<!doctype html><meta charset="utf-8"><title>Opus vs themes</title><style>body{margin:0;padding:16px;background:#1d1d1f;color:#eee;font:13px system-ui}td,th{vertical-align:top;padding:10px;text-align:left}.shot{width:512px;height:600px;overflow:hidden;background:#fff}.shot iframe{width:1280px;height:1500px;border:0;transform:scale(.4);transform-origin:0 0}a{color:#8ab4f8}</style><h1>Opus 5.5 (model-written) vs Haiku 4.5 + theme</h1><table>${rows.join('')}</table>`,
+  `<!doctype html><meta charset="utf-8"><title>Opus sites</title><style>body{margin:0;padding:16px;background:#1d1d1f;color:#eee;font:13px system-ui}td,th{vertical-align:top;padding:10px;text-align:left}.shot{width:512px;height:600px;overflow:hidden;background:#fff}.shot iframe{width:1280px;height:1500px;border:0;transform:scale(.4);transform-origin:0 0}a{color:#8ab4f8}</style><h1>Opus 5.5 (model-written)</h1><table>${rows.join('')}</table>`,
 );
 console.log(resolve(outDir, 'skill.html'));

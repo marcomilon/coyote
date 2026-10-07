@@ -11,20 +11,20 @@ export type SendEmail = (email: Email) => Promise<void>;
 
 const MAIL = {
   es: {
-    loginSubject: 'Tus sitios en Coyote',
+    loginSubject: 'Tus sitios en ventas314.com',
     login: (names: string[], link: string) =>
-      `Hola:\n\nPediste entrar a tus sitios de Coyote:\n${names.map((n) => `- ${n}`).join('\n')}\n\nÁbrelos con este enlace (sirve una vez, durante una hora):\n${link}\n\nSi no fuiste tú, ignora este correo.\n\nCoyote`,
+      `Hola:\n\nPediste entrar a tus sitios de ventas314.com:\n${names.map((n) => `- ${n}`).join('\n')}\n\nÁbrelos con este enlace (sirve una vez, durante una hora):\n${link}\n\nSi no fuiste tú, ignora este correo.\n\nventas314.com`,
     readySubject: (name: string) => `Tu sitio está listo: ${name}`,
     ready: (name: string, link: string) =>
-      `Hola:\n\nEl sitio de ${name} está listo. Míralo y pide cambios desde tu celular con este enlace (sirve una vez, durante una hora):\n${link}\n\nSi el enlace venció, pide uno nuevo en «Mis sitios» con este mismo correo.\n\nCoyote`,
+      `Hola:\n\nEl sitio de ${name} está listo. Míralo y pide cambios desde tu celular con este enlace (sirve una vez, durante una hora):\n${link}\n\nSi el enlace venció, pide uno nuevo en «Mis sitios» con este mismo correo.\n\nventas314.com`,
   },
   pt: {
-    loginSubject: 'Seus sites no Coyote',
+    loginSubject: 'Seus sites em ventas314.com',
     login: (names: string[], link: string) =>
-      `Olá:\n\nVocê pediu para entrar nos seus sites do Coyote:\n${names.map((n) => `- ${n}`).join('\n')}\n\nAbra com este link (vale uma vez, por uma hora):\n${link}\n\nSe não foi você, ignore este e-mail.\n\nCoyote`,
+      `Olá:\n\nVocê pediu para entrar nos seus sites de ventas314.com:\n${names.map((n) => `- ${n}`).join('\n')}\n\nAbra com este link (vale uma vez, por uma hora):\n${link}\n\nSe não foi você, ignore este e-mail.\n\nventas314.com`,
     readySubject: (name: string) => `Seu site está pronto: ${name}`,
     ready: (name: string, link: string) =>
-      `Olá:\n\nO site de ${name} está pronto. Veja e peça mudanças pelo celular com este link (vale uma vez, por uma hora):\n${link}\n\nSe o link vencer, peça outro em «Meus sites» com este mesmo e-mail.\n\nCoyote`,
+      `Olá:\n\nO site de ${name} está pronto. Veja e peça mudanças pelo celular com este link (vale uma vez, por uma hora):\n${link}\n\nSe o link vencer, peça outro em «Meus sites» com este mesmo e-mail.\n\nventas314.com`,
   },
 };
 

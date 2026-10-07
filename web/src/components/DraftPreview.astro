@@ -1,0 +1,69 @@
+---
+// Full-screen view of the owner's draft. Drafts are served only inside the app's frames (cf-rewrite.js), so this
+// page replaces "open in another tab", and its bar keeps the draft from passing for a published site.
+import '../styles/global.css';
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const s = t(lang);
+const p = s.preview;
+const clientStrings = { noToken: s.mySite.noToken, badToken: s.mySite.badToken, mySitePath: s.paths.mySite };
+---
+
+<!doctype html>
+<html lang={s.htmlLang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{p.title}</title>
+    <meta name="description" content={p.description} />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Hanken+Grotesk:wght@400;600;700&display=swap" />
+    <script is:inline src="/config.js"></script>
+  </head>
+  <body class="preview-page">
+    <div class="preview" id="preview" data-state="loading" data-strings={JSON.stringify(clientStrings)}>
+      <header class="preview-bar">
+        <a class="logo" href={s.paths.home}><img src="/logo.png" alt="ventas314.com" width="668" height="132" /></a>
+        <p><b>{p.badge}</b> <span>{p.note}</span></p>
+        <a class="btn small ghost" data-back href={s.paths.mySite}>{p.back}</a>
+      </header>
+      <iframe title={p.frame} data-frame></iframe>
+      <section class="panel" data-message aria-live="assertive">
+        <h2 data-message-title></h2>
+        <p data-message-text></p>
+      </section>
+    </div>
+  </body>
+</html>
+
+<style>
+  .preview-page { margin: 0; height: 100dvh; overflow: hidden; }
+  .preview { display: flex; flex-direction: column; height: 100dvh; }
+  .preview-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: .6rem 16px; background: var(--amarillo); border-bottom: 3px solid var(--ink);
+  }
+  .preview-bar .logo { flex: none; display: block; }
+  /* The lettering sits low in the image (under the V's tick): lift it so it lines up with the text. */
+  .preview-bar .logo img { display: block; height: 1.9rem; width: auto; translate: 0 -.22rem; }
+  .preview-bar p { margin: 0 auto 0 0; font-size: .95rem; line-height: 1.3; translate: 0 .15rem; }
+  .preview-bar b { font: 400 .95rem/1 var(--display); margin-right: .4rem; }
+  .preview-bar .btn { flex: none; }
+  .preview iframe { flex: 1; width: 100%; border: 0; background: #fff; }
+  .preview [data-message] { margin: 2rem 16px; }
+  .preview[data-state='message'] iframe, .preview:not([data-state='message']) [data-message] { display: none; }
+  @media (max-width: 560px) { .preview-bar span { display: none; } .preview-bar .logo img { height: 1.5rem; } }
+  @media (max-width: 400px) { .preview-bar .logo { display: none; } }
+</style>
+
+<script>
+  import '../scripts/preview';
+</script>

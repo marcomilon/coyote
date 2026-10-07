@@ -88,12 +88,11 @@ describe('runGenerateJob: a detailed request goes straight to the draft', () => 
     expect(job.usage.map((u) => u.step)).toEqual(['classify', 'plan_site', 'write_page']);
 
     const page = t.objects.get('_draft/draft1/index.html')!;
-    expect(page).toContain('href="https://wa.me/573001234567"'); // the stand-in number swapped back
-    expect(page).toContain('Sitio creado con Coyote');
+    expect(page).toContain('href="https://wa.me/573001234567"');
+    expect(page).toContain('Sitio creado con ventas314.com');
     const doc = JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!);
     expect(doc).toMatchObject({ answers: { contact: { whatsapp: '573001234567' } }, media: { photos: [] } });
     expect(doc.page).toContain('<h1>Panadería Luna</h1>');
-    expect(doc.content).toBeUndefined();
     expect(t.sites.get('panaderia-luna')).toMatchObject({ status: 'draft', currentDraftId: 'draft1', drafts: ['draft1'], ownerWhatsApp: '573001234567' });
     expect(t.sites.get('panaderia-luna')!.tokenHash).toMatch(/^[0-9a-f]{64}$/);
     // Nothing is published: no {slug}/ page.
@@ -139,7 +138,7 @@ describe('questions', () => {
     const write = t.writer.requests.at(-1)!;
     expect(write.notes.map((n) => n.answer).join(' ')).toContain('Hogazas de masa madre a $18.000');
     expect(write.notes.map((n) => n.answer)).toContain('Clásico');
-    expect(JSON.stringify(write)).not.toContain('5551234'); // the phone number reaches the model only as a stand-in
+    expect(JSON.stringify(write)).toContain('5551234'); // the page writer gets the owner's real number
     expect(write.answers.contact.phone).toMatch(/^57/);
     // The real number is in the site's contact details.
     expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!).answers.contact.phone).toBe('576015551234');

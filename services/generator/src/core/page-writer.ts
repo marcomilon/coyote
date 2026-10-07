@@ -12,9 +12,22 @@ import type { Note } from './questions';
  * checks run on it afterwards (page-check.ts), not as rules in the prompt, because rules made the designs worse.
  */
 
-/** The page writer's model. PAGE_MODEL overrides it. Not on Bedrock: the account cannot use Opus 5.5 there. */
-export const DEFAULT_PAGE_MODEL = 'claude-opus-5-5';
-export const pageModel = (env: Record<string, string | undefined> = process.env) => env.PAGE_MODEL || DEFAULT_PAGE_MODEL;
+/**
+ * The page writer's models, by the name `./coyote.sh page-model` sets (the SSM parameter PAGE_MODEL_PARAMETER).
+ * Haiku 4.5 is for testing the workflow cheaply; the designs are Opus's. Not on Bedrock: the account cannot use
+ * Opus 5.5 there.
+ */
+export const PAGE_MODELS = { opus: 'claude-opus-5-5', haiku: 'claude-haiku-4-5' } as const;
+export const DEFAULT_PAGE_MODEL = PAGE_MODELS.opus;
+
+/** The model ID: PAGE_MODEL overrides it, then the switch's setting, then Opus (also for an unknown setting). */
+export function pageModel(env: Record<string, string | undefined> = process.env, setting?: string): string {
+  if (env.PAGE_MODEL) return env.PAGE_MODEL;
+  return Object.hasOwn(PAGE_MODELS, setting ?? '') ? PAGE_MODELS[setting as keyof typeof PAGE_MODELS] : DEFAULT_PAGE_MODEL;
+}
+
+/** Haiku 4.5 rejects the effort setting. */
+const takesEffort = (model: string) => !model.includes('claude-haiku-4-5');
 
 export type PageEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export const pageEffort = (env: Record<string, string | undefined> = process.env): PageEffort => (env.PAGE_EFFORT as PageEffort) || 'high';
@@ -70,8 +83,8 @@ export interface PageRequest {
   instruction?: string;
 }
 
-/** Writes a page. Resolves to the raw reply text; parsePage extracts the document. */
-export type WritePage = (request: PageRequest, options: { effort: PageEffort }) => Promise<{ text: string; usage: Usage; stopReason: string | null }>;
+/** Writes a page. Resolves to the raw reply text; parsePage extracts the document. `model` defaults to pageModel(). */
+export type WritePage = (request: PageRequest, options: { effort: PageEffort; model?: string }) => Promise<{ text: string; usage: Usage; stopReason: string | null }>;
 
 let key: Promise<string> | undefined;
 
@@ -154,26 +167,28 @@ export function parsePage(text: string): string | undefined {
   return html && html.length > 500 ? html : undefined;
 }
 
+/** The API request for a page. */
+export function pageParams(request: PageRequest, model: string, effort: PageEffort): Anthropic.MessageStreamParams {
+  // The photos go first, in the order the request names them, so the design can follow them.
+  const content: Anthropic.ContentBlockParam[] = [
+    ...request.photos.map((p): Anthropic.ContentBlockParam => ({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: Buffer.from(p.bytes).toString('base64') } })),
+    { type: 'text', text: pagePrompt(request) },
+  ];
+  return {
+    model,
+    max_tokens: 64000,
+    system: FRONTEND_DESIGN,
+    messages: [{ role: 'user', content }],
+    ...(takesEffort(model) && { output_config: { effort } }),
+  } as Anthropic.MessageStreamParams;
+}
+
 /** Anthropic's API, streaming (a page is 10–30k tokens), thinking on at the given effort. */
 export function anthropicWritePage(env: Record<string, string | undefined> = process.env): WritePage {
   let client: Anthropic | undefined;
-  return async (request, { effort }) => {
+  return async (request, { effort, model = pageModel(env) }) => {
     client ??= new Anthropic({ apiKey: await anthropicApiKey(env), maxRetries: 2 });
-    const model = pageModel(env);
-    // The photos go first, in the order the request names them, so the design can follow them.
-    const content: Anthropic.ContentBlockParam[] = [
-      ...request.photos.map((p): Anthropic.ContentBlockParam => ({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: Buffer.from(p.bytes).toString('base64') } })),
-      { type: 'text', text: pagePrompt(request) },
-    ];
-    const message = await client.messages
-      .stream({
-        model,
-        max_tokens: 64000,
-        system: FRONTEND_DESIGN,
-        messages: [{ role: 'user', content }],
-        output_config: { effort },
-      } as Anthropic.MessageStreamParams, { signal: AbortSignal.timeout(PAGE_DEADLINE_MS) })
-      .finalMessage();
+    const message = await client.messages.stream(pageParams(request, model, effort), { signal: AbortSignal.timeout(PAGE_DEADLINE_MS) }).finalMessage();
     const text = message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
     return {
       text,

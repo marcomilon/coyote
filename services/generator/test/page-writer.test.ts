@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
-import { checkPage, maskContact, replaceContact } from '../src/core/page-check';
-import { pagePrompt, parsePage, pickLook, TONES, type PageRequest } from '../src/core/page-writer';
+import { checkPage, contactMissing, replaceContact } from '../src/core/page-check';
+import { pageModel, pageParams, pagePrompt, parsePage, pickLook, TONES, type PageRequest } from '../src/core/page-writer';
 import { submit } from '../src/core/submit';
 import { body, harness } from './harness';
 
@@ -27,7 +27,7 @@ describe('checkPage', () => {
     expect(result.html).toContain('https://wa.me/573001234567?text=Hola');
     expect(result.html).toContain('<iframe src="https://maps.google.com/maps?q=');
     expect(result.html).toContain('overflow-x:clip');
-    expect(result.html).toMatch(/Sitio creado con Coyote · <a href="https:\/\/app\.test\/reportar\?sitio=x"/);
+    expect(result.html).toMatch(/Sitio creado con ventas314.com · <a href="https:\/\/app\.test\/reportar\?sitio=x"/);
     expect(result.texts).toContain('Panadería Luna');
     expect(result.texts).toContain('Pan'); // alt text is visible text
   });
@@ -79,20 +79,44 @@ describe('checkPage', () => {
 });
 
 describe('contact details on a written page', () => {
-  it('masks phone numbers for the model and swaps them back, in links, scripts, and formatted text', () => {
-    const masked = maskContact(contact);
-    expect(masked.whatsapp).toHaveLength(12);
-    expect(masked.whatsapp).toMatch(/^57/);
-    expect(masked.whatsapp).not.toBe(contact.whatsapp);
-    const written = `<a href="https://wa.me/${masked.whatsapp}">+57 ${masked.whatsapp.slice(2, 5)} ${masked.whatsapp.slice(5, 8)} ${masked.whatsapp.slice(8)}</a><script>const n='${masked.whatsapp}'</script>`;
-    const real = replaceContact(written, masked, contact);
-    expect(real).not.toContain(masked.whatsapp);
-    expect(real.match(/573001234567/g)).toHaveLength(3);
+  it('a contact change swaps the number in links, scripts, and formatted text, keeping the formatting', () => {
+    const after = { ...contact, whatsapp: '573119998877' };
+    const page = `<a href="https://wa.me/573001234567">+57 300 123 4567</a><script>const n='573001234567'</script><p>300 123 4567</p>`;
+    const out = replaceContact(page, contact, after);
+    expect(out).toBe(`<a href="https://wa.me/573119998877">+57 311 999 8877</a><script>const n='573119998877'</script><p>311 999 8877</p>`);
   });
 
-  it('the prompt never carries the real number', () => {
-    const request: PageRequest = { answers: { businessName: 'Panadería Luna', about: 'Pan', lang: 'es', contact: maskContact(contact) }, notes: [], photos: [] };
-    expect(pagePrompt(request)).not.toContain('3001234567');
+  it('finds an Argentine mobile with or without its 9', () => {
+    const before = { whatsapp: '5493593834943' };
+    const after = { whatsapp: '5491123456789' };
+    const out = replaceContact('<a href="https://wa.me/5493593834943">+54 9 3593 83-4943</a><p>3593 834943</p>', before, after);
+    expect(out).toBe('<a href="https://wa.me/5491123456789">+54 9 1123 45-6789</a><p>1123 456789</p>');
+  });
+
+  it('finds an address however the page wrote it, and says when a changed detail is not on the page', () => {
+    const before = { whatsapp: '51977204162', address: 'av. bolivar 244, pueblo libre', email: 'a@b.pe' };
+    const after = { ...before, address: 'av. bolivar 666, pueblo libre' };
+    const page = '<p class="contact-link">Av. Bolívar 244<br>Pueblo Libre</p><footer>📍 Av. Bolívar 244, Pueblo Libre • a@b.pe</footer><p>Bolívar fue un prócer.</p>';
+    const out = replaceContact(page, before, after);
+    expect(out).toBe('<p class="contact-link">av. bolivar 666, pueblo libre</p><footer>📍 av. bolivar 666, pueblo libre • a@b.pe</footer><p>Bolívar fue un prócer.</p>');
+    expect(contactMissing(out, before, after)).toEqual([]);
+    // A page that never showed the address, and a new email it never had: both reported.
+    expect(contactMissing('<p>Hola</p>', before, { ...after, email: 'nuevo@b.pe' })).toEqual(['email', 'address']);
+  });
+
+  it("finds a number written with non-breaking spaces or hyphens, and the owner's 13-digit number is not a card", () => {
+    const before = { whatsapp: '5493593834943' };
+    const after = { whatsapp: '5491123456789' };
+    for (const gap of ['&nbsp;', '&#160;', '\u00a0', '\u2011']) {
+      const written = `<p>WhatsApp: +54${gap}9${gap}3593${gap}834943</p>`;
+      expect(checkPage(`<!doctype html><html><head><title>Panadería Luna</title></head><body><h1>Panadería Luna</h1>${written}</body></html>`, { ...opts, contact: before }).violations).toEqual([]);
+      expect(replaceContact(written, before, after)).toBe(`<p>WhatsApp: +54${gap}9${gap}1123${gap}456789</p>`);
+    }
+  });
+
+  it('the prompt carries the owner\'s real contact details', () => {
+    const request: PageRequest = { answers: { businessName: 'Panadería Luna', about: 'Pan', lang: 'es', contact }, notes: [], photos: [] };
+    expect(pagePrompt(request)).toContain('573001234567');
     expect(pagePrompt(request)).toContain('frontend-design skill');
   });
 
@@ -107,6 +131,20 @@ describe('contact details on a written page', () => {
     expect(pagePrompt({ answers, notes: [], photos: [], look })).toContain(`go with whichever of these suits the business best: ${look.tones.join(', ').replace(/, ([^,]+)$/, ', or $1')}, on a dark background.`);
     expect(pagePrompt({ answers, notes: [], photos: [], look: { ...look, noTicker: true } })).toContain('on a dark background, without a scrolling ticker or marquee strip.');
     expect(pagePrompt({ answers, notes: [], photos: [], current: '<html></html>', instruction: 'x' })).not.toContain('For the look');
+  });
+
+  it('picks the model from the page-model switch, with PAGE_MODEL over it and Opus by default', () => {
+    expect(pageModel({}, 'haiku')).toBe('claude-haiku-4-5');
+    expect(pageModel({}, 'opus')).toBe('claude-opus-5-5');
+    expect(pageModel({}, undefined)).toBe('claude-opus-5-5');
+    expect(pageModel({}, 'toString')).toBe('claude-opus-5-5');
+    expect(pageModel({ PAGE_MODEL: 'claude-x' }, 'haiku')).toBe('claude-x');
+  });
+
+  it('sends the effort setting to Opus but not to Haiku 4.5, which rejects it', () => {
+    const request = { answers: { businessName: 'Luna', about: 'Pan', lang: 'es' as const, contact }, notes: [], photos: [] };
+    expect(pageParams(request, 'claude-opus-5-5', 'high')).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'high' } });
+    expect(pageParams(request, 'claude-haiku-4-5', 'high')).not.toHaveProperty('output_config');
   });
 
   it('reads the last html block or a bare document', () => {
@@ -127,6 +165,13 @@ describe('runGenerateJob with the page writer', () => {
     expect([...t.objects.keys()].some((k) => k.includes('hero'))).toBe(false);
     expect(t.writer.requests[0]!.photos).toEqual([]);
     expect(t.writer.requests[0]!.look!.tones).toHaveLength(3);
+  });
+
+  it('writes with the model it is given, for new sites and edits alike', async () => {
+    const t = harness();
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', { ...t.generateDeps, pageModel: 'claude-haiku-4-5' });
+    expect(t.writer.settings[0]).toEqual({ effort: 'high', model: 'claude-haiku-4-5' });
   });
 
   it('fails the job, and frees the slug, when the page writer fails or sends no page', async () => {

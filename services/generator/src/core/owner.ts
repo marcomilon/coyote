@@ -4,7 +4,7 @@ import { cleanContact, type ContactField } from './answers';
 import { Contact } from './content';
 import { deleteDraft, draftPrefix, loadDraft, mediaPrefix, ownerText, refreshPreview, saveDraft, sourcePrefix, type SiteDoc } from './drafts';
 import { JOB_TTL_SECONDS, type Job, type SiteRecord, type Stores } from './jobs';
-import { checkPage, replaceContact } from './page-check';
+import { checkPage, contactMissing, replaceContact } from './page-check';
 import { checkTexts } from './policy';
 import { parseToken, secretMatches } from './token';
 import type { Urls } from './urls';
@@ -12,6 +12,8 @@ import type { Urls } from './urls';
 const OWNER_REQUESTS_PER_DAY = 60;
 /** Free-text edits call the model (about $0.50 each for a written page), so they have their own cap. */
 export const EDITS_PER_DAY = 5;
+/** Chat messages searched for the reply that made an undone draft (only the last few drafts are kept). */
+const UNDO_LOOKBACK = 100;
 
 export interface OwnerDeps {
   stores: Stores;
@@ -54,9 +56,8 @@ export async function authenticate(
   return allowed ? site : 'rate_limited';
 }
 
-/** The stable URL to open in another tab: the preview, or the current draft for a site made before previews. */
-export const previewUrl = (site: SiteRecord, urls: Urls) =>
-  site.previewId ? urls.draftUrl(site.previewId) : site.currentDraftId ? urls.draftUrl(site.currentDraftId) : undefined;
+/** The stable URL that always shows the current draft (made with the first draft; refill-all makes any missing one). */
+export const previewUrl = (site: SiteRecord, urls: Urls) => (site.previewId ? urls.draftUrl(site.previewId) : undefined);
 
 /** What "Mi sitio" shows. Never the token hash. */
 export async function ownerView(site: SiteRecord, { stores, urls }: Pick<OwnerDeps, 'stores' | 'urls'>) {
@@ -76,11 +77,11 @@ export async function ownerView(site: SiteRecord, { stores, urls }: Pick<OwnerDe
 const ContactInput = z.object(Object.fromEntries(Object.keys(Contact.shape).map((key) => [key, z.string().max(300).optional()])) as Record<ContactField, z.ZodOptional<z.ZodString>>).strict();
 const EditBody = z.object({ instruction: z.string().trim().min(3).max(1000).optional(), contact: ContactInput.optional() }).strict();
 
-export type EditResult = { status: 200 } | { status: 202; jobId: string } | { status: 400; fields: string[] } | { status: 409 } | { status: 422 } | { status: 429 };
+export type EditResult = { status: 200; missing: string[] } | { status: 202; jobId: string } | { status: 400; fields: string[] } | { status: 409 } | { status: 422 } | { status: 429 };
 
 /**
  * POST /me/edit. Contact changes refill the placeholders at once (a new draft, no model call). An instruction
- * starts an edit job: optional clarify, then edit_site on the current source, the same checks, a new draft.
+ * starts an edit job: optional clarify, then the page writer on the current page, the same checks, a new draft.
  */
 export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps): Promise<EditResult> {
   const { stores } = deps;
@@ -95,15 +96,17 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
 
   let current = await loadDraft(site.slug, site.currentDraftId, stores);
 
+  let missing: string[] = [];
   if (contact) {
     const changed = await applyContact(current, contact, deps);
     if ('status' in changed) return changed;
     await saveDraft(site, changed.doc, deps);
     site = (await stores.getSite(site.slug)) ?? site;
     current = changed.doc;
+    missing = changed.missing;
   }
 
-  if (!instruction) return { status: 200 };
+  if (!instruction) return { status: 200, missing };
 
   const source = site.jobId ? await stores.getJob(site.jobId) : undefined;
   const job: Job = {
@@ -129,14 +132,14 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
 export type ContactInput = z.infer<typeof ContactInput>;
 
 /**
- * A contact change, with no model call: the new details are swapped into the page (a themed draft renders them).
+ * A contact change, with no model call: the new details are swapped into the page.
  * Resolves to the changed record, not saved yet.
  */
 export async function applyContact(
   current: SiteDoc,
   contact: ContactInput,
   deps: Pick<OwnerDeps, 'outputAllowed'>,
-): Promise<{ doc: SiteDoc } | { status: 400; fields: string[] } | { status: 422 }> {
+): Promise<{ doc: SiteDoc; missing: (keyof Contact)[] } | { status: 400; fields: string[] } | { status: 422 }> {
   const merged: Record<string, string | undefined> = { ...current.answers.contact };
   for (const [field, value] of Object.entries(contact) as [ContactField, string | undefined][]) {
     if (value !== undefined) merged[field] = cleanContact(field, value);
@@ -145,11 +148,12 @@ export async function applyContact(
   if (!checked.success) return { status: 400, fields: [...new Set(checked.error.issues.map((i) => `contact.${i.path.join('.')}`))] };
   const address = checked.data.address;
   if (address && address !== current.answers.contact.address && (checkTexts([address]).length > 0 || !(await deps.outputAllowed(address)))) return { status: 422 };
-  const page = current.page === undefined ? undefined : replaceContact(current.page, current.answers.contact, checked.data);
-  const doc = { ...current, answers: { ...current.answers, contact: checked.data }, content: current.content && { ...current.content, contact: checked.data }, page };
+  const page = replaceContact(current.page, current.answers.contact, checked.data);
+  const doc = { ...current, answers: { ...current.answers, contact: checked.data }, page };
   // A detail removed from the page can still be in its text; that change needs an edit request.
-  if (page !== undefined && checkPage(page, { contact: checked.data, ownerText: ownerText(doc), businessName: doc.answers.businessName, lang: doc.answers.lang, reportUrl: '', privacyUrl: '' }).violations.length > 0) return { status: 422 };
-  return { doc };
+  if (checkPage(page, { contact: checked.data, ownerText: ownerText(doc), businessName: doc.answers.businessName, lang: doc.answers.lang, reportUrl: '', privacyUrl: '' }).violations.length > 0) return { status: 422 };
+  // Saved either way; the owner is told when the page still shows the old detail (it can be changed in the chat).
+  return { doc, missing: contactMissing(page, current.answers.contact, checked.data) };
 }
 
 /** "Deshacer": back to the previous version. The newer one is deleted. */
@@ -161,6 +165,9 @@ export async function undo(site: SiteRecord, { stores }: Pick<OwnerDeps, 'stores
   await refreshPreview(site.slug, drafts.at(-2)!, { stores });
   await deleteDraft(site.slug, dropped, stores);
   await stores.invalidatePaths([`/${draftPrefix(dropped)}*`]);
+  // The chat reply that made it says so, so the chat model is not told the change is still there.
+  const made = (await stores.listChat(site.slug, 0, UNDO_LOOKBACK)).find((m) => m.draftId === dropped);
+  if (made) await stores.updateChat(site.slug, made.at, { undone: true });
   return { status: 200 };
 }
 

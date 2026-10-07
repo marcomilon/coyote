@@ -9,7 +9,7 @@ const { lang } = Astro.props;
 const s = t(lang);
 const m = s.mySites;
 const other = t(s.otherLang.code);
-const clientStrings = { ...m, lang, chatPath: s.paths.chat, mySitePath: s.paths.mySite };
+const clientStrings = { ...m, lang, chatPath: s.paths.chat, mySitePath: s.paths.mySite, previewPath: s.paths.preview };
 ---
 
 <Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySites} withConfig>

@@ -15,13 +15,9 @@
     "test": "vitest run",
     "dev": "npm run dev -w web",
     "synth": "npm run synth -w infra",
-    "generate:local": "npm run generate:local -w services/generator --",
     "prescreen:fixtures": "npm run prescreen:fixtures -w services/generator --",
     "diff": "npm run diff -w infra",
-    "deploy": "./coyote.sh deploy",
-    "sites:sheet": "npm run sites:sheet -w services/generator",
-    "themes:sheet": "npm run themes:sheet -w services/generator",
-    "themes:tailwind": "npm run themes:tailwind -w services/generator"
+    "deploy": "./coyote.sh deploy"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.163",

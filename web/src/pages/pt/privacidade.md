@@ -2,11 +2,11 @@
 layout: ../../layouts/Legal.astro
 lang: pt
 title: Privacidade
-description: Quais dados o Coyote guarda, para quê e como apagá-los.
+description: Quais dados ventas314.com guarda, para quê e como apagá-los.
 alternate: /privacidad
 ---
 
-O Coyote cria e hospeda sites simples para negócios. Guardamos o mínimo para que isso funcione.
+ventas314.com cria e hospeda sites simples para negócios. Guardamos o mínimo para que isso funcione.
 
 ## O que guardamos
 
@@ -20,7 +20,7 @@ Não usamos cookies nem ferramentas de análise, nem neste aplicativo nem nos si
 
 ## Quem processa seus dados
 
-Tudo fica hospedado na Amazon Web Services, que também envia os nossos e-mails. O design e os textos são gerados por modelos de inteligência artificial da Anthropic (Claude) e do Amazon Bedrock, que recebem suas respostas e suas fotos para criar o site e não as usam para treinar seus modelos. Nunca enviamos a esses modelos o número de WhatsApp nem o telefone de contato que você informou no formulário (eles recebem os números que você escrever na descrição ou nas suas respostas).
+Tudo fica hospedado na Amazon Web Services, que também envia os nossos e-mails. O design e os textos são gerados por modelos de inteligência artificial da Anthropic (Claude) e do Amazon Bedrock, que recebem suas respostas e suas fotos para criar o site e não as usam para treinar seus modelos. Para que o seu site mostre os seus dados de contato, esses modelos também recebem o seu número de WhatsApp, o seu telefone, o seu endereço e as suas redes. O seu e-mail pessoal eles nunca recebem.
 
 ## Os sites que criamos
 

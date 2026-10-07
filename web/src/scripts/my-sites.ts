@@ -3,6 +3,7 @@
 // Mi sitio, and the chat work with it as they do with the link shown at creation.
 import { api as apiCall, apiUrl } from './jobs';
 import { followDraft, qrCode } from './live-preview';
+import { forgetOwnerTokens } from './owner-token';
 
 interface Site {
   slug: string;
@@ -17,6 +18,7 @@ interface Strings {
   lang: 'es' | 'pt';
   chatPath: string;
   mySitePath: string;
+  previewPath: string;
   sent: Note;
   badLink: Note;
   unavailable: string;
@@ -54,6 +56,7 @@ function readSession(): Session | undefined {
 }
 
 function saveSession(session: Session | undefined) {
+  if (!session) forgetOwnerTokens('sessions'); // the sites opened with it, kept by owner-token.ts
   try {
     if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     else localStorage.removeItem(SESSION_KEY);
@@ -71,7 +74,7 @@ function select(site: Site, session: Session, button: HTMLButtonElement) {
   const hash = `#token=${encodeURIComponent(`${site.slug}.${session.token}`)}`;
   const chatLink = `${location.origin}${strings.chatPath}${hash}`;
   $('[data-detail-name]').textContent = site.businessName;
-  $<HTMLAnchorElement>('[data-open]').href = site.previewUrl;
+  $<HTMLAnchorElement>('[data-open]').href = `${strings.previewPath}${hash}`;
   $<HTMLAnchorElement>('[data-mysite]').href = `${strings.mySitePath}${hash}`;
   $<HTMLAnchorElement>('[data-chat-open]').href = chatLink;
   $('[data-qr]').replaceChildren(qrCode(chatLink, strings.qr.title));

@@ -18,7 +18,9 @@ Commands:
   abuse-report                   Requests, rejections, and new sites of the last 24 h
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
-  refill-all                     Re-render every site's current draft (after theme, renderer, or domain changes; no model call)
+  page-model [opus|haiku]        Show or set the model that writes the pages, for the whole stack, from the next job.
+                                 haiku is cheap, for testing the workflow; opus makes the real designs. Survives deploys
+  refill-all                     Finish every site's current draft again (after page-check or domain changes; no model call)
   subscribe-alerts <email>       Email alarms, visitor reports, and cost alerts to this address (then confirm-alerts)
   protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
                                  AWS sends new confirmation emails; confirm each with confirm-alerts, never by clicking
@@ -154,6 +156,18 @@ cmd_protect_alerts() {
   fi
 }
 
+cmd_page_model() {
+  local ssm=(aws ssm --profile "$PROFILE" --region us-east-1) name=/coyote/page-model
+  case "${1:-}" in
+    '') "${ssm[@]}" get-parameter --name "$name" --query Parameter.Value --output text ;;
+    opus | haiku)
+      "${ssm[@]}" put-parameter --name "$name" --value "$1" --overwrite >/dev/null
+      echo "Pages are now written by $1 (from the next job)."
+      ;;
+    *) die "page-model takes opus or haiku" ;;
+  esac
+}
+
 cmd_admin() {
   cd "$ROOT/services/generator"
   AWS_PROFILE="$PROFILE" npx tsx scripts/admin.ts "$@"
@@ -165,6 +179,7 @@ case "$command" in
   deploy) cmd_deploy "$@" ;;
   destroy) cmd_destroy ;;
   abuse-report | unpublish | restore | refill-all) cmd_admin "$command" "$@" ;;
+  page-model) cmd_page_model "$@" ;;
   confirm-alerts) cmd_confirm_alerts "$@" ;;
   protect-alerts) cmd_protect_alerts ;;
   subscribe-alerts) cmd_subscribe_alerts "$@" ;;

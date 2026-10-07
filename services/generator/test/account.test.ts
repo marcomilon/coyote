@@ -77,7 +77,7 @@ describe('Mis sitios', () => {
     expect(t.emails).toHaveLength(0);
     expect(await requestLogin({ email: 'LUNA@example.com', lang: 'pt' }, '1.2.3.4', t.accountDeps)).toEqual({ status: 202 });
     expect(t.emails).toHaveLength(1);
-    expect(t.emails[0]).toMatchObject({ to: 'luna@example.com', subject: 'Seus sites no Coyote' });
+    expect(t.emails[0]).toMatchObject({ to: 'luna@example.com', subject: 'Seus sites em ventas314.com' });
     expect(t.emails[0]!.text).toContain('- Panadería Luna');
     expect(t.emails[0]!.text).toContain(`${urls.appUrl}/pt/meus-sites#login=`);
 

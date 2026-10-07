@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeAnswers } from '../src/core/answers';
-import { answersBlock, briefSystemPrompt, briefUserPrompt, contentSystemPrompt, contentUserPrompt, editSystemPrompt, editUserPrompt, planSystemPrompt, planUserPrompt } from '../src/core/prompt';
-import { editorial as plain } from '../themes/editorial';
-import { brief, modelContent } from './fixtures';
+import { answersBlock, planSystemPrompt, planUserPrompt } from '../src/core/prompt';
 
 const answers = normalizeAnswers({
   businessName: 'Panadería Luna',
@@ -13,17 +11,10 @@ const answers = normalizeAnswers({
 const context = { lang: 'es' as const, contact: { ...answers.contact, email: 'hola@luna.test' }, photos: 1 };
 
 describe('prompts', () => {
-  it('match the snapshots (review any change with the sites sheet)', () => {
-    expect(briefSystemPrompt()).toMatchSnapshot('brief system');
-    expect(briefUserPrompt([{ theme: plain, fontPairings: ['fraunces-worksans', 'dmserif-dmsans'] }])).toMatchSnapshot('brief user');
-    expect(contentSystemPrompt('es')).toMatchSnapshot('content system es');
-    expect(contentSystemPrompt('pt')).toMatchSnapshot('content system pt');
-    expect(contentUserPrompt(brief)).toMatchSnapshot('content user');
+  it('match the snapshots', () => {
     expect(planSystemPrompt()).toMatchSnapshot('plan system');
     expect(planUserPrompt(context)).toMatchSnapshot('plan user');
     expect(planUserPrompt({ ...context, edit: true })).toMatchSnapshot('plan user, edit');
-    expect(editSystemPrompt('es')).toMatchSnapshot('edit system');
-    expect(editUserPrompt(modelContent)).toMatchSnapshot('edit user');
     expect(answersBlock(answers, [{ question: '¿Qué vendes?', answer: 'Pan' }], 'cambia el horario')).toMatchSnapshot('answers');
   });
 

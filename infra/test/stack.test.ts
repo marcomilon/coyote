@@ -75,6 +75,18 @@ describe('CoyoteStack, domainless', () => {
     expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
   });
 
+  it('answers a missing app page with our 404 page and a 404 status', () => {
+    template.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        Comment: 'coyote app',
+        CustomErrorResponses: [
+          Match.objectLike({ ErrorCode: 403, ResponseCode: 404, ResponsePagePath: '/404.html' }),
+          Match.objectLike({ ErrorCode: 404, ResponseCode: 404, ResponsePagePath: '/404.html' }),
+        ],
+      }),
+    });
+  });
+
   it('lets the app run its own scripts only', () => {
     const csp = cspOf(template, 'AppHeaders');
     expect(csp).toContain("script-src 'self'");

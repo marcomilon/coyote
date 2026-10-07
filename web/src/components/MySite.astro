@@ -13,7 +13,7 @@ const other = t(s.otherLang.code);
 const clientStrings = { ...m, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, question: s.questions } };
 ---
 
-<Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig>
+<Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig noindex>
   <div class="mysite wrap" id="mysite" data-state="loading" data-strings={JSON.stringify(clientStrings)}>
     <section data-view="loading" class="panel"><div class="paint" aria-hidden="true"></div></section>
 

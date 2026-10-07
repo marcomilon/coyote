@@ -6,6 +6,7 @@ const es = {
   otherLang: { code: 'pt' as Lang, label: 'Português' },
   paths: { home: '/', create: '/crear', mySite: '/mi-sitio', mySites: '/mis-sitios', chat: '/chat', preview: '/ver', terms: '/terminos', privacy: '/privacidad' },
   brandTagline: 'Ponemos tu negocio online',
+  notFound: { title: 'Página no encontrada — ventas314.com', heading: 'Esta página no existe', text: 'Puede que el enlace esté incompleto o que la página se haya movido.', home: 'Ir al inicio' },
   nav: { create: 'Crear mi sitio', mySites: 'Mis sitios' },
   home: {
     title: 'ventas314.com — tu negocio en internet, hoy',
@@ -158,6 +159,7 @@ const pt: typeof es = {
   otherLang: { code: 'es', label: 'Español' },
   paths: { home: '/pt/', create: '/pt/criar', mySite: '/pt/meu-site', mySites: '/pt/meus-sites', chat: '/pt/chat', preview: '/pt/ver', terms: '/pt/termos', privacy: '/pt/privacidade' },
   brandTagline: 'Colocamos seu negócio online',
+  notFound: { title: 'Página não encontrada — ventas314.com', heading: 'Esta página não existe', text: 'Talvez o link esteja incompleto ou a página tenha mudado de lugar.', home: 'Ir para o início' },
   nav: { create: 'Criar meu site', mySites: 'Meus sites' },
   home: {
     title: 'ventas314.com — seu negócio na internet, hoje',

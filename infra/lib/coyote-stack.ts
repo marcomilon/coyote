@@ -157,6 +157,13 @@ export class CoyoteStack extends Stack {
       certificate: domain?.appCertificate,
       defaultRootObject: 'index.html',
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+      // A private bucket answers 403 for a missing key: visitors (and search engines) get our 404 page, as a 404.
+      errorResponses: [403, 404].map((httpStatus) => ({
+        httpStatus,
+        responseHttpStatus: 404,
+        responsePagePath: '/404.html',
+        ttl: Duration.minutes(5),
+      })),
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.appBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,

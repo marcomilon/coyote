@@ -12,7 +12,7 @@ const other = t(s.otherLang.code);
 const clientStrings = { ...m, lang, chatPath: s.paths.chat, mySitePath: s.paths.mySite, previewPath: s.paths.preview };
 ---
 
-<Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySites} withConfig>
+<Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySites} withConfig noindex>
   <div class="mysites wrap" id="mysites" data-state="loading" data-strings={JSON.stringify(clientStrings)}>
     <section data-view="loading" class="panel"><div class="paint" aria-hidden="true"></div></section>
 

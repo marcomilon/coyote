@@ -38,7 +38,6 @@ export interface Urls {
   mailFrom?: string;
   reportUrl(slug: string): string;
   privacyUrl: string;
-  /** The platform links every generated page carries, in the page's language. */
   /** The links in every page's platform footer: our home page, report, and privacy, in the page's language. */
   pageLinks(slug: string, lang: 'es' | 'pt'): { homeUrl: string; reportUrl: string; privacyUrl: string };
 }

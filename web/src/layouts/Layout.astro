@@ -10,9 +10,19 @@ interface Props {
   alternate: string;
   /** Loads /config.js (the API URL). Only pages that call the API need it. */
   withConfig?: boolean;
+  /** Pages for one owner (Mi sitio, the chat, Mis sitios): kept out of search engines. */
+  noindex?: boolean;
 }
-const { lang, title, description, alternate, withConfig = false } = Astro.props;
+const { lang, title, description, alternate, withConfig = false, noindex = false } = Astro.props;
 const s = t(lang);
+// Absolute links need the site's address (astro.config.mjs); a domainless build leaves them out.
+const site = Astro.site;
+// The address as the app links it: no trailing slash, except on the two home pages ('/' and '/pt/').
+const homes: string[] = [t('es').paths.home, t('pt').paths.home];
+const path = homes.includes(Astro.url.pathname) ? Astro.url.pathname : Astro.url.pathname.replace(/\/$/, '');
+const here = site && new URL(path, site).href;
+const there = site && new URL(alternate, site).href;
+const [es, pt] = lang === 'es' ? [here, there] : [there, here];
 ---
 
 <!doctype html>
@@ -24,7 +34,34 @@ const s = t(lang);
     <meta name="description" content={description} />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="alternate" hreflang={s.otherLang.code} href={alternate} />
+    {noindex && <meta name="robots" content="noindex" />}
+    {
+      site ? (
+        <>
+          {!noindex && (
+            <>
+              <link rel="canonical" href={here} />
+              <link rel="alternate" hreflang="es" href={es} />
+              <link rel="alternate" hreflang="pt" href={pt} />
+              <link rel="alternate" hreflang="x-default" href={es} />
+            </>
+          )}
+          <meta property="og:type" content="website" />
+          <meta property="og:site_name" content="ventas314.com" />
+          <meta property="og:title" content={title} />
+          <meta property="og:description" content={description} />
+          <meta property="og:url" content={here} />
+          <meta property="og:image" content={new URL('/og.png', site).href} />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta property="og:locale" content={lang === 'es' ? 'es_LA' : 'pt_BR'} />
+          <meta name="twitter:card" content="summary_large_image" />
+        </>
+      ) : (
+        <link rel="alternate" hreflang={s.otherLang.code} href={alternate} />
+      )
+    }
+    <slot name="head" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

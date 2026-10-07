@@ -327,3 +327,8 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 
 input[type='file'] { width: 100%; font: inherit; font-size: .9rem; padding: .6rem; border: 2px dashed var(--ink); border-radius: .4rem; background: var(--paper); }
 input[type='file']::file-selector-button { font: 400 .8rem/1 var(--display); background: var(--ink); color: var(--paper); border: 0; border-radius: .3rem; padding: .5rem .7rem; margin-right: .7rem; cursor: pointer; }
+
+/* 404 */
+.not-found { padding-block: 3rem 4rem; max-width: 40rem; }
+.not-found h1 { font-size: clamp(2rem, 6vw, 3rem); margin-bottom: 1rem; }
+.not-found .hint { margin-top: 2rem; }

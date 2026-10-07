@@ -29,6 +29,22 @@ const signs =
 ---
 
 <Layout lang={lang} title={h.title} description={h.description} alternate={other.paths.home}>
+  {
+    Astro.site && (
+      <script
+        is:inline
+        type="application/ld+json"
+        slot="head"
+        set:html={JSON.stringify({
+          '@context': 'https://schema.org',
+          '@graph': [
+            { '@type': 'Organization', name: 'ventas314.com', url: new URL('/', Astro.site).href, logo: new URL('/logo.png', Astro.site).href },
+            { '@type': 'WebSite', name: 'ventas314.com', url: new URL(s.paths.home, Astro.site).href, inLanguage: s.htmlLang, description: h.description },
+          ],
+        })}
+      />
+    )
+  }
   <section class="hero wrap">
     <div>
       <p class="kicker">{h.kicker}</p>

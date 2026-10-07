@@ -1,0 +1,21 @@
+---
+// Served by CloudFront (with status 404) for any path the app doesn't have. Spanish first, with the Portuguese
+// version under it: the path doesn't say which language the visitor reads.
+import Layout from '../layouts/Layout.astro';
+import { t } from '../i18n/strings';
+
+const es = t('es');
+const pt = t('pt');
+---
+
+<Layout lang="es" title={es.notFound.title} description={es.notFound.text} alternate={pt.paths.home} noindex>
+  <section class="panel wrap not-found">
+    <h1>{es.notFound.heading}</h1>
+    <p>{es.notFound.text}</p>
+    <div class="actions">
+      <a class="btn" href={es.paths.home}>{es.notFound.home}</a>
+      <a class="btn ghost" href={es.paths.create}>{es.nav.create}</a>
+    </div>
+    <p class="hint" lang="pt-BR">{pt.notFound.heading}. <a href={pt.paths.home}>{pt.notFound.home}</a></p>
+  </section>
+</Layout>

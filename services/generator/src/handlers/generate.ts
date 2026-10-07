@@ -1,6 +1,7 @@
 import { DetectModerationLabelsCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { sesSendEmail } from '../aws/mail';
+import { snsAnnounce } from '../aws/notices';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { callTool, outputAllowed } from '../core/bedrock';
 import { runGenerateJob } from '../core/generate-job';
@@ -15,6 +16,7 @@ const rekognition = new RekognitionClient({});
 const ssm = new SSMClient({});
 const writePage = anthropicWritePage();
 const sendEmail = sesSendEmail(urls.mailFrom);
+const announce = snsAnnounce(process.env.SITE_NOTICES_TOPIC_ARN);
 
 /** Top-level moderation categories we refuse. Alcohol and swimwear are fine: restaurants and beachwear shops exist. */
 const REFUSED = new Set(['Explicit', 'Non-Explicit Nudity of Intimate parts and Kissing', 'Violence', 'Visually Disturbing', 'Hate Symbols', 'Drugs & Tobacco', 'Gambling']);
@@ -52,6 +54,7 @@ export const handler = async (event: { jobId: string }): Promise<void> => {
     pageEffort: pageEffort(),
     pageModel: pageModel(process.env, await pageModelSetting()),
     sendEmail,
+    announce,
   });
   if (result.outcome === 'SKIPPED') return;
   const name = ({ DONE: 'Generated', NEEDS_INPUT: 'NeedsInput', REJECTED: 'Rejected', FAILED: 'Failed' } as const)[result.outcome];

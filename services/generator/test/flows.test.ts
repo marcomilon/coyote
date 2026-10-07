@@ -3,6 +3,7 @@ import { GuardrailBlocked, type CallTool } from '../src/core/bedrock';
 import { submitAnswers } from '../src/core/clarify';
 import { runGenerateJob } from '../src/core/generate-job';
 import { publicJob, PENDING_TIMEOUT_MS } from '../src/core/jobs';
+import { editSite } from '../src/core/owner';
 import { submit } from '../src/core/submit';
 import { QUESTIONS } from './fixtures';
 import { body, harness } from './harness';
@@ -235,3 +236,61 @@ describe('status', () => {
   });
 });
 
+
+describe('the admin notice for new sites', () => {
+  it('goes out once per new site, with the owner, the draft link, and the description; never for an edit', async () => {
+    const t = harness();
+    const notices: { subject: string; message: string }[] = [];
+    const deps = { ...t.generateDeps, announce: async (subject: string, message: string) => void notices.push({ subject, message }) };
+    await submit(body, '1.2.3.4', t.submitDeps);
+    expect(await runGenerateJob('job-1', deps)).toMatchObject({ outcome: 'DONE' });
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.subject).toBe('Nuevo sitio: Panadería Luna');
+    expect(notices[0]!.message).toContain('panaderia-luna');
+    expect(notices[0]!.message).toContain(t.generateDeps.urls.draftUrl('draft1'));
+    expect(notices[0]!.message).toContain(body.about);
+    // A second run of the same job (a retry) is skipped, and an owner's edit is not a new site: still one notice.
+    await runGenerateJob('job-1', deps);
+    expect(await editSite(t.sites.get('panaderia-luna')!, { instruction: 'agrega que abrimos los domingos' }, t.ownerDeps)).toMatchObject({ status: 202 });
+    expect(await runGenerateJob('job-2', deps)).toMatchObject({ outcome: 'DONE' });
+    expect(notices).toHaveLength(1);
+  });
+
+  it('a failed notice never fails the job', async () => {
+    const t = harness();
+    await submit(body, '1.2.3.4', t.submitDeps);
+    const deps = { ...t.generateDeps, announce: async () => { throw new Error('SNS down'); } };
+    expect(await runGenerateJob('job-1', deps)).toMatchObject({ outcome: 'DONE' });
+    expect(t.sites.get('panaderia-luna')).toMatchObject({ currentDraftId: 'draft1' });
+  });
+});
+
+describe('the admin notice for rejections', () => {
+  const collect = () => {
+    const notices: { subject: string; message: string }[] = [];
+    return { notices, announce: async (subject: string, message: string) => void notices.push({ subject, message }) };
+  };
+
+  it('at submit: a brand name and a rejection by the pre-screen, with the reason', async () => {
+    const t = harness();
+    const { notices, announce } = collect();
+    await submit({ ...body, businessName: 'Bancolombia Soporte' }, '1.2.3.4', { ...t.submitDeps, announce });
+    expect(notices[0]).toMatchObject({ subject: 'Sitio rechazado: Bancolombia Soporte' });
+    expect(notices[0]!.message).toContain('Motivo: brand — bancolombia');
+    const u = harness({ classify: 'reject' });
+    const second = collect();
+    await submit(body, '1.2.3.4', { ...u.submitDeps, announce: second.announce });
+    expect(second.notices[0]!.message).toContain('Motivo: prescreen — adult');
+  });
+
+  it('after generation: a page the checks reject', async () => {
+    const t = harness();
+    t.writer.options.page = () => `<!doctype html><html><head><title>Luna</title></head><body><h1>Panadería Luna</h1><p>Llama al +57 311 999 0000</p><p>${'x '.repeat(300)}</p></body></html>`;
+    const { notices, announce } = collect();
+    await submit(body, '1.2.3.4', t.submitDeps);
+    expect(await runGenerateJob('job-1', { ...t.generateDeps, announce })).toMatchObject({ outcome: 'REJECTED' });
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.subject).toBe('Sitio rechazado: Panadería Luna');
+    expect(notices[0]!.message).toContain('Motivo: policy');
+  });
+});

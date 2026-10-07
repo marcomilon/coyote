@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { snsAnnounce } from '../aws/notices';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { callTool } from '../core/bedrock';
 import { submitAnswers } from '../core/clarify';
@@ -11,6 +12,7 @@ import { json, parseBody } from './http';
 
 const stores = createStores(storeConfigFromEnv());
 const lambda = new LambdaClient({});
+const announce = snsAnnounce(process.env.SITE_NOTICES_TOPIC_ARN);
 const startGenerate = async (jobId: string) => {
   await lambda.send(new InvokeCommand({ FunctionName: process.env.GENERATE_FUNCTION_NAME, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ jobId })) }));
 };
@@ -20,7 +22,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const body = parseBody(event.body, event.isBase64Encoded);
 
   if (event.routeKey === 'POST /jobs/{id}/answers') {
-    const result = await submitAnswers(event.pathParameters?.id ?? '', body, { stores, callTool, prescreenModelId: prescreenModelId(), startGenerate, now: Date.now });
+    const result = await submitAnswers(event.pathParameters?.id ?? '', body, { stores, callTool, prescreenModelId: prescreenModelId(), startGenerate, now: Date.now, announce });
     if (result.status === 422) emitMetrics({ Rejected: 1 });
     switch (result.status) {
       case 202:
@@ -41,6 +43,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     rateLimitPerDay: Number(process.env.RATE_LIMIT_PER_DAY ?? 3),
     ipSalt: process.env.IP_HASH_SALT ?? '',
     startGenerate,
+    announce,
     now: Date.now,
     newId: randomUUID,
   });

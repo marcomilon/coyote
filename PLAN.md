@@ -170,6 +170,7 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
 - One CloudWatch dashboard with the metrics above.
 - `./coyote.sh abuse-report`: reads `jobs` for the last 24 h and prints the top IP hashes by requests, their decisions and categories, and the newest drafts. This is the tool for "who is doing this", since metrics only say "something is happening".
 - Visitor reports (footer link) arrive by email through `abuse-reports`.
+- The admin gets a notice (`notices.ts`, SNS topic `SiteNotices`) for every new site (business, slug, owner's email, draft link, models and tokens, description) and every rejected request or change (who rejected it and why: brand, pre-screen, guardrail, images, page checks). `./coyote.sh subscribe-alerts <email>` subscribes to it with the other topics.
 
 Policy text (es/pt) lives in the terms page, linked from the form. The submit button states acceptance.
 

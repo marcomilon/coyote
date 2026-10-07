@@ -12,6 +12,7 @@ import { readyEmail, type SendEmail } from './mail';
 import { issueToken, TOKEN_TTL_SECONDS } from './token';
 import { processUploads } from './uploads';
 import type { Urls } from './urls';
+import { announceNewSite, announceRejection, type Announce } from './notices';
 
 export interface GenerateJobDeps {
   stores: Stores;
@@ -37,6 +38,8 @@ export interface GenerateJobDeps {
   pageModel?: string;
   /** The "your site is ready" email. Undefined when no sender is set up. */
   sendEmail?: SendEmail;
+  /** Notices for the admin (notices.ts). Undefined: nobody is told. */
+  announce?: Announce;
 }
 
 export type GenerateOutcome =
@@ -128,6 +131,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
         usage.push(screening.usage);
         if (isRejected(screening)) {
           await finish({ status: 'REJECTED', rejectedBy: 'prescreen', rejectDetail: screening.category });
+          await announceRejection(deps.announce, job, 'prescreen', screening.category);
           return { outcome: 'REJECTED', ...tokens() };
         }
       }
@@ -137,6 +141,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       if (!processed.ok) {
         await releaseNewSite(job, deps);
         await finish({ status: 'REJECTED', rejectedBy: 'image', rejectDetail: processed.reason.slice(0, 300) });
+        await announceRejection(deps.announce, job, 'image', processed.reason.slice(0, 300));
         return { outcome: 'REJECTED', ...tokens() };
       }
       media = processed.media;
@@ -190,13 +195,16 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     const previewUrl = site.previewId ? urls.draftUrl(site.previewId) : undefined;
     await finish({ status: 'DONE', draftUrl: urls.draftUrl(draftId), previewUrl, media, ownerToken });
     if (ownerToken && job.ownerEmail) await sendReady(job, slug, deps);
+    if (ownerToken) await announceNewSite(deps.announce, job, slug, deps.urls.draftUrl(draftId), usage);
     return { outcome: 'DONE', ...tokens() };
   } catch (error) {
     await releaseNewSite(job, deps);
     if (error instanceof PolicyRejection) {
       await finish({ status: 'REJECTED', rejectedBy: 'policy', rejectDetail: error.message.slice(0, 500) });
+      await announceRejection(deps.announce, job, 'policy', error.message.slice(0, 500));
     } else if (error instanceof GuardrailBlocked) {
       await finish({ status: 'REJECTED', rejectedBy: 'guardrail', rejectDetail: 'generation' });
+      await announceRejection(deps.announce, job, 'guardrail', 'generation');
     } else {
       console.error('generate failed', { jobId, error });
       await finish({ status: 'FAILED', error: String(error).slice(0, 500) });

@@ -1,11 +1,14 @@
 import { z } from 'zod';
 import { GuardrailBlocked, type CallTool } from './bedrock';
 import { releaseNewSite } from './generate-job';
+import { announceRejection, type Announce } from './notices';
 import type { Stores } from './jobs';
 import { isRejected, prescreen } from './prescreen';
 import { applyAnswers, type Note } from './questions';
 
 export interface AnswersDeps {
+  /** Notices for the admin (notices.ts). */
+  announce?: Announce;
   stores: Stores;
   callTool: CallTool;
   prescreenModelId: string;
@@ -45,6 +48,7 @@ export async function submitAnswers(jobId: string, body: unknown, deps: AnswersD
     const reject = async (rejectedBy: 'prescreen' | 'guardrail', rejectDetail: string): Promise<AnswersResult> => {
       await releaseNewSite(job, deps);
       await stores.updateJob(jobId, { status: 'REJECTED', rejectedBy, rejectDetail, notes, usage });
+      await announceRejection(deps.announce, job, rejectedBy, rejectDetail);
       return { status: 422 };
     };
     try {

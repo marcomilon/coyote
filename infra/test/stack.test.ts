@@ -75,6 +75,14 @@ describe('CoyoteStack, domainless', () => {
     expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
   });
 
+  it('keeps a framed draft out of the browser cache for top-level loads (Vary: Sec-Fetch-Dest)', () => {
+    template.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
+      ResponseHeadersPolicyConfig: Match.objectLike({
+        CustomHeadersConfig: { Items: Match.arrayWith([Match.objectLike({ Header: 'Vary', Value: 'Sec-Fetch-Dest' })]) },
+      }),
+    });
+  });
+
   it('answers a missing app page with our 404 page and a 404 status', () => {
     template.hasResourceProperties('AWS::CloudFront::Distribution', {
       DistributionConfig: Match.objectLike({

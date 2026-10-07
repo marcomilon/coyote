@@ -151,7 +151,7 @@ export class CoyoteStack extends Stack {
     // ---------------------------------------------------------------------------------------
     const appDistribution = new cloudfront.Distribution(this, 'AppDistribution', {
       comment: 'coyote app',
-      domainNames: domain ? [domain.appHost] : undefined,
+      domainNames: domain ? [domain.appHost, domain.bareHost] : undefined,
       certificate: domain?.appCertificate,
       defaultRootObject: 'index.html',
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
@@ -163,7 +163,11 @@ export class CoyoteStack extends Stack {
             eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
             function: new cloudfront.Function(this, 'AppRewrite', {
               runtime: cloudfront.FunctionRuntime.JS_2_0,
-              code: cloudfront.FunctionCode.fromFile({ filePath: asset('./cf-app-rewrite.js') }),
+              code: cloudfront.FunctionCode.fromInline(
+                readFileSync(asset('./cf-app-rewrite.js'), 'utf8')
+                  .replace('__BARE_HOST__', domain ? domain.bareHost : '')
+                  .replace('__APP_URL__', domain ? domain.urls.appUrl : ''),
+              ),
             }),
           },
         ],
@@ -309,6 +313,7 @@ export class CoyoteStack extends Stack {
         new route53.AaaaRecord(this, `${name}Aaaa`, { zone, recordName, target: recordTarget });
       };
       alias('AppRecord', domain.zone, domain.appHost, new targets.CloudFrontTarget(appDistribution));
+      alias('AppBareRecord', domain.zone, domain.bareHost, new targets.CloudFrontTarget(appDistribution)); // redirects to www
       alias('SitesApexRecord', domain.sitesZone, domain.sitesHost, new targets.CloudFrontTarget(sitesDistribution));
       alias('SitesWildcardRecord', domain.sitesZone, `*.${domain.sitesHost}`, new targets.CloudFrontTarget(sitesDistribution));
       alias(
@@ -388,7 +393,8 @@ export class CoyoteStack extends Stack {
       domainName: props.domainName,
       sitesDomainName: props.sitesDomainName,
     });
-    const appHost = new URL(urls.appUrl).host;
+    const appHost = new URL(urls.appUrl).host; // www.<domain>
+    const bareHost = props.domainName;
     const apiHost = new URL(urls.apiUrl).host;
     const sitesHost = new URL(urls.draftOrigin).host.replace(/^draft\./, '');
 
@@ -401,6 +407,7 @@ export class CoyoteStack extends Stack {
     // The stack is in us-east-1, which is where CloudFront needs its certificates.
     const appCertificate = new acm.Certificate(this, 'AppCertificate', {
       domainName: appHost,
+      subjectAlternativeNames: [bareHost],
       validation: acm.CertificateValidation.fromDns(zone),
     });
     const sitesCertificate = new acm.Certificate(this, 'SitesCertificate', {
@@ -416,7 +423,7 @@ export class CoyoteStack extends Stack {
       }),
     });
 
-    return { urls, appHost, apiHost, sitesHost, zone, sitesZone, appCertificate, sitesCertificate, apiDomain };
+    return { urls, appHost, bareHost, apiHost, sitesHost, zone, sitesZone, appCertificate, sitesCertificate, apiDomain };
   }
 }
 

@@ -65,7 +65,7 @@ export async function requestLogin(body: unknown, ip: string, deps: AccountDeps)
   if (!account || account.sites.length === 0) return { status: 202 };
   const secret = await issueLogin(stores, id, now);
   const names = account.sites.map((s) => s.businessName);
-  await deps.sendEmail(loginEmail(account.email, parsed.data.lang, names, deps.urls.mySitesUrl(secret, parsed.data.lang)));
+  await deps.sendEmail(loginEmail(account.email, parsed.data.lang, names, deps.urls.mySitesUrl(secret, parsed.data.lang), deps.urls.appUrl));
   return { status: 202 };
 }
 

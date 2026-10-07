@@ -39,7 +39,8 @@ export interface Urls {
   reportUrl(slug: string): string;
   privacyUrl: string;
   /** The platform links every generated page carries, in the page's language. */
-  pageLinks(slug: string, lang: 'es' | 'pt'): { reportUrl: string; privacyUrl: string };
+  /** The links in every page's platform footer: our home page, report, and privacy, in the page's language. */
+  pageLinks(slug: string, lang: 'es' | 'pt'): { homeUrl: string; reportUrl: string; privacyUrl: string };
 }
 
 const trimSlash = (url: string) => url.replace(/\/+$/, '');
@@ -50,7 +51,7 @@ export function createUrls(config: UrlConfig): Urls {
     const siteOrigin = (slug: string) => `https://${slug}.${sitesHost}`;
     const draftOrigin = `https://draft.${sitesHost}`;
     return withAppUrls({
-      appUrl: `https://app.${config.domainName}`,
+      appUrl: `https://www.${config.domainName}`, // the bare domain redirects here (cf-app-rewrite.js)
       apiUrl: `https://api.${config.domainName}`,
       siteOrigin,
       draftOrigin,
@@ -79,8 +80,8 @@ function withAppUrls(base: Omit<Urls, 'miSitioUrl' | 'mySitesUrl' | 'reportUrl' 
     ...base,
     pageLinks: (slug, lang) =>
       lang === 'pt'
-        ? { reportUrl: `${base.appUrl}/pt/denunciar${sitio(slug)}`, privacyUrl: `${base.appUrl}/pt/privacidade` }
-        : { reportUrl: `${base.appUrl}/reportar${sitio(slug)}`, privacyUrl: `${base.appUrl}/privacidad` },
+        ? { homeUrl: `${base.appUrl}/pt/`, reportUrl: `${base.appUrl}/pt/denunciar${sitio(slug)}`, privacyUrl: `${base.appUrl}/pt/privacidade` }
+        : { homeUrl: `${base.appUrl}/`, reportUrl: `${base.appUrl}/reportar${sitio(slug)}`, privacyUrl: `${base.appUrl}/privacidad` },
     miSitioUrl: (token) => `${base.appUrl}/mi-sitio#token=${encodeURIComponent(token)}`,
     mySitesUrl: (login, lang, slug) =>
       `${base.appUrl}${lang === 'pt' ? '/pt/meus-sites' : '/mis-sitios'}#login=${encodeURIComponent(login)}${slug ? `&site=${encodeURIComponent(slug)}` : ''}`,

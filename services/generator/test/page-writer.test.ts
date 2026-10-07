@@ -6,7 +6,7 @@ import { submit } from '../src/core/submit';
 import { body, harness } from './harness';
 
 const contact = { whatsapp: '573001234567', address: 'Calle 60 # 9-12', instagram: 'luna.pan' };
-const links = { reportUrl: 'https://app.test/reportar?sitio=x', privacyUrl: 'https://app.test/privacidad' };
+const links = { homeUrl: 'https://app.test/', reportUrl: 'https://app.test/reportar?sitio=x', privacyUrl: 'https://app.test/privacidad' };
 const opts = { contact, businessName: 'Panadería Luna', lang: 'es' as const, ...links };
 
 const doc = (body: string, head = '') =>
@@ -27,7 +27,7 @@ describe('checkPage', () => {
     expect(result.html).toContain('https://wa.me/573001234567?text=Hola');
     expect(result.html).toContain('<iframe src="https://maps.google.com/maps?q=');
     expect(result.html).toContain('overflow-x:clip');
-    expect(result.html).toMatch(/Sitio creado con ventas314.com · <a href="https:\/\/app\.test\/reportar\?sitio=x"/);
+    expect(result.html).toMatch(/<a href="https:\/\/app\.test\/" style="color:inherit">Sitio creado con ventas314.com<\/a> · <a href="https:\/\/app\.test\/reportar\?sitio=x"/);
     expect(result.texts).toContain('Panadería Luna');
     expect(result.texts).toContain('Pan'); // alt text is visible text
   });

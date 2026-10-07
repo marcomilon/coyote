@@ -18,17 +18,17 @@ A public web form asks 3 questions. Opus writes the page (a model first asks the
 
 ## Domains
 Two domains:
-- `<domain>` — the brand. Hosts the generator UI (`app.<domain>`), the API (`api.<domain>`), and email (`notify.<domain>`). Needs a Route 53 hosted zone.
+- `<domain>` — the brand. Hosts the generator UI (`www.<domain>`; the bare domain redirects there), the API (`api.<domain>`), and email (`notify.<domain>`). Needs a Route 53 hosted zone.
 - `<sites-domain>` — a separate registrable domain, only for user sites (`{slug}.<sites-domain>`). Safe Browsing and mail reputation are tracked per registrable domain, so a phishing page must not be able to flag the app, API, or email. Buy it with Route 53 Domains and submit it to the Public Suffix List once live.
 
 Domains arrive in stages. The `cdk.json` context (`domainName`, `sitesDomainName`) selects the mode:
-1. **Domainless** (now, until the project is stable): both values unset. No ACM, no Route 53, no aliases. App at its `dxxxx.cloudfront.net` URL, API at the default `execute-api` URL. Sites are path-based: `https://<sites-dist>.cloudfront.net/{slug}/` (after the publishing plan), drafts at `/_draft/{draftId}/`. (A `cloudfront.net` hostname cannot do wildcard subdomains.)
-2. **`consideralohecho.com`** (internal testing, when the user decides): `domainName = consideralohecho.com`, `sitesDomainName = sites.consideralohecho.com`, so sites live at `{slug}.sites.consideralohecho.com`. Sharing one registrable domain is fine only while nothing is public.
+1. **Domainless** (the first stage): both values unset. No ACM, no Route 53, no aliases. App at its `dxxxx.cloudfront.net` URL, API at the default `execute-api` URL. Sites are path-based: `https://<sites-dist>.cloudfront.net/{slug}/` (after the publishing plan), drafts at `/_draft/{draftId}/`. (A `cloudfront.net` hostname cannot do wildcard subdomains.)
+2. **`ventas314.com`** (now, internal testing): `domainName = ventas314.com`, `sitesDomainName = sites.ventas314.com`, `sitesHostedZoneName = ventas314.com`. App at `www.ventas314.com` (`ventas314.com` redirects there), API at `api.ventas314.com`, sites at `{slug}.sites.ventas314.com`, drafts at `draft.sites.ventas314.com`. Sharing one registrable domain is fine only while nothing is public. The domain stays registered in another AWS account; its name servers point to the `ventas314.com` hosted zone in this account (👤 created by hand; the stack only looks it up, so `destroy` keeps it).
 3. **Final domains** (before public launch): separate registrable domain for sites, PSL submission.
 
-`consideralohecho.com` itself serves only the project landing page (`landing/index.html`, a static file hosted outside the stack). It does not change the stack's domain mode.
+`consideralohecho.com` serves only the project landing page (`landing/index.html`, a static file hosted outside the stack).
 
-Context keys: `domainName`, `sitesDomainName`, and optionally `hostedZoneName` / `sitesHostedZoneName` when a name lives in a parent zone (stage 2: `sitesDomainName = sites.consideralohecho.com`, `sitesHostedZoneName = consideralohecho.com`).
+Context keys: `domainName`, `sitesDomainName`, and optionally `hostedZoneName` / `sitesHostedZoneName` when a name lives in a parent zone (stage 2: `sitesHostedZoneName = ventas314.com`). Domain mode looks up the zones; the result is cached in `infra/cdk.context.json` (committed), and `account` in `cdk.json` names the account when synth runs with no credentials (CI).
 
 Switching stage = change the context, redeploy, run `./coyote.sh refill-all`. To keep it that simple:
 - No domain literal in code, prompts, or tests.
@@ -44,7 +44,7 @@ The project uses the AWS CLI profile **`coyote`** (account `887799775985`, IAM u
 ## Architecture
 
 ```
-browser ──(form, es/pt)──> CloudFront #1 [app.<domain>] ──> S3 appBucket (generator UI + "Mi sitio", JS allowed)
+browser ──(form, es/pt)──> CloudFront #1 [www.<domain>] ──> S3 appBucket (generator UI + "Mi sitio", JS allowed)
    │
    └── POST /generate ──> API Gateway HTTP API [api.<domain>] ──> submit Lambda ──> DynamoDB jobs (PENDING)
                                      (rate limit → pre-screen → slug claim)  │ async invoke (failure → job FAILED)
@@ -158,7 +158,7 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
    - Any failure → `REJECTED`, nothing uploaded.
 
 4. **After publication**
-   - Every page has a footer "Sitio creado con ventas314.com · Reportar · Privacidad", added by the page checks, not by the page writer. Sites have no forms, so "Reportar" links to the app page `/reportar?sitio={slug}`, which calls `POST /report/{slug}`. Reports go to an SNS topic (email to the admin). Auto-unpublish only after N reports from distinct IP hashes (otherwise anonymous reports can be used against competitors). Quarantine moves the S3 prefix to `_quarantine/`, is reversible, and shows on the owner's "Mi sitio" page.
+   - Every page has a footer "Sitio creado con ventas314.com · Reportar · Privacidad" (the first part links to our home page), added by the page checks, not by the page writer. Sites have no forms, so "Reportar" links to the app page `/reportar?sitio={slug}`, which calls `POST /report/{slug}`. Reports go to an SNS topic (email to the admin). Auto-unpublish only after N reports from distinct IP hashes (otherwise anonymous reports can be used against competitors). Quarantine moves the S3 prefix to `_quarantine/`, is reversible, and shows on the owner's "Mi sitio" page.
    - `jobs` stores the 3 answers, IP hash, guardrail outcome, and classifier decision for 90 days.
    - `./coyote.sh unpublish <slug>`: removes the pages and adds the slug to `blocklist` so it cannot be claimed again. `./coyote.sh restore <slug>` undoes a quarantine.
    - CloudWatch metric + alarm on `REJECTED` rate (a spike means probing).
@@ -189,7 +189,7 @@ Infra: an `uploads` Lambda with `s3:PutObject` on `_uploads/*` (it signs the POS
 
 ## Site ownership (magic link)
 No passwords, no Cognito. Whoever has the link owns the site. The email given in the form is the recovery channel: "Mis sitios" (below) sends a sign-in link to it. The owner's phone (product phase 2) comes later.
-- When the first draft of a new site is ready, the create page goes straight to the link: `https://app.<domain>/mi-sitio#token=<slug>.<secret>` (the first `GET /jobs/{id}` after `DONE` takes it off the job). The token is in the fragment so it never reaches logs or referrers; the page then keeps it in the browser (localStorage) and leaves only `#sitio=<slug>` in the address, so a shared or screenshotted address does not hand over the site (the QR still carries the token, for the phone). Token = random 32 bytes, stored hashed in `sites`, 1-year expiry. The link is not shown for saving; the owner comes back through "Mis sitios".
+- When the first draft of a new site is ready, the create page goes straight to the link: `https://www.<domain>/mi-sitio#token=<slug>.<secret>` (the first `GET /jobs/{id}` after `DONE` takes it off the job). The token is in the fragment so it never reaches logs or referrers; the page then keeps it in the browser (localStorage) and leaves only `#sitio=<slug>` in the address, so a shared or screenshotted address does not hand over the site (the QR still carries the token, for the phone). Token = random 32 bytes, stored hashed in `sites`, 1-year expiry. The link is not shown for saving; the owner comes back through "Mis sitios".
 - A lost link is recovered through "Mis sitios" (email). WhatsApp re-issue (template `enlace_mi_sitio` to `sites.ownerPhone`) comes with product phase 2.
 - "Mi sitio" page, in tabs: "Vista previa" (the current draft at phone and desktop width, following every change live); "Actualizar tu página" (the chat, the same one the QR opens on the owner's phone: text and contact changes, undo, and a "Rediseñar" offer that starts an edit job (pre-screen, optional questions, Opus on the current page, the page checks and the output guardrail, a new draft); a site made before the chat can no longer be changed there); "Deshacer" (back to the previous draft; the last 5 are kept); delete my data. Post-MVP: last 30 days of messages, pause notifications, add/verify email, buy a domain.
 - API: `GET /me`, `POST /me/edit { instruction?, contact? }`, `POST /me/undo`, `DELETE /me`, `GET /me/chat`, `POST /me/chat { text }`, all with `Authorization: Bearer <token>`, 60 requests per site per day (`GET /me/chat` has its own cap of 3000, for polling), 5 free-text edits per site per day, 30 chat messages per site per day. `POST /jobs/{id}/answers` answers the model's questions (the job ID is the credential). Unpublish and republish come back with the publishing plan.
@@ -229,30 +229,30 @@ The owner looks at the draft on a computer and asks for changes from their phone
 - The privacy page names Anthropic (answers and photos, never the phone number) and the public CDNs the sites load fonts and libraries from.
 
 ## Environments and delivery
-- **Environment**: one stack (see Decisions). With domains: `app.<domain>`, `api.<domain>`, `*.<sites-domain>`.
+- **Environment**: one stack (see Decisions). With domains: `www.<domain>` (and the bare domain, which redirects), `api.<domain>`, `*.<sites-domain>`.
 - **CI**: GitHub Actions on every PR: `npm run build` + `npm test` + `cdk synth`. Deploys are manual (`./coyote.sh deploy`); automated deploys with an OIDC role can come with the production account.
 - **Runbook** in `README`: deploy, rotate SSM secrets, unpublish a site, check Bedrock quota. No prepaid vendors to top up.
 - **Flags**: critic pass, digest mode.
 
 ## Infra (CDK, `infra/lib`)
 `CoyoteStack` (us-east-1), one per environment. Items marked *(domain mode)* exist only when `domainName`/`sitesDomainName` are set. In domainless mode the stack exports `AppUrl`, `ApiUrl`, `SitesBaseUrl`.
-- *(domain mode)* ACM certificates, DNS-validated: `<sites-domain>` + `*.<sites-domain>` (own hosted zone); `app.<domain>` and `api.<domain>` via `HostedZone.fromLookup`.
-- *(domain mode)* Route 53 alias records: `app.<domain>`, `api.<domain>`, `<sites-domain>`, `*.<sites-domain>`.
+- *(domain mode)* ACM certificates, DNS-validated: `<sites-domain>` + `*.<sites-domain>` (own hosted zone); `www.<domain>` + `<domain>` and `api.<domain>` via `HostedZone.fromLookup`.
+- *(domain mode)* Route 53 alias records: `www.<domain>`, `<domain>`, `api.<domain>`, `<sites-domain>`, `*.<sites-domain>`.
 - S3 `sitesBucket`: private, versioned, block public access. Lifecycle: noncurrent versions 30 d, `_uploads/` 1 d. Drafts (`_draft/`) never expire. `_src/` (records) and `_media/` (images) are never served. S3 `appBucket`: generator UI.
-- **CloudFront #1 — app**: OAC to `appBucket`, alias `app.<domain>`. A viewer-request function maps clean URLs to Astro's output (`/mi-sitio` → `/mi-sitio/index.html`). CSP: `script-src 'self'` (Astro is configured to emit external script files, no inline scripts), `connect-src https://api.<domain>`, `frame-src https://draft.<sites-domain>`. HSTS.
+- **CloudFront #1 — app**: OAC to `appBucket`, aliases `www.<domain>` and `<domain>`. A viewer-request function sends the bare domain to `www` (301, path and query kept) and maps clean URLs to Astro's output (`/mi-sitio` → `/mi-sitio/index.html`). CSP: `script-src 'self'` (Astro is configured to emit external script files, no inline scripts), `connect-src https://api.<domain>`, `frame-src https://draft.<sites-domain>`. HSTS.
 - **CloudFront #2 — sites**: OAC to `sitesBucket`, aliases `<sites-domain>` + `*.<sites-domain>`. One viewer-request CloudFront Function, both modes unit-tested:
   - `Host == draft.<sites-domain>` → `/_draft/<path>` (only 32-hex draft IDs)
   - `Host == {slug}.<sites-domain>` → `/{slug}/<path or index.html>` (after the publishing plan)
-  - apex → redirect to `https://app.<domain>`
+  - apex → redirect to the app (`https://www.<domain>`)
   - domainless (`Host` is the `cloudfront.net` name): no host rewrite; `/_draft/{id}` → 301 `/_draft/{id}/`; `/_draft/{id}/` → `/_draft/{id}/index.html`; `/` → redirect to the app. Until the publishing plan, `/{slug}/` (and `{slug}.<sites-domain>`) answer 404.
-  - ResponseHeadersPolicy: `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' <the CDNs in page-check.ts>, with no `connect-src` so scripts have no network access; frame-src https://maps.google.com https://www.google.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action https://api.<domain>; frame-ancestors https://app.<domain>`. HSTS. `X-Robots-Tag: noindex, nofollow` while every page is a private draft.
+  - ResponseHeadersPolicy: `default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' <the CDNs in page-check.ts>, with no `connect-src` so scripts have no network access; frame-src https://maps.google.com https://www.google.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action https://api.<domain>; frame-ancestors https://www.<domain>`. HSTS. `X-Robots-Tag: noindex, nofollow` while every page is a private draft.
   - Domainless CSP: `frame-ancestors` uses the app distribution URL. Where an exact URL would make the distributions and the API depend on each other in a circle, a wildcard is used instead: sites `form-action https://*.execute-api.<region>.amazonaws.com`, app `connect-src` the same, app `frame-src https://*.cloudfront.net`. Domain mode uses exact origins everywhere.
   - Cache: default TTL 5 min, so an owner's edit shows up without an invalidation. Missing pages (S3 answers 403) return a small 404 page from `_errors/`.
 - `BucketDeployment` of `web/dist/` (the Astro build) plus the generated `config.js` → `appBucket`.
 - DynamoDB, MVP: `jobs` (pk `jobId`, TTL 90 d; answers, safety outcomes, usage), `sites` (pk `slug`; status, currentDraftId, drafts, ownerWhatsApp, tokenHash, createdAt), `ratelimit` (pk `ip`, TTL), `blocklist` (pk `slug`), `chat` (pk `slug`, sk `at`, TTL 90 d), `accounts` (pk `pk`, sk `sk`, TTL; "Mis sitios"). Post-MVP: `messages`, `suppression`, `wa_*` (`PLAN-PHASE2.md`), `domains`, GSI on `sites.ownerPhone`.
 - `CfnGuardrail` + `CfnGuardrailVersion` (Standard tier; filters, denied topics, word filters as above). ID/version passed to Lambdas via env.
 - Lambdas: `NodejsFunction`, Node 22, esbuild. MVP: `submit` (sync, 15 s), `generate` (async, 5 min, 1 GB, on-failure destination → `job-failed` handler), `status`, `uploads`, `owner` (`/me`), `chat` (async, 2 min, started by `owner`), `account` (`/account/*`), `report`. SES email identity (`senderEmail` in domainless mode, `notify.<domain>` with DKIM in domain mode). `submit` also serves `POST /jobs/{id}/answers`. Post-MVP: `contact`, `ses-events`, `digest`, `domains`, `wa-*`.
-- HTTP API on `api.<domain>`: `POST /generate`, `GET /jobs/{id}`, `POST /jobs/{id}/publish`, `POST /uploads`, `/me/*`, `POST /report/{slug}`. CORS locked to `https://app.<domain>`. Throttling.
+- HTTP API on `api.<domain>`: `POST /generate`, `GET /jobs/{id}`, `POST /jobs/{id}/publish`, `POST /uploads`, `/me/*`, `POST /report/{slug}`. CORS locked to `https://www.<domain>`. Throttling.
 - SNS topic `abuse-reports` with email subscription.
 - IAM: `bedrock:InvokeModel` scoped to the model/profile ARN with the `bedrock:GuardrailIdentifier` condition, plus the image model without it; `bedrock:ApplyGuardrail` on the guardrail; `s3:PutObject`/`DeleteObject` on the sites bucket; DynamoDB RW on the MVP tables; `rekognition:DetectModerationLabels`.
 - CloudWatch alarms on `generate` errors and `REJECTED` rate. AWS Budget alert (e.g. $20/month); Bedrock is the only meaningful cost.
@@ -382,7 +382,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] `./coyote.sh abuse-report` (requests per hashed IP, rejections by layer, newest published sites)
 - [x] `README` runbook
 - [x] Full "Verification" section passes on the deployed stack (contact form excluded: post-MVP). `npm run verify:live -w services/generator` runs the 48 safety fixtures through the deployed API: 48/48. Layers that stopped the 27 bad cases: guardrail 18, pre-screen 5, brand list 4
-- [ ] 👤 *(optional, when stable)* switch to `consideralohecho.com`; first real deploy of domain mode; subdomain rewrite verified
+- [ ] Switch to `ventas314.com` (config set; 👤 zone delegated): first real deploy of domain mode; subdomain rewrite verified
 - [ ] 👤 Choose the two final domain names: the brand domain (`<domain>`) and the separate one for user sites (`<sites-domain>`). Choosing the brand also unblocks Meta Business verification (`PLAN-PHASE2.md` step 1), which takes weeks, so decide early if WhatsApp is next
 - [ ] 👤 **Before any public launch: create the production AWS account** and its CLI profile. Add one production switch to the stack then (retain data + point-in-time recovery, no `localhost` in CORS or `frame-ancestors`, rate limit 3/IP/day) and deploy the same code there. Never launch publicly from the sandbox account: moving live sites, records, and a domain to another account later is real migration work
 - [ ] 👤 **Launch gate**: final domains set, redeploy, re-render, final `<sites-domain>` submitted to the PSL (never the testing domain)

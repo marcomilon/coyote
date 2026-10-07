@@ -69,7 +69,7 @@ describe('sites rewrite, domain mode', () => {
 });
 
 describe('app rewrite', () => {
-  const run = load('cf-app-rewrite.js');
+  const run = load('cf-app-rewrite.js', { __BARE_HOST__: '', __APP_URL__: '' });
 
   it.each([
     ['/', '/index.html'],
@@ -80,3 +80,19 @@ describe('app rewrite', () => {
     ['/_astro/form.abc123.js', '/_astro/form.abc123.js'],
   ])('%s → %s', (uri, expected) => expect(run(uri).uri).toBe(expected));
 });
+
+describe('app rewrite, domain mode', () => {
+  const run = load('cf-app-rewrite.js', { __BARE_HOST__: 'brand.test', __APP_URL__: 'https://www.brand.test' });
+  const handler = new Function(`${readFileSync(new URL('../lib/cf-app-rewrite.js', import.meta.url), 'utf8').replace('__BARE_HOST__', 'brand.test').replace('__APP_URL__', 'https://www.brand.test')}; return handler;`)() as (event: unknown) => Result;
+
+  it('sends the bare domain to www, keeping the path and the query', () => {
+    expect(run('/mi-sitio', 'brand.test')).toMatchObject({ statusCode: 301, headers: { location: { value: 'https://www.brand.test/mi-sitio' } } });
+    const withQuery = handler({ request: { uri: '/reportar', headers: { host: { value: 'Brand.test' } }, querystring: { sitio: { value: 'luna' } } } });
+    expect(withQuery).toMatchObject({ statusCode: 301, headers: { location: { value: 'https://www.brand.test/reportar?sitio=luna' } } });
+  });
+
+  it('serves www as usual', () => {
+    expect(run('/mi-sitio', 'www.brand.test').uri).toBe('/mi-sitio/index.html');
+  });
+});
+

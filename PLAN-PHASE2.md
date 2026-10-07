@@ -7,7 +7,7 @@ Competing with Wix/Squarespace/Hostinger on generation quality is a losing axis.
 
 - **Reused unchanged from the MVP**: the page writer with its follow-up questions, the chat for changes, safety layers, slug/hosting, drafts and the magic link.
 - **Added**: a conversational front end, the contact form (designed in `PLAN.md`, built here), and WhatsApp as the first lead-delivery channel. SES email follows as the fallback (`PLAN.md` phase 7).
-- **URLs**: as in `PLAN.md` (sites at `{slug}.<sites-domain>`, app at `app.<domain>`, API at `api.<domain>`). All URLs in messages come from `urls.ts`, so the flows also run in domainless mode during development. Sending site links to real users requires the final domains: a `cloudfront.net/{slug}/` link looks like spam and would change later.
+- **URLs**: as in `PLAN.md` (sites at `{slug}.<sites-domain>`, app at `www.<domain>`, API at `api.<domain>`). All URLs in messages come from `urls.ts`, so the flows also run in domainless mode during development. Sending site links to real users requires the final domains: a `cloudfront.net/{slug}/` link looks like spam and would change later.
 
 ## Platform: AWS End User Messaging Social
 WhatsApp Business Platform through AWS. No Meta Cloud API webhooks to host, no BSP middleman.

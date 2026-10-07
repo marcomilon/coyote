@@ -5,12 +5,12 @@ import type { SendEmail } from '../core/mail';
 export function sesSendEmail(from: string | undefined): SendEmail | undefined {
   if (!from) return undefined;
   const ses = new SESv2Client({});
-  return async ({ to, subject, text }) => {
+  return async ({ to, subject, text, html }) => {
     await ses.send(
       new SendEmailCommand({
         FromEmailAddress: `ventas314.com <${from}>`,
         Destination: { ToAddresses: [to] },
-        Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } },
+        Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' }, Html: { Data: html, Charset: 'UTF-8' } } } },
       }),
     );
   };

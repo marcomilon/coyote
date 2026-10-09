@@ -10,6 +10,7 @@
  * Writes <out>/index.html (the gallery; publishable as an artifact with pages/ next to it) and results.json.
  * --images on: the page writer may make photos (make_image: Stability on Bedrock us-west-2, Rekognition; the guardrail
  * only when GUARDRAIL_ID/GUARDRAIL_VERSION are set); such a page is pages/<biz>/<slug>/index.html with its assets/.
+ * --tones all|<tone>,<tone>: instead of the random look, one page per tone, each offered alone (light, no ticker).
  * --goal on: the request says the business's goal (`goal` in examples/<id>.json: whatsapp, call, visit, book).
  * Every page of a business in one run (same repeat number) gets the same look nudge, so only the axes differ.
  * --out an earlier run adds to it: its other results stay in the gallery (same businesses).
@@ -27,7 +28,7 @@ import { ownerText } from '../src/core/drafts';
 import { imageMaker } from '../src/core/images';
 import { IMAGE_PRICE, imageModelId, usageCost } from '../src/core/models';
 import { checkPage } from '../src/core/page-check';
-import { anthropicWritePage, DEFAULT_PAGE_SKILL, NO_SKILL, pageModel, pagePrompt, parsePage, pickLook, skillText, type Look, type PageEffort, type PageSkill } from '../src/core/page-writer';
+import { anthropicWritePage, DEFAULT_PAGE_SKILL, NO_SKILL, pageModel, pagePrompt, parsePage, pickLook, skillText, TONES, type Look, type PageEffort, type PageSkill } from '../src/core/page-writer';
 import type { Note } from '../src/core/questions';
 import { BUSINESSES } from './bakeoff-businesses';
 
@@ -41,6 +42,7 @@ const { values } = parseArgs({
     look: { type: 'string', default: 'on' },
     images: { type: 'string', default: 'off' },
     goal: { type: 'string', default: 'off' },
+    tones: { type: 'string' },
     repeat: { type: 'string', default: '1' },
     model: { type: 'string', default: 'opus' },
     effort: { type: 'string', default: 'high' },
@@ -126,6 +128,8 @@ const skills = await Promise.all(values.skills!.split(',').map((s) => skill(s.tr
 const looks = values.look!.split(',').map((s) => s.trim() === 'on');
 const imageSettings = values.images!.split(',').map((s) => s.trim() === 'on');
 const goalSettings = values.goal!.split(',').map((s) => s.trim() === 'on');
+const fixedTones = values.tones === 'all' ? [...TONES] : values.tones?.split(',').map((s) => s.trim());
+for (const tone of fixedTones ?? []) if (!(TONES as readonly string[]).includes(tone)) throw new Error(`unknown tone ${tone}: one of ${TONES.join(', ')}`);
 const repeat = Number(values.repeat);
 const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
 const outDir = values.out ? resolve(values.out) : resolve(repo, `out/design/${stamp}`);
@@ -157,19 +161,24 @@ const localMaker = (dir: string, made: string[]) =>
 const jobs = businesses.flatMap((b) =>
   skills.flatMap((s) =>
     looks.flatMap((look) =>
-      imageSettings.flatMap((images) => goalSettings.flatMap((goal) => Array.from({ length: repeat }, (_, i) => ({ b, s, look, images, goal: goal && b.goal ? b.goal : undefined, n: i + 1 })))),
+      imageSettings.flatMap((images) =>
+        goalSettings.flatMap((goal) =>
+          (look && fixedTones ? fixedTones : [undefined]).flatMap((tone) => Array.from({ length: repeat }, (_, i) => ({ b, s, look, images, goal: goal && b.goal ? b.goal : undefined, tone, n: i + 1 }))),
+        ),
+      ),
     ),
   ),
-).filter((job, i, all) => all.findIndex((j) => j.b === job.b && j.s === job.s && j.look === job.look && j.images === job.images && j.goal === job.goal && j.n === job.n) === i); // a business with no goal: one page, not two
+).filter((job, i, all) => all.findIndex((j) => j.b === job.b && j.s === job.s && j.look === job.look && j.images === job.images && j.goal === job.goal && j.tone === job.tone && j.n === job.n) === i); // a business with no goal: one page, not two
 /** One look nudge per business and repeat number, shared by its pages. */
 const drawn = new Map<string, Look>();
 const lookFor = (b: Business, n: number) => drawn.get(`${b.id}/${n}`) ?? drawn.set(`${b.id}/${n}`, pickLook()).get(`${b.id}/${n}`)!;
 console.log(`${jobs.length} pages with ${model} (effort ${effort}) → ${outDir}`);
 
-async function run({ b, s, look, images, goal, n }: (typeof jobs)[number]): Promise<Result> {
+async function run({ b, s, look, images, goal, tone, n }: (typeof jobs)[number]): Promise<Result> {
   const skillName = s?.name ?? NO_SKILL;
-  const slug = `${skillName}-look-${look ? 'on' : 'off'}${images ? '-images' : ''}${goal ? `-goal-${goal}` : ''}-${n}`;
-  const request = { answers: b.answers, notes: b.notes, photos: [], ...(goal && { goal }), ...(look && { look: lookFor(b, n) }) };
+  const slug = `${skillName}-look-${tone ? tone.replace(/[^a-z]+/gi, '-').toLowerCase() : look ? 'on' : 'off'}${images ? '-images' : ''}${goal ? `-goal-${goal}` : ''}-${n}`;
+  const lookNudge = tone ? { tones: [tone], dark: false, noTicker: true } : lookFor(b, n);
+  const request = { answers: b.answers, notes: b.notes, photos: [], ...(goal && { goal }), ...(look && { look: lookNudge }) };
   const base: Result = { business: b.id, businessName: b.answers.businessName, skill: skillName, look, images, ...(goal && { goal }), n, model, effort, tones: request.look, prompt: `pages/${b.id}/${slug}.txt`, seconds: 0, violations: [], repairs: [] };
   mkdirSync(resolve(outDir, 'pages', b.id), { recursive: true });
   writeFileSync(resolve(outDir, base.prompt), `${pagePrompt(request, s?.name ?? null, images)}\n`);
@@ -221,9 +230,9 @@ async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>
 }
 
 const results = await pool(jobs, Number(values.concurrency), run, (r) =>
-  console.log(`${r.business} · ${r.skill} · look ${r.look ? 'on' : 'off'}${r.images ? ` · ${r.made} photos` : ''}${r.goal ? ` · goal ${r.goal}` : ''} #${r.n}: ${r.error ?? `${r.violations.length ? `REJECTED (${r.violations.join('; ')})` : 'passes'}, $${r.cost!.toFixed(2)}, ${Math.round(r.seconds)} s`}`),
+  console.log(`${r.business} · ${r.skill} · look ${r.look ? 'on' : 'off'}${r.images ? ` · ${r.made} photos` : ''}${r.goal ? ` · goal ${r.goal}` : ''}${r.tones?.tones.length === 1 ? ` · ${r.tones.tones[0]}` : ''} #${r.n}: ${r.error ?? `${r.violations.length ? `REJECTED (${r.violations.join('; ')})` : 'passes'}, $${r.cost!.toFixed(2)}, ${Math.round(r.seconds)} s`}`),
 );
-const key = (r: Result) => `${r.business}/${r.skill}/${r.look}/${!!r.images}/${r.goal ?? ''}/${r.n}`;
+const key = (r: Result) => `${r.business}/${r.skill}/${r.look}/${!!r.images}/${r.goal ?? ''}/${r.tones?.tones.length === 1 ? r.tones.tones[0] : ''}/${r.n}`;
 const earlier: Result[] = existsSync(resolve(outDir, 'results.json')) ? JSON.parse(readFileSync(resolve(outDir, 'results.json'), 'utf8')) : [];
 const fresh = new Set(results.map(key));
 const all = [...earlier.filter((r) => !fresh.has(key(r))), ...results];
@@ -252,7 +261,7 @@ function card(r: Result): string {
     : `<div class="shot empty"><p>${esc(r.error ?? 'No page')}</p></div>`;
   const notes = [...r.violations.map((v) => `<li class="bad">${esc(v)}</li>`), ...(r.repairs.length ? [`<li>${r.repairs.length} repair${r.repairs.length > 1 ? 's' : ''}: ${esc(r.repairs.slice(0, 4).join(', '))}${r.repairs.length > 4 ? '…' : ''}</li>`] : [])].join('');
   return `<article class="card" data-skill="${esc(r.skill)}" data-look="${r.look ? 'on' : 'off'}" data-images="${r.images ? 'on' : 'off'}" data-goal="${r.goal ? 'on' : 'off'}">
-  <header><h3>${esc(r.skill === NO_SKILL ? 'No skill' : r.skill)}<span class="look">look ${r.look ? 'on' : 'off'}</span>${r.images ? `<span class="look">${r.made ?? 0} photos</span>` : ''}${r.goal ? `<span class="look">goal: ${r.goal}</span>` : ''}${repeat > 1 ? `<span class="n">#${r.n}</span>` : ''}</h3>${status}</header>
+  <header><h3>${esc(r.skill === NO_SKILL ? 'No skill' : r.skill)}<span class="look">look ${r.look ? 'on' : 'off'}</span>${r.images ? `<span class="look">${r.made ?? 0} photos</span>` : ''}${r.goal ? `<span class="look">goal: ${r.goal}</span>` : ''}${r.tones?.tones.length === 1 ? `<span class="look">${esc(r.tones.tones[0]!)}</span>` : ''}${repeat > 1 ? `<span class="n">#${r.n}</span>` : ''}</h3>${status}</header>
   ${shot}
   <p class="tones">${esc(tones)}</p>
   <dl class="stats">

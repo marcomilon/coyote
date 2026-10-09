@@ -28,7 +28,8 @@ const handle = (value: string | undefined, host: string): string | undefined => 
   if (!value) return undefined;
   const cleaned = value
     .trim()
-    .replace(new RegExp(`^https?://(www\\.)?${host}/`, 'i'), '')
+    // With or without the scheme: owners type "facebook.com/name" (the form's own example), "m.facebook.com/name"…
+    .replace(new RegExp(`^(https?://)?(www\\.|m\\.)?${host}(/|$)`, 'i'), '')
     .replace(/^@/, '')
     .replace(/[/?#].*$/, '');
   return cleaned || undefined;

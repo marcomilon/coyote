@@ -27,6 +27,11 @@ describe('Contact', () => {
     expect(cleanContact('phone', '+57 (601) 555-1234')).toBe('576015551234');
     expect(cleanContact('email', ' Hola@Luna.test ')).toBe('hola@luna.test');
     expect(cleanContact('instagram', 'https://instagram.com/luna.pan/')).toBe('luna.pan');
+    expect(cleanContact('instagram', 'instagram.com/luna.pan')).toBe('luna.pan');
+    expect(cleanContact('facebook', 'facebook.com/panaderialuna')).toBe('panaderialuna');
+    expect(cleanContact('facebook', 'm.facebook.com/panaderialuna/')).toBe('panaderialuna');
+    expect(cleanContact('facebook', '@panaderialuna')).toBe('panaderialuna');
+    expect(cleanContact('facebook', 'facebook.com')).toBeUndefined();
     expect(cleanContact('address', '   ')).toBeUndefined();
   });
 });

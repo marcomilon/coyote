@@ -106,6 +106,18 @@ function redirects(code: string, known: Known): string[] {
   return found;
 }
 
+/** What's wrong in a structured-data block (JSON-LD): links that aren't the owner's, contact details the owner never gave. */
+function dataProblems(data: string, known: Known): string[] {
+  const found: string[] = [];
+  for (const [, url] of data.matchAll(/"(https?:\/\/[^"\s]+)"/g)) {
+    const host = hostOf(url!);
+    if (host !== 'schema.org' && !linkAllowed(url!, known)) found.push(`a link to ${url!.slice(0, 60)}`);
+  }
+  for (const [number] of data.matchAll(PHONE_LIKE)) if (digits(number).length >= 9 && !ownersNumber(number, known)) found.push(`a phone number the owner did not give (${number.trim()})`);
+  for (const [email] of data.matchAll(EMAIL_LIKE)) if (!known.emails.includes(email.toLowerCase())) found.push(`an email the owner did not give (${email})`);
+  return found;
+}
+
 export interface PageCheckOptions {
   contact: Contact;
   /** Everything else the owner wrote (description, answers, edit requests): its numbers and emails are the owner's too. */
@@ -176,6 +188,16 @@ export function checkPage(page: string, { contact, ownerText = '', businessName,
         return;
       }
       const code = el.children.map((c) => ('data' in c ? c.data : '')).join('');
+      if (/^application\/(?:ld\+)?json$/i.test(attr('type')?.trim() ?? '')) {
+        // Data for search engines, never run: no redirect check, but its links and contact details must be the
+        // owner's, or the block goes (the page is the same without it).
+        const problems = dataProblems(code, known);
+        if (problems.length) {
+          doomed.push(el);
+          repairs.push(`removed structured data (${problems.join('; ')})`);
+        }
+        return;
+      }
       for (const detail of redirects(code, known)) violations.push({ code: 'forbidden-url', detail });
       return;
     }

@@ -26,6 +26,8 @@ Commands:
   page-skill add <name> <file>   Add a skill (a SKILL.md, e.g. ~/.claude/skills/<name>/SKILL.md) or replace one
   page-look [on|off]             Show or switch the look nudge on new pages (3 random tones, light or dark, no ticker),
                                  for the whole stack from the next job. No deploy needed. Survives deploys
+  page-images [on|off]           Show or switch the photos the page writer makes (for owners who leave "Fotos creadas con IA" on),
+                                 for the whole stack from the next job. No deploy needed. Survives deploys
   refill-all                     Finish every site's current draft again (after page-check or domain changes; no model call)
   subscribe-alerts <email>       Email alarms, visitor reports, site notices (new and rejected), and cost alerts to this address (then confirm-alerts)
   protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
@@ -170,7 +172,7 @@ cmd_status() {
   output() { "${aws[@]}" cloudformation describe-stacks --stack-name Coyote --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue"; }
   fn="$("${aws[@]}" lambda list-functions --query "Functions[?starts_with(FunctionName, 'Coyote-GeneratorApiGenerate')].FunctionName | [0]")"
   # name<TAB>value lines; missing parameters print nothing.
-  params="$("${aws[@]}" ssm get-parameters --names /coyote/page-model /coyote/page-skill /coyote/page-look --query "Parameters[].[Name, Value]")"
+  params="$("${aws[@]}" ssm get-parameters --names /coyote/page-model /coyote/page-skill /coyote/page-look /coyote/page-images --query "Parameters[].[Name, Value]")"
   param() { awk -v n="/coyote/$1" '$1 == n { print $2 }' <<<"$params"; }
   env() { "${aws[@]}" lambda get-function-configuration --function-name "$fn" --query "Environment.Variables.$1"; }
   bucket="$(output PageSkillsBucketName)"
@@ -186,6 +188,7 @@ cmd_status() {
   echo "  model     $(param page-model)$([[ "$override" != None ]] && echo " (overridden by PAGE_MODEL=$override)")   effort $(env PAGE_EFFORT | sed 's/^None$/default/')"
   echo "  skill     $(param page-skill)   available: $("${aws[@]}" s3 ls "s3://$bucket/" 2>/dev/null | awk '{print $4}' | sed -n 's/\.md$//p' | tr '\n' ' ')"
   echo "  look      $(param page-look)"
+  echo "  images    $(param page-images)   model $(env IMAGE_MODEL_ID) (us-west-2), when the owner leaves \"Fotos creadas con IA\" on"
   echo
   echo "Bedrock"
   echo "  questions   $(env BEDROCK_MODEL_ID)"
@@ -247,6 +250,18 @@ cmd_page_look() {
   esac
 }
 
+cmd_page_images() {
+  local ssm=(aws ssm --profile "$PROFILE" --region us-east-1) name=/coyote/page-images
+  case "${1:-}" in
+    '') "${ssm[@]}" get-parameter --name "$name" --query Parameter.Value --output text ;;
+    on | off)
+      "${ssm[@]}" put-parameter --name "$name" --value "$1" --overwrite >/dev/null
+      echo "Made photos are now $1 (from the next job)."
+      ;;
+    *) die "page-images takes on or off" ;;
+  esac
+}
+
 cmd_admin() {
   cd "$ROOT/services/generator"
   AWS_PROFILE="$PROFILE" npx tsx scripts/admin.ts "$@"
@@ -262,6 +277,7 @@ case "$command" in
   page-model) cmd_page_model "$@" ;;
   page-skill) cmd_page_skill "$@" ;;
   page-look) cmd_page_look "$@" ;;
+  page-images) cmd_page_images "$@" ;;
   confirm-alerts) cmd_confirm_alerts "$@" ;;
   protect-alerts) cmd_protect_alerts ;;
   subscribe-alerts) cmd_subscribe_alerts "$@" ;;

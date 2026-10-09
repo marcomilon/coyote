@@ -22,18 +22,25 @@ export interface FakeModelOptions {
  * A page writer that answers with a small page built from the request: the business name, a WhatsApp link to the
  * number it was given, and the change it was asked for. `page` replaces the page; `fail` makes it throw.
  */
-export function fakeWriter(options: { page?: (request: PageRequest) => string; fail?: Error } = {}) {
+export function fakeWriter(options: { page?: (request: PageRequest) => string; fail?: Error; images?: string[]; useImages?: number } = {}) {
   const requests: PageRequest[] = [];
   const settings: Parameters<WritePage>[1][] = [];
   const writePage: WritePage = async (request, setting) => {
     requests.push(request);
     settings.push(setting);
     if (options.fail) throw options.fail;
+    // `images`: scenes it asks make_image for; the page shows the first `useImages` it gets (all by default).
+    const made: string[] = [];
+    for (const description of setting.makeImage ? (options.images ?? []) : []) {
+      const result = await setting.makeImage!({ description, aspect: '16:9' });
+      if ('file' in result) made.push(result.file);
+    }
+    const imgs = made.slice(0, options.useImages ?? made.length).map((file) => `<img src="${file}" alt="">`).join('');
     const page =
       options.page?.(request) ??
       (request.current !== undefined
-        ? request.current.replace('</main>', `<p>${request.instruction}</p></main>`)
-        : `<!doctype html><html lang="${request.answers.lang}"><head><meta charset="utf-8"><title>${request.answers.businessName}</title></head><body><main><h1>${request.answers.businessName}</h1><p>${request.answers.about}</p><p>${'Pan recién horneado. '.repeat(20)}</p><a href="https://wa.me/${request.answers.contact.whatsapp}">WhatsApp</a></main></body></html>`);
+        ? request.current.replace('</main>', `<p>${request.instruction}</p>${imgs}</main>`)
+        : `<!doctype html><html lang="${request.answers.lang}"><head><meta charset="utf-8"><title>${request.answers.businessName}</title></head><body><main><h1>${request.answers.businessName}</h1>${imgs}<p>${request.answers.about}</p><p>${'Pan recién horneado. '.repeat(20)}</p><a href="https://wa.me/${request.answers.contact.whatsapp}">WhatsApp</a></main></body></html>`);
     return { text: `\`\`\`html\n${page}\n\`\`\``, stopReason: 'end_turn', usage: { step: request.current !== undefined ? 'edit_page' : 'write_page', modelId: 'opus', inputTokens: 100, outputTokens: 1000 } };
   };
   return { writePage, requests, settings, options };

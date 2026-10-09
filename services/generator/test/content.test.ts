@@ -10,14 +10,14 @@ describe('Contact', () => {
     expect(Contact.safeParse({ whatsapp: '573001234567', email: 'hola' }).success).toBe(false);
   });
 
-  it('checks a WhatsApp number against its country when the country is listed', () => {
+  it('checks a WhatsApp number against its country', () => {
     expect(Contact.safeParse({ whatsapp: '573001234567' }).success).toBe(true); // Colombia, 10 digits
     expect(Contact.safeParse({ whatsapp: '57300123456' }).success).toBe(false); // one short
     expect(Contact.safeParse({ whatsapp: '5491123456789' }).success).toBe(true); // Argentina with the mobile 9
     expect(Contact.safeParse({ whatsapp: '541123456789' }).success).toBe(false); // without it
     expect(Contact.safeParse({ whatsapp: '59894231234' }).success).toBe(true); // Uruguay, 3-digit code
     expect(Contact.safeParse({ whatsapp: '13051234567' }).success).toBe(true); // +1
-    expect(Contact.safeParse({ whatsapp: '442079460958' }).success).toBe(true); // not listed: only 8 to 15 digits
+    expect(Contact.safeParse({ whatsapp: '442079460958' }).success).toBe(false); // not listed
     expect(countryOf('5511912345678')?.iso).toBe('BR');
     expect(countryOf('59171234567')?.iso).toBe('BO');
   });
@@ -33,6 +33,20 @@ describe('Contact', () => {
     expect(cleanContact('facebook', '@panaderialuna')).toBe('panaderialuna');
     expect(cleanContact('facebook', 'facebook.com')).toBeUndefined();
     expect(cleanContact('address', '   ')).toBeUndefined();
+  });
+
+  it('keeps the "Fotos creadas con IA" toggle; a form without it means no', () => {
+    const raw = { businessName: 'Luna', about: 'Panadería de barrio', whatsapp: '573001234567' };
+    expect(normalizeAnswers({ ...raw, aiImages: true }).aiImages).toBe(true);
+    expect(normalizeAnswers({ ...raw, aiImages: false }).aiImages).toBe(false);
+    expect(normalizeAnswers(raw)).not.toHaveProperty('aiImages');
+  });
+
+  it('keeps the goal; rejects an unknown goal', () => {
+    const raw = { businessName: 'Luna', about: 'Panadería de barrio', whatsapp: '573001234567' };
+    expect(normalizeAnswers({ ...raw, goal: 'call' })).toMatchObject({ goal: 'call' });
+    expect(normalizeAnswers(raw)).not.toHaveProperty('goal');
+    expect(() => normalizeAnswers({ ...raw, goal: 'sell' })).toThrow();
   });
 });
 describe('normalizeAnswers', () => {

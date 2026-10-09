@@ -65,9 +65,10 @@ const clientStrings = {
             </div>
             <div>
               <label class="sub" for="whatsapp">{c.q3.whatsapp}</label>
-              <input type="tel" id="whatsapp" name="whatsapp" maxlength="24" autocomplete="tel-national" inputmode="tel" required />
+              <input type="tel" id="whatsapp" name="whatsapp" maxlength="24" autocomplete="tel-national" inputmode="tel" aria-describedby="whatsapp-hint" required />
             </div>
           </div>
+          <p class="hint" id="whatsapp-hint">{c.q3.whatsappHint}</p>
           <p class="error" data-error="contact.whatsapp" role="alert"></p>
           <label class="sub" for="email">{c.q3.email}</label>
           <input type="email" id="email" name="email" maxlength="120" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" placeholder={c.q3.emailPlaceholder} />
@@ -89,19 +90,32 @@ const clientStrings = {
           </div>
         </fieldset>
 
-        {/* Logo and photos: hidden for now (remove `hidden` to show it again). */}
-        <fieldset hidden>
-          <legend class="q"><i>+</i>{c.photos.label}</legend>
+        <fieldset>
+          <legend class="q"><i>4</i>{c.goal.label}</legend>
+          <div class="choices">
+            {(['whatsapp', 'call', 'visit', 'book'] as const).map((goal) => (
+              <label class="choice"><input type="radio" name="goal" value={goal} checked={goal === 'whatsapp'} /><span>{c.goal.options[goal]}</span></label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend class="q"><i>5</i>{c.photos.label}</legend>
           <p class="hint">{c.photos.hint}</p>
           <div class="two">
             <div><label class="sub" for="logo">{c.photos.logo}</label><input type="file" id="logo" name="logo" accept="image/*" /></div>
             <div><label class="sub" for="photos">{c.photos.pics}</label><input type="file" id="photos" name="photos" accept="image/*" multiple /></div>
           </div>
           <p class="error" data-error="photos" role="alert"></p>
+          <label class="toggle">
+            <input type="checkbox" role="switch" name="aiImages" checked aria-describedby="aiImages-hint" />
+            <span class="track" aria-hidden="true"></span>
+            <span class="toggle-text"><span class="toggle-label">{c.aiImages.label}</span><span class="hint" id="aiImages-hint">{c.aiImages.hint}</span></span>
+          </label>
         </fieldset>
 
         <fieldset>
-          <label class="q" for="ownerEmail"><i>4</i>{c.email.label}</label>
+          <label class="q" for="ownerEmail"><i>6</i>{c.email.label}</label>
           <p class="hint" id="ownerEmail-hint">{c.email.hint}</p>
           <input type="email" id="ownerEmail" name="ownerEmail" maxlength="120" autocomplete="email" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="email" aria-describedby="ownerEmail-hint" placeholder={c.email.placeholder} required />
           <p class="hint" data-signed-in hidden>{c.email.signedIn}</p>

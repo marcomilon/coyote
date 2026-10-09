@@ -18,6 +18,8 @@ const Body = z.object({
   instagram: z.string().max(200).optional(),
   facebook: z.string().max(200).optional(),
   lang: z.string().max(5).optional(),
+  aiImages: z.boolean().optional(),
+  goal: z.string().max(20).optional(),
   uploadId: z.string().uuid().optional(),
   /** The owner's email (account.ts): links the site to "Mis sitios". Not an answer: never sent to a model. */
   ownerEmail: z.email().max(120),

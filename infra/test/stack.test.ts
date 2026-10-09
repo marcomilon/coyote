@@ -2,7 +2,7 @@ import { App } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODEL_ID } from '../../services/generator/src/core/models';
+import { DEFAULT_IMAGE_MODEL_ID, DEFAULT_MODEL_ID } from '../../services/generator/src/core/models';
 import { CoyoteStack, type CoyoteStackProps } from '../lib/coyote-stack';
 import { PAGE_SCRIPT_HOSTS } from '../../services/generator/src/core/page-check';
 
@@ -92,6 +92,13 @@ describe('CoyoteStack, domainless', () => {
   it('keeps the page-look switch in SSM, starting on', () => {
     template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-look', Value: 'on' });
     template.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PAGE_LOOK_PARAMETER: '/coyote/page-look' }) } });
+  });
+
+  it('keeps the page-images switch in SSM, starting on', () => {
+    template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-images', Value: 'on' });
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: { Variables: Match.objectLike({ PAGE_IMAGES_PARAMETER: '/coyote/page-images', IMAGE_MODEL_ID: DEFAULT_IMAGE_MODEL_ID }) },
+    });
   });
 
   it('keeps a framed draft out of the browser cache for top-level loads (Vary: Sec-Fetch-Dest)', () => {
@@ -184,7 +191,10 @@ describe('CoyoteStack, domainless', () => {
     const writer = text.filter((s) => JSON.stringify(s.Resource).includes(DEFAULT_MODEL_ID));
     expect(writer).toHaveLength(2); // generate (plan_site) and the chat
     for (const statement of writer) expect(statement.Action).toBe('bedrock:InvokeModel');
-    expect(unguarded).toEqual([]); // no image model any more: every model call carries the guardrail
+    // The only call without the guardrail: the image model in us-west-2, for generate only (images.ts screens it).
+    expect(unguarded).toEqual([{ Action: 'bedrock:InvokeModel', Effect: 'Allow', Resource: { 'Fn::Join': ['', ['arn:', { Ref: 'AWS::Partition' }, `:bedrock:us-west-2::foundation-model/${DEFAULT_IMAGE_MODEL_ID}`]] } }]);
+    const imagePolicies = Object.entries(template.findResources('AWS::IAM::Policy')).filter(([, p]) => JSON.stringify(p).includes(`foundation-model/${DEFAULT_IMAGE_MODEL_ID}`));
+    expect(imagePolicies.map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
   });
 
   it('never retries a failed generation and records the failure', () => {

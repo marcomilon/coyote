@@ -32,7 +32,10 @@ export const PAGE_MODEL_PARAMETER = '/coyote/page-model';
 export const PAGE_SKILL_PARAMETER = '/coyote/page-skill';
 /** Whether a new site's request carries the look nudge (page-writer.ts `pickLook`): on or off. Set by `./coyote.sh page-look`; survives deploys. */
 export const PAGE_LOOK_PARAMETER = '/coyote/page-look';
+/** Whether the page writer may make photos (for owners who left "Fotos creadas con IA" on): on or off. Set by `./coyote.sh page-images`; survives deploys. */
+export const PAGE_IMAGES_PARAMETER = '/coyote/page-images';
 import { DEFAULT_PAGE_SKILL } from '../../services/generator/src/core/frontend-design';
+import { DEFAULT_IMAGE_MODEL_ID, IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
 import type { CoyoteGuardrail } from './guardrail';
 
 export interface GeneratorApiProps {
@@ -129,8 +132,13 @@ export class GeneratorApi extends Construct {
       stringValue: 'on',
       description: 'Look nudge on new pages: on or off. Set with ./coyote.sh page-look',
     });
+    const pageImages = new ssm.StringParameter(this, 'PageImages', {
+      parameterName: PAGE_IMAGES_PARAMETER,
+      stringValue: 'on',
+      description: 'Photos made by the page writer (when the owner asks): on or off. Set with ./coyote.sh page-images',
+    });
     const generate = fn('Generate', 'generate', {
-      environment: { ...environment, ANTHROPIC_SECRET_NAME, PAGE_MODEL_PARAMETER, PAGE_SKILL_PARAMETER, PAGE_LOOK_PARAMETER, PAGE_SKILLS_BUCKET: props.pageSkillsBucket.bucketName, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
+      environment: { ...environment, ANTHROPIC_SECRET_NAME, PAGE_MODEL_PARAMETER, PAGE_SKILL_PARAMETER, PAGE_LOOK_PARAMETER, PAGE_IMAGES_PARAMETER, IMAGE_MODEL_ID: DEFAULT_IMAGE_MODEL_ID, PAGE_SKILLS_BUCKET: props.pageSkillsBucket.bucketName, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
       memorySize: 1024,
       timeout: Duration.minutes(10), // the page writer takes 3–4 minutes
       retryAttempts: 0, // a retry would pay for the model calls twice
@@ -140,6 +148,7 @@ export class GeneratorApi extends Construct {
     pageModel.grantRead(generate);
     pageSkill.grantRead(generate);
     pageLook.grantRead(generate);
+    pageImages.grantRead(generate);
     props.pageSkillsBucket.grantRead(generate);
     // Not a secret: it only keeps raw IPs out of the tables. The stack ID is unique per deployment.
     const ipSalt = Fn.select(2, Fn.split('/', stack.stackId));
@@ -177,7 +186,7 @@ export class GeneratorApi extends Construct {
     // _media/<slug>/: moderated images. _src/<slug>/: sources and site records. _draft/<id>/: served drafts.
     for (const prefix of ['_media/*', '_src/*', '_draft/*']) {
       props.sitesBucket.grantReadWrite(generate, prefix);
-      props.sitesBucket.grantDelete(generate, prefix); // old drafts, and a hero photo that fails moderation
+      props.sitesBucket.grantDelete(generate, prefix); // old drafts, and a made photo that fails moderation
       props.sitesBucket.grantReadWrite(owner, prefix);
       props.sitesBucket.grantDelete(owner, prefix);
       props.sitesBucket.grantReadWrite(chat, prefix);
@@ -205,7 +214,7 @@ export class GeneratorApi extends Construct {
     for (const f of [owner, report]) props.sitesDistribution.grantCreateInvalidation(f);
     props.rateLimitTable.grantReadWriteData(owner);
 
-    // Bedrock: model calls are only allowed with our guardrail attached.
+    // Bedrock: text model calls are only allowed with our guardrail attached.
     const modelResources = (modelId: string) => [
       `arn:${stack.partition}:bedrock:${stack.region}:${stack.account}:inference-profile/${modelId}`,
       `arn:${stack.partition}:bedrock:*::foundation-model/${modelId.replace(/^(us|eu|apac|global)\./, '')}`,
@@ -226,6 +235,11 @@ export class GeneratorApi extends Construct {
       f.addToRolePolicy(applyGuardrail);
     }
     for (const f of [generate, chat]) f.addToRolePolicy(invokeWriter);
+    // The image model (us-west-2: us-east-1 has no text-to-image model) takes no guardrail: the scene goes through
+    // ApplyGuardrail first and the photo through Rekognition (images.ts).
+    generate.addToRolePolicy(
+      new iam.PolicyStatement({ actions: ['bedrock:InvokeModel'], resources: [`arn:${stack.partition}:bedrock:${IMAGE_MODEL_REGION}::foundation-model/${DEFAULT_IMAGE_MODEL_ID}`] }),
+    );
     secretsmanager.Secret.fromSecretNameV2(this, 'AnthropicKey', ANTHROPIC_SECRET_NAME).grantRead(generate);
     owner.addToRolePolicy(applyGuardrail); // an edited address is checked by the guardrail; the owner Lambda never calls a model
 

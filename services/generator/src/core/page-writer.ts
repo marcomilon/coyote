@@ -1,9 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import type { Answers } from './answers';
+import type { Answers, PageGoal } from './answers';
 import type { Usage } from './bedrock';
 import type { Contact } from './content';
 import { DEFAULT_PAGE_SKILL } from './frontend-design';
+import { countryOf } from './phones';
 import type { Note } from './questions';
 
 /**
@@ -89,6 +90,8 @@ export function pickLook(random: () => number = Math.random): Look {
 
 export interface PageRequest {
   answers: Answers;
+  /** The owner's main goal for the site (the form's answer). Unset: nothing said (WhatsApp is the main contact either way). */
+  goal?: PageGoal;
   notes: Note[];
   photos: PagePhoto[];
   /** New sites only: the direction nudge. */
@@ -98,11 +101,38 @@ export interface PageRequest {
   instruction?: string;
 }
 
+/** Photo shapes the image model makes. */
+export const IMAGE_ASPECTS = ['16:9', '4:3', '1:1', '3:4', '9:16'] as const;
+export type ImageAspect = (typeof IMAGE_ASPECTS)[number];
+
+/**
+ * The make_image tool (the owner's "Fotos creadas con IA" toggle and `./coyote.sh page-images`): makes and saves a
+ * photo. Resolves to its file, relative to the page, or to why there is none (the page writer draws SVG instead).
+ */
+export type MakeImage = (input: { description: string; aspect: ImageAspect }) => Promise<{ file: string; bytes: Uint8Array } | { error: string }>;
+
+export const MAKE_IMAGE_TOOL = {
+  name: 'make_image',
+  description:
+    'Makes a photo for the page with an image model and saves it next to the page. Describe one scene in English: subject, setting, light, framing. The model cannot write: no text, signs, or logos in the scene. Returns the file to use in the page, as a relative URL.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      description: { type: 'string', description: 'The scene, in English.' },
+      aspect: { type: 'string', enum: [...IMAGE_ASPECTS] },
+    },
+    required: ['description', 'aspect'],
+  },
+};
+
 /**
  * Writes a page. Resolves to the raw reply text; parsePage extracts the document. `model` defaults to pageModel(),
- * `skill` to the frontend-design skill; null sends no skill.
+ * `skill` to the frontend-design skill; null sends no skill. With `makeImage`, the model may call the make_image tool.
  */
-export type WritePage = (request: PageRequest, options: { effort: PageEffort; model?: string; skill?: PageSkill | null }) => Promise<{ text: string; usage: Usage; stopReason: string | null }>;
+export type WritePage = (
+  request: PageRequest,
+  options: { effort: PageEffort; model?: string; skill?: PageSkill | null; makeImage?: MakeImage },
+) => Promise<{ text: string; usage: Usage; stopReason: string | null }>;
 
 let key: Promise<string> | undefined;
 
@@ -119,9 +149,22 @@ export function anthropicApiKey(env: Record<string, string | undefined> = proces
   })());
 }
 
+/**
+ * The site's language, from the business's country (its WhatsApp number): the Spanish of that country, so the
+ * words, the "tú" or "vos", and the tone are local. A Brazilian number or the Portuguese form: Brazilian
+ * Portuguese. +1 is Puerto Rico, the Dominican Republic, or the US: plain Latin American Spanish. WhatsApp numbers
+ * are always from the form's country list (phones.ts `validForCountry`).
+ */
+export function siteLanguage(answers: Answers): string {
+  const country = countryOf(answers.contact.whatsapp);
+  if (answers.lang === 'pt' || !country || country.iso === 'BR') return 'Brazilian Portuguese';
+  if (country.dial === '1') return 'Latin American Spanish';
+  return `Spanish, written the way people in ${new Intl.DisplayNames(['en'], { type: 'region' }).of(country.iso)} talk`;
+}
+
 function contactLines(contact: Contact): string {
   return [
-    `- WhatsApp: +${contact.whatsapp} (the main way customers contact them)`,
+    `- Phone and WhatsApp: +${contact.whatsapp} (customers write on WhatsApp or call this number)`,
     contact.phone && `- Phone: +${contact.phone}`,
     contact.email && `- Email: ${contact.email}`,
     contact.address && `- Address: ${contact.address}`,
@@ -136,23 +179,24 @@ function contactLines(contact: Contact): string {
  * The request, worded like the chat request that gave the best designs. Keep it that way: no tags, notes, or
  * rules. Safety is the checks on the finished page (page-check.ts), not the prompt.
  */
-export function pagePrompt({ answers, notes, photos, look, current, instruction }: PageRequest, skill: string | null = DEFAULT_PAGE_SKILL.name): string {
-  const language = answers.lang === 'pt' ? 'Brazilian Portuguese' : 'Latin American Spanish';
+export function pagePrompt({ answers, notes, photos, look, goal, current, instruction }: PageRequest, skill: string | null = DEFAULT_PAGE_SKILL.name, images = false): string {
   const details = notes.map((n) => `  - ${n.question} ${n.answer}`).join('\n');
   const business = [
     `- Name: ${answers.businessName}`,
     `- What it does: ${answers.about}`,
     details && `- More details from the owner:\n${details}`,
     contactLines(answers.contact),
-    `- Language of the site: ${language}`,
+    `- Language of the site: ${siteLanguage(answers)}`,
   ]
     .filter(Boolean)
     .join('\n');
   const files = photos.map((p) => p.file);
+  const make = 'make photos with the make_image tool (describe each scene in English)';
   const photosLine =
-    files.length === 0
-      ? 'There are no photos of the business: where the page needs images, draw them as SVG. '
-      : files.length === 1 ? `There is a photo of the business at ${files[0]}. ` : `There are photos of the business at ${files.join(', ')}. `;
+    (files.length === 0
+      ? `There are no photos of the business: where the page needs images, ${images ? `${make}, or draw them as SVG` : 'draw them as SVG'}. `
+      : files.length === 1 ? `There is a photo of the business at ${files[0]}. ` : `There are photos of the business at ${files.join(', ')}. `) +
+    (images && files.length > 0 ? `Where the page needs more images, you can ${make}. ` : '');
 
   if (current !== undefined) {
     return `${skill ? `Use the ${skill} skill. ` : ''}This is the one-page website of this small business:
@@ -168,6 +212,16 @@ The owner asks for this change: ${instruction}
 ${photosLine}Keep everything else as it is, and don't invent facts the owner didn't give. Reply with the complete HTML file.`;
   }
 
+  const goalLine = goal
+    ? `${
+        {
+          whatsapp: 'The owner mostly wants visitors to message them on WhatsApp.',
+          call: 'The owner mostly wants visitors to call them.',
+          visit: 'The owner mostly wants visitors to come to the place.',
+          book: 'The owner mostly wants visitors to book an appointment.',
+        }[goal]
+      }\n\n`
+    : '';
   const lookLine = look
     ? `For the look, go with whichever of these suits the business best: ${look.tones[0]}, ${look.tones[1]}, or ${look.tones[2]}, on a ${look.dark ? 'dark' : 'light'} background${look.noTicker ? ', without a scrolling ticker or marquee strip' : ''}.\n\n`
     : '';
@@ -175,7 +229,7 @@ ${photosLine}Keep everything else as it is, and don't invent facts the owner did
 
 ${business}
 
-${lookLine}${photosLine}Don't invent facts the owner didn't give.`;
+${goalLine}${lookLine}${photosLine}Don't invent facts the owner didn't give.`;
 }
 
 /** The reply's HTML document: the last ```html block, or a bare document. */
@@ -186,32 +240,73 @@ export function parsePage(text: string): string | undefined {
 }
 
 /** The API request for a page. */
-export function pageParams(request: PageRequest, model: string, effort: PageEffort, skill: PageSkill | null = DEFAULT_PAGE_SKILL): Anthropic.MessageStreamParams {
+export function pageParams(request: PageRequest, model: string, effort: PageEffort, skill: PageSkill | null = DEFAULT_PAGE_SKILL, images = false): Anthropic.MessageStreamParams {
   // The photos go first, in the order the request names them, so the design can follow them.
   const content: Anthropic.ContentBlockParam[] = [
     ...request.photos.map((p): Anthropic.ContentBlockParam => ({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: Buffer.from(p.bytes).toString('base64') } })),
-    { type: 'text', text: pagePrompt(request, skill?.name ?? null) },
+    { type: 'text', text: pagePrompt(request, skill?.name ?? null, images) },
   ];
   return {
     model,
     max_tokens: 64000,
     ...(skill && { system: skill.text }),
     messages: [{ role: 'user', content }],
+    ...(images && { tools: [MAKE_IMAGE_TOOL] }),
     ...(takesEffort(model) && { output_config: { effort } }),
   } as Anthropic.MessageStreamParams;
 }
 
-/** Anthropic's API, streaming (a page is 10–30k tokens), thinking on at the given effort. */
-export function anthropicWritePage(env: Record<string, string | undefined> = process.env): WritePage {
-  let client: Anthropic | undefined;
-  return async (request, { effort, model = pageModel(env), skill = DEFAULT_PAGE_SKILL }) => {
+/** Tool rounds before the page writer must answer with the page (the image cap itself is MakeImage's). */
+const MAX_TOOL_ROUNDS = 6;
+
+/** Runs the make_image calls of one reply, together. A failure is a result the model reads, never an exception. */
+async function runImageTools(content: Anthropic.ContentBlock[], makeImage: MakeImage): Promise<Anthropic.ToolResultBlockParam[]> {
+  const calls = content.filter((block): block is Anthropic.ToolUseBlock => block.type === 'tool_use');
+  return Promise.all(
+    calls.map(async (call): Promise<Anthropic.ToolResultBlockParam> => {
+      const input = call.input as { description?: unknown; aspect?: unknown };
+      const aspect = IMAGE_ASPECTS.includes(input.aspect as ImageAspect) ? (input.aspect as ImageAspect) : '16:9';
+      const made =
+        call.name !== MAKE_IMAGE_TOOL.name || typeof input.description !== 'string'
+          ? { error: 'unknown tool or no description' }
+          : await makeImage({ description: input.description, aspect }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }));
+      if ('error' in made) return { type: 'tool_result', tool_use_id: call.id, is_error: true, content: `No photo: ${made.error}. Draw this image as SVG instead.` };
+      return {
+        type: 'tool_result',
+        tool_use_id: call.id,
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: Buffer.from(made.bytes).toString('base64') } },
+          { type: 'text', text: `Saved as ${made.file}` },
+        ],
+      };
+    }),
+  );
+}
+
+/** Anthropic's API, streaming (a page is 10–30k tokens), thinking on at the given effort; with make_image, a tool loop. `api`: tests. */
+export function anthropicWritePage(env: Record<string, string | undefined> = process.env, api?: Pick<Anthropic, 'messages'>): WritePage {
+  let client = api;
+  return async (request, { effort, model = pageModel(env), skill = DEFAULT_PAGE_SKILL, makeImage }) => {
     client ??= new Anthropic({ apiKey: await anthropicApiKey(env), maxRetries: 2 });
-    const message = await client.messages.stream(pageParams(request, model, effort, skill), { signal: AbortSignal.timeout(PAGE_DEADLINE_MS) }).finalMessage();
-    const text = message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
-    return {
-      text,
-      stopReason: message.stop_reason,
-      usage: { step: request.current !== undefined ? 'edit_page' : 'write_page', modelId: model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens },
-    };
+    const params = pageParams(request, model, effort, skill, !!makeImage);
+    const signal = AbortSignal.timeout(PAGE_DEADLINE_MS); // one deadline for every round
+    const messages = [...params.messages];
+    let inputTokens = 0;
+    let outputTokens = 0;
+    const texts: string[] = []; // every round's text: parsePage takes the last HTML block
+    for (let round = 0; ; round++) {
+      const last = round === MAX_TOOL_ROUNDS;
+      const message = await client.messages
+        .stream({ ...params, messages, ...(last && { tool_choice: { type: 'none' } }) } as Anthropic.MessageStreamParams, { signal })
+        .finalMessage();
+      inputTokens += message.usage.input_tokens;
+      outputTokens += message.usage.output_tokens;
+      texts.push(...message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])));
+      if (message.stop_reason === 'tool_use' && makeImage && !last) {
+        messages.push({ role: 'assistant', content: message.content }, { role: 'user', content: await runImageTools(message.content, makeImage) });
+        continue;
+      }
+      return { text: texts.join('\n'), stopReason: message.stop_reason, usage: { step: request.current !== undefined ? 'edit_page' : 'write_page', modelId: model, inputTokens, outputTokens } };
+    }
   };
 }

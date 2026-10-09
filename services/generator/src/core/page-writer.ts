@@ -73,7 +73,8 @@ export const TONES = [
 ] as const;
 
 export interface Look {
-  tones: [string, string, string];
+  /** Three to choose from (pickLook); the bench sends one to see a style on its own. */
+  tones: string[];
   dark: boolean;
   noTicker: boolean;
 }
@@ -84,7 +85,7 @@ const NO_TICKER_SHARE = 0.75;
 /** Three different tones, a light or dark page, and usually no ticker strip. `random` is injectable for tests. */
 export function pickLook(random: () => number = Math.random): Look {
   const pool: string[] = [...TONES];
-  const tones = [0, 1, 2].map(() => pool.splice(Math.floor(random() * pool.length), 1)[0]!) as Look['tones'];
+  const tones = [0, 1, 2].map(() => pool.splice(Math.floor(random() * pool.length), 1)[0]!);
   return { tones, dark: random() < 0.4, noTicker: random() < NO_TICKER_SHARE };
 }
 
@@ -224,7 +225,7 @@ ${photosLine}Keep everything else as it is, and don't invent facts the owner did
       }\n\n`
     : '';
   const lookLine = look
-    ? `For the look, go with whichever of these suits the business best: ${look.tones[0]}, ${look.tones[1]}, or ${look.tones[2]}, on a ${look.dark ? 'dark' : 'light'} background${look.noTicker ? ', without a scrolling ticker or marquee strip' : ''}.\n\n`
+    ? `For the look, ${look.tones.length === 1 ? `go with ${look.tones[0]}` : `go with whichever of these suits the business best: ${look.tones.slice(0, -1).join(', ')}, or ${look.tones.at(-1)}`}, on a ${look.dark ? 'dark' : 'light'} background${look.noTicker ? ', without a scrolling ticker or marquee strip' : ''}.\n\n`
     : '';
   return `${skill ? `Use the ${skill} skill to create` : 'Create'} a one-page website for this small business, as a single HTML file.
 
@@ -271,6 +272,7 @@ async function runImageTools(content: Anthropic.ContentBlock[], makeImage: MakeI
         call.name !== MAKE_IMAGE_TOOL.name || typeof input.description !== 'string'
           ? { error: 'unknown tool or no description' }
           : await makeImage({ description: input.description, aspect }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }));
+      console.info('make_image', { scene: input.description, aspect, ...('error' in made ? { error: made.error } : { file: made.file }) });
       if ('error' in made) return { type: 'tool_result', tool_use_id: call.id, is_error: true, content: `No photo: ${made.error}. Draw this image as SVG instead.` };
       return {
         type: 'tool_result',

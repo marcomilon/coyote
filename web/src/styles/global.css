@@ -172,10 +172,10 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .error:empty { display: none; }
 .count { font-size: .8rem; text-align: right; opacity: .6; margin-top: .3rem; font-variant-numeric: tabular-nums; }
 .count.full { color: var(--rojo); opacity: 1; font-weight: 600; }
-.choices { display: flex; flex-wrap: wrap; gap: .6rem; }
+.choices { display: flex; flex-wrap: wrap; gap: .4rem; }
 .choice { cursor: pointer; }
 .choice input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.choice span { display: block; padding: .6rem 1rem; border: 2px solid var(--ink); border-radius: 2rem; background: var(--paper); font-weight: 600; }
+.choice span { display: block; padding: .4rem .75rem; border: 2px solid var(--ink); border-radius: 2rem; background: var(--paper); font-size: .85rem; font-weight: 600; white-space: nowrap; }
 .choice input:checked + span { background: var(--ink); color: var(--paper); }
 .choice input:focus-visible + span { outline: 3px solid var(--amarillo); outline-offset: 2px; }
 .toggle { display: flex; gap: .9rem; align-items: flex-start; cursor: pointer; margin-top: 1.1rem; }
@@ -189,6 +189,7 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .toggle-label { font-weight: 600; }
 .toggle .hint { margin: 0; }
 .two { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.two[hidden] { display: none; }
 .submit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem; border-top: 3px dashed var(--ink); padding-top: 1.5rem; }
 .submit-row p { font-size: .82rem; opacity: .75; flex: 1 1 14rem; }
 

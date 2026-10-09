@@ -164,6 +164,7 @@ describe('contact details on a written page', () => {
     expect(pagePrompt({ ...request, goal: 'call' })).toContain('The owner mostly wants visitors to call them.');
     expect(pagePrompt(request)).toContain('- Phone and WhatsApp: +573001234567 (customers write on WhatsApp or call this number)');
     expect(pagePrompt({ ...request, goal: 'visit' })).toContain('to come to the place.');
+    expect(pagePrompt({ ...request, goal: 'info' })).toContain('The owner mostly wants visitors to get to know the business.');
   });
 
   it('picks the model from the page-model switch, with PAGE_MODEL over it and Opus by default', () => {

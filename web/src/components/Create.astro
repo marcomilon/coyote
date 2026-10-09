@@ -93,8 +93,8 @@ const clientStrings = {
         <fieldset>
           <legend class="q"><i>4</i>{c.goal.label}</legend>
           <div class="choices">
-            {(['whatsapp', 'call', 'visit', 'book'] as const).map((goal) => (
-              <label class="choice"><input type="radio" name="goal" value={goal} checked={goal === 'whatsapp'} /><span>{c.goal.options[goal]}</span></label>
+            {(['info', 'whatsapp', 'call', 'visit', 'book'] as const).map((goal) => (
+              <label class="choice"><input type="radio" name="goal" value={goal} checked={goal === 'info'} /><span>{c.goal.options[goal]}</span></label>
             ))}
           </div>
         </fieldset>
@@ -102,7 +102,8 @@ const clientStrings = {
         <fieldset>
           <legend class="q"><i>5</i>{c.photos.label}</legend>
           <p class="hint">{c.photos.hint}</p>
-          <div class="two">
+          {/* Uploads hidden for now (remove `hidden` to show them again); the AI photos switch stays. */}
+          <div class="two" hidden>
             <div><label class="sub" for="logo">{c.photos.logo}</label><input type="file" id="logo" name="logo" accept="image/*" /></div>
             <div><label class="sub" for="photos">{c.photos.pics}</label><input type="file" id="photos" name="photos" accept="image/*" multiple /></div>
           </div>

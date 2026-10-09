@@ -68,6 +68,21 @@ describe('checkPage', () => {
     expect(checkPage(doc('<p>Llámanos al +54 9 11 5555 0000</p>'), { ...opts, ownerText }).violations).not.toEqual([]);
   });
 
+  it('keeps structured data (JSON-LD) with the owner\'s details, and removes it when it has anyone else\'s', () => {
+    const data = (sameAs: string, telephone = '+573001234567') =>
+      doc(`<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Bakery", "name": "Panadería Luna",
+        "telephone": "${telephone}", "sameAs": ["${sameAs}"], "hasMap": "https://www.google.com/maps/search/?api=1&query=Calle"}</script><h1>Panadería Luna</h1>`);
+    const good = checkPage(data('https://www.instagram.com/luna.pan/'), opts);
+    expect(good.violations).toEqual([]);
+    expect(good.repairs).toEqual([]);
+    expect(good.html).toContain('application/ld+json');
+    for (const bad of [checkPage(data('https://facebook.com/otra'), opts), checkPage(data('https://instagram.com/luna.pan', '+54 9 11 5555 0000'), opts)]) {
+      expect(bad.violations).toEqual([]);
+      expect(bad.repairs).toEqual([expect.stringMatching(/^removed structured data/)]);
+      expect(bad.html).not.toContain('ld+json');
+    }
+  });
+
   it('does not mistake years, prices, or SVG paths for phone numbers', () => {
     const result = checkPage(
       doc(`<p>Desde 2019 – 2024 · $12.500</p><p>Tel. +57 300 123 4567</p><svg><path d="M4 -15 A15 15 0 1 1 4 15"/></svg>

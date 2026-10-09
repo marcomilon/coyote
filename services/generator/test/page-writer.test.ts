@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
 import { checkPage, contactMissing, replaceContact } from '../src/core/page-check';
-import { pageModel, pageParams, pagePrompt, parsePage, pickLook, TONES, type PageRequest } from '../src/core/page-writer';
+import { DEFAULT_PAGE_SKILL, pageModel, pageParams, pagePrompt, parsePage, pickLook, skillText, TONES, type PageRequest } from '../src/core/page-writer';
 import { submit } from '../src/core/submit';
 import { body, harness } from './harness';
 
@@ -141,6 +141,27 @@ describe('contact details on a written page', () => {
     expect(pageModel({ PAGE_MODEL: 'claude-x' }, 'haiku')).toBe('claude-x');
   });
 
+  it('sends the chosen skill as the system prompt and names it in the request; with none, neither', () => {
+    const request = { answers: { businessName: 'Luna', about: 'Pan', lang: 'es' as const, contact }, notes: [], photos: [] };
+    const text = (p: ReturnType<typeof pageParams>) => JSON.stringify(p.messages);
+    expect(pageParams(request, 'claude-opus-5-5', 'high')).toMatchObject({ system: DEFAULT_PAGE_SKILL.text });
+    const hallmark = pageParams(request, 'claude-opus-5-5', 'high', { name: 'hallmark', text: 'Be bold.' });
+    expect(hallmark).toMatchObject({ system: 'Be bold.' });
+    expect(text(hallmark)).toContain('Use the hallmark skill to create a one-page website');
+    const none = pageParams(request, 'claude-opus-5-5', 'high', null);
+    expect(none).not.toHaveProperty('system');
+    expect(text(none)).toContain('Create a one-page website');
+    expect(text(none)).not.toContain('skill');
+    const edit = { ...request, current: '<html></html>', instruction: 'x' };
+    expect(pagePrompt(edit, null)).toMatch(/^This is the one-page website/);
+    expect(pagePrompt(edit, 'hallmark')).toMatch(/^Use the hallmark skill\. This is/);
+  });
+
+  it('reads a SKILL.md without its frontmatter', () => {
+    expect(skillText('---\nname: hallmark\ndescription: x\n---\n\n# Hallmark\nBe bold.\n')).toBe('# Hallmark\nBe bold.');
+    expect(skillText('# Plain\n')).toBe('# Plain');
+  });
+
   it('sends the effort setting to Opus but not to Haiku 4.5, which rejects it', () => {
     const request = { answers: { businessName: 'Luna', about: 'Pan', lang: 'es' as const, contact }, notes: [], photos: [] };
     expect(pageParams(request, 'claude-opus-5-5', 'high')).toMatchObject({ model: 'claude-opus-5-5', output_config: { effort: 'high' } });
@@ -172,6 +193,24 @@ describe('runGenerateJob with the page writer', () => {
     await submit(body, '1.2.3.4', t.submitDeps);
     await runGenerateJob('job-1', { ...t.generateDeps, pageModel: 'claude-haiku-4-5' });
     expect(t.writer.settings[0]).toEqual({ effort: 'high', model: 'claude-haiku-4-5' });
+  });
+
+  it('sends the look nudge on new sites unless the page-look switch is off', async () => {
+    for (const [pageLook, sent] of [[undefined, true], [true, true], [false, false]] as const) {
+      const t = harness();
+      await submit(body, '1.2.3.4', t.submitDeps);
+      await runGenerateJob('job-1', { ...t.generateDeps, pageLook });
+      expect(t.writer.requests[0]!.look !== undefined).toBe(sent);
+    }
+  });
+
+  it('writes with the skill it is given, or none', async () => {
+    for (const pageSkill of [{ name: 'hallmark', text: 'Be bold.' }, null]) {
+      const t = harness();
+      await submit(body, '1.2.3.4', t.submitDeps);
+      await runGenerateJob('job-1', { ...t.generateDeps, pageSkill });
+      expect(t.writer.settings[0]).toMatchObject({ skill: pageSkill });
+    }
   });
 
   it('fails the job, and frees the slug, when the page writer fails or sends no page', async () => {

@@ -3,11 +3,11 @@ import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-sec
 import type { Answers } from './answers';
 import type { Usage } from './bedrock';
 import type { Contact } from './content';
-import { FRONTEND_DESIGN } from './frontend-design';
+import { DEFAULT_PAGE_SKILL } from './frontend-design';
 import type { Note } from './questions';
 
 /**
- * The site writer: Claude Opus 5.5 through Anthropic's API, with the frontend-design skill as its system prompt
+ * The site writer: Claude Opus 5.5 through Anthropic's API, with a skill (frontend-design by default) as its system prompt
  * and a request written the way an owner would ask in chat. The page comes back as one HTML document; the
  * checks run on it afterwards (page-check.ts), not as rules in the prompt, because rules made the designs worse.
  */
@@ -25,6 +25,21 @@ export function pageModel(env: Record<string, string | undefined> = process.env,
   if (env.PAGE_MODEL) return env.PAGE_MODEL;
   return Object.hasOwn(PAGE_MODELS, setting ?? '') ? PAGE_MODELS[setting as keyof typeof PAGE_MODELS] : DEFAULT_PAGE_MODEL;
 }
+
+/**
+ * The skill sent as the system prompt, switched by `./coyote.sh page-skill` (SSM PAGE_SKILL_PARAMETER names a
+ * `<name>.md` in the PAGE_SKILLS_BUCKET, or `none`). The bundled frontend-design skill is the default.
+ */
+export interface PageSkill {
+  name: string;
+  text: string;
+}
+export { DEFAULT_PAGE_SKILL };
+/** The switch's value that turns the skill off. */
+export const NO_SKILL = 'none';
+
+/** A SKILL.md as the model reads it: without its YAML frontmatter. */
+export const skillText = (markdown: string): string => markdown.replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trim();
 
 /** Haiku 4.5 rejects the effort setting. */
 const takesEffort = (model: string) => !model.includes('claude-haiku-4-5');
@@ -83,8 +98,11 @@ export interface PageRequest {
   instruction?: string;
 }
 
-/** Writes a page. Resolves to the raw reply text; parsePage extracts the document. `model` defaults to pageModel(). */
-export type WritePage = (request: PageRequest, options: { effort: PageEffort; model?: string }) => Promise<{ text: string; usage: Usage; stopReason: string | null }>;
+/**
+ * Writes a page. Resolves to the raw reply text; parsePage extracts the document. `model` defaults to pageModel(),
+ * `skill` to the frontend-design skill; null sends no skill.
+ */
+export type WritePage = (request: PageRequest, options: { effort: PageEffort; model?: string; skill?: PageSkill | null }) => Promise<{ text: string; usage: Usage; stopReason: string | null }>;
 
 let key: Promise<string> | undefined;
 
@@ -118,7 +136,7 @@ function contactLines(contact: Contact): string {
  * The request, worded like the chat request that gave the best designs. Keep it that way: no tags, notes, or
  * rules. Safety is the checks on the finished page (page-check.ts), not the prompt.
  */
-export function pagePrompt({ answers, notes, photos, look, current, instruction }: PageRequest): string {
+export function pagePrompt({ answers, notes, photos, look, current, instruction }: PageRequest, skill: string | null = DEFAULT_PAGE_SKILL.name): string {
   const language = answers.lang === 'pt' ? 'Brazilian Portuguese' : 'Latin American Spanish';
   const details = notes.map((n) => `  - ${n.question} ${n.answer}`).join('\n');
   const business = [
@@ -137,7 +155,7 @@ export function pagePrompt({ answers, notes, photos, look, current, instruction 
       : files.length === 1 ? `There is a photo of the business at ${files[0]}. ` : `There are photos of the business at ${files.join(', ')}. `;
 
   if (current !== undefined) {
-    return `Use the frontend-design skill. This is the one-page website of this small business:
+    return `${skill ? `Use the ${skill} skill. ` : ''}This is the one-page website of this small business:
 
 ${business}
 
@@ -153,7 +171,7 @@ ${photosLine}Keep everything else as it is, and don't invent facts the owner did
   const lookLine = look
     ? `For the look, go with whichever of these suits the business best: ${look.tones[0]}, ${look.tones[1]}, or ${look.tones[2]}, on a ${look.dark ? 'dark' : 'light'} background${look.noTicker ? ', without a scrolling ticker or marquee strip' : ''}.\n\n`
     : '';
-  return `Use the frontend-design skill to create a one-page website for this small business, as a single HTML file.
+  return `${skill ? `Use the ${skill} skill to create` : 'Create'} a one-page website for this small business, as a single HTML file.
 
 ${business}
 
@@ -168,16 +186,16 @@ export function parsePage(text: string): string | undefined {
 }
 
 /** The API request for a page. */
-export function pageParams(request: PageRequest, model: string, effort: PageEffort): Anthropic.MessageStreamParams {
+export function pageParams(request: PageRequest, model: string, effort: PageEffort, skill: PageSkill | null = DEFAULT_PAGE_SKILL): Anthropic.MessageStreamParams {
   // The photos go first, in the order the request names them, so the design can follow them.
   const content: Anthropic.ContentBlockParam[] = [
     ...request.photos.map((p): Anthropic.ContentBlockParam => ({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: Buffer.from(p.bytes).toString('base64') } })),
-    { type: 'text', text: pagePrompt(request) },
+    { type: 'text', text: pagePrompt(request, skill?.name ?? null) },
   ];
   return {
     model,
     max_tokens: 64000,
-    system: FRONTEND_DESIGN,
+    ...(skill && { system: skill.text }),
     messages: [{ role: 'user', content }],
     ...(takesEffort(model) && { output_config: { effort } }),
   } as Anthropic.MessageStreamParams;
@@ -186,9 +204,9 @@ export function pageParams(request: PageRequest, model: string, effort: PageEffo
 /** Anthropic's API, streaming (a page is 10–30k tokens), thinking on at the given effort. */
 export function anthropicWritePage(env: Record<string, string | undefined> = process.env): WritePage {
   let client: Anthropic | undefined;
-  return async (request, { effort, model = pageModel(env) }) => {
+  return async (request, { effort, model = pageModel(env), skill = DEFAULT_PAGE_SKILL }) => {
     client ??= new Anthropic({ apiKey: await anthropicApiKey(env), maxRetries: 2 });
-    const message = await client.messages.stream(pageParams(request, model, effort), { signal: AbortSignal.timeout(PAGE_DEADLINE_MS) }).finalMessage();
+    const message = await client.messages.stream(pageParams(request, model, effort, skill), { signal: AbortSignal.timeout(PAGE_DEADLINE_MS) }).finalMessage();
     const text = message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
     return {
       text,

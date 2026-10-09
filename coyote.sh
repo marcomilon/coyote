@@ -12,6 +12,7 @@ usage() {
 Usage: ./coyote.sh <command> [args]
 
 Commands:
+  status                         The deployed stack at a glance: URLs, page writer switches, Bedrock models
   deploy [cdk args]              Deploy the stack. Writes infra/cdk-outputs.json
   destroy                        Delete the whole stack and ALL its data (sites, records, alerts). For when you
                                  stop working on the project: the idle cost drops to zero. deploy brings it back
@@ -20,6 +21,11 @@ Commands:
   restore <slug>                 Bring a quarantined site back online
   page-model [opus|haiku]        Show or set the model that writes the pages, for the whole stack, from the next job.
                                  haiku is cheap, for testing the workflow; opus makes the real designs. Survives deploys
+  page-skill [<name>|none]       Show the page writer's skill and the ones available, or switch it (none: no skill),
+                                 for the whole stack from the next job. No deploy needed. Survives deploys
+  page-skill add <name> <file>   Add a skill (a SKILL.md, e.g. ~/.claude/skills/<name>/SKILL.md) or replace one
+  page-look [on|off]             Show or switch the look nudge on new pages (3 random tones, light or dark, no ticker),
+                                 for the whole stack from the next job. No deploy needed. Survives deploys
   refill-all                     Finish every site's current draft again (after page-check or domain changes; no model call)
   subscribe-alerts <email>       Email alarms, visitor reports, site notices (new and rejected), and cost alerts to this address (then confirm-alerts)
   protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
@@ -156,6 +162,36 @@ cmd_protect_alerts() {
   fi
 }
 
+cmd_status() {
+  local aws=(aws --profile "$PROFILE" --region us-east-1 --output text)
+  local stack fn env params bucket
+  stack="$("${aws[@]}" cloudformation describe-stacks --stack-name Coyote \
+    --query "Stacks[0].[StackStatus, LastUpdatedTime || CreationTime]" 2>/dev/null)" || die "no Coyote stack in this account. Run ./coyote.sh deploy"
+  output() { "${aws[@]}" cloudformation describe-stacks --stack-name Coyote --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue"; }
+  fn="$("${aws[@]}" lambda list-functions --query "Functions[?starts_with(FunctionName, 'Coyote-GeneratorApiGenerate')].FunctionName | [0]")"
+  # name<TAB>value lines; missing parameters print nothing.
+  params="$("${aws[@]}" ssm get-parameters --names /coyote/page-model /coyote/page-skill /coyote/page-look --query "Parameters[].[Name, Value]")"
+  param() { awk -v n="/coyote/$1" '$1 == n { print $2 }' <<<"$params"; }
+  env() { "${aws[@]}" lambda get-function-configuration --function-name "$fn" --query "Environment.Variables.$1"; }
+  bucket="$(output PageSkillsBucketName)"
+
+  echo "Stack       $(cut -f1 <<<"$stack"), last change $(cut -f2 <<<"$stack" | cut -c1-16 | tr T ' ') UTC (AWS profile $PROFILE)"
+  echo "App         $(output AppUrl)"
+  echo "API         $(output ApiUrl)"
+  echo "Sites       $(output SitesBaseUrl)"
+  echo
+  echo "Page writer (switches apply from the next job)"
+  local override
+  override="$(env PAGE_MODEL)"
+  echo "  model     $(param page-model)$([[ "$override" != None ]] && echo " (overridden by PAGE_MODEL=$override)")   effort $(env PAGE_EFFORT | sed 's/^None$/default/')"
+  echo "  skill     $(param page-skill)   available: $("${aws[@]}" s3 ls "s3://$bucket/" 2>/dev/null | awk '{print $4}' | sed -n 's/\.md$//p' | tr '\n' ' ')"
+  echo "  look      $(param page-look)"
+  echo
+  echo "Bedrock"
+  echo "  questions   $(env BEDROCK_MODEL_ID)"
+  echo "  pre-screen  $(env PRESCREEN_MODEL_ID)"
+}
+
 cmd_page_model() {
   local ssm=(aws ssm --profile "$PROFILE" --region us-east-1) name=/coyote/page-model
   case "${1:-}" in
@@ -168,6 +204,49 @@ cmd_page_model() {
   esac
 }
 
+cmd_page_skill() {
+  local ssm=(aws ssm --profile "$PROFILE" --region us-east-1) s3=(aws s3 --profile "$PROFILE" --region us-east-1)
+  local name=/coyote/page-skill bucket
+  bucket="$(aws cloudformation describe-stacks --profile "$PROFILE" --region us-east-1 --stack-name Coyote \
+    --query "Stacks[0].Outputs[?OutputKey=='PageSkillsBucketName'].OutputValue" --output text)"
+  [[ -n "$bucket" && "$bucket" != None ]] || die "no skills bucket in the stack. Run ./coyote.sh deploy first"
+  case "${1:-}" in
+    '')
+      echo "Active: $("${ssm[@]}" get-parameter --name "$name" --query Parameter.Value --output text)"
+      echo "Available: none $("${s3[@]}" ls "s3://$bucket/" | awk '{print $4}' | sed -n 's/\.md$//p' | tr '\n' ' ')"
+      ;;
+    add)
+      [[ $# -eq 3 ]] || die "usage: page-skill add <name> <file>"
+      [[ "$2" =~ ^[a-z0-9-]+$ && "$2" != none ]] || die "a skill name is lowercase letters, digits and hyphens (not 'none')"
+      [[ -s "$3" ]] || die "no such file: $3"
+      "${s3[@]}" cp "$3" "s3://$bucket/$2.md" --content-type 'text/markdown; charset=utf-8' >/dev/null
+      echo "Added $2. Switch to it with: ./coyote.sh page-skill $2"
+      ;;
+    none)
+      "${ssm[@]}" put-parameter --name "$name" --value none --overwrite >/dev/null
+      echo "Pages are now written with no skill (from the next job)."
+      ;;
+    *)
+      [[ $# -eq 1 ]] || die "usage: page-skill [<name>|none] or page-skill add <name> <file>"
+      "${s3[@]}" ls "s3://$bucket/$1.md" >/dev/null 2>&1 || die "no skill '$1'. Add it first: ./coyote.sh page-skill add $1 <file>"
+      "${ssm[@]}" put-parameter --name "$name" --value "$1" --overwrite >/dev/null
+      echo "Pages are now written with the $1 skill (from the next job)."
+      ;;
+  esac
+}
+
+cmd_page_look() {
+  local ssm=(aws ssm --profile "$PROFILE" --region us-east-1) name=/coyote/page-look
+  case "${1:-}" in
+    '') "${ssm[@]}" get-parameter --name "$name" --query Parameter.Value --output text ;;
+    on | off)
+      "${ssm[@]}" put-parameter --name "$name" --value "$1" --overwrite >/dev/null
+      echo "The look nudge is now $1 (from the next job)."
+      ;;
+    *) die "page-look takes on or off" ;;
+  esac
+}
+
 cmd_admin() {
   cd "$ROOT/services/generator"
   AWS_PROFILE="$PROFILE" npx tsx scripts/admin.ts "$@"
@@ -176,10 +255,13 @@ cmd_admin() {
 command="${1:-help}"
 shift || true
 case "$command" in
+  status) cmd_status ;;
   deploy) cmd_deploy "$@" ;;
   destroy) cmd_destroy ;;
   abuse-report | unpublish | restore | refill-all) cmd_admin "$command" "$@" ;;
   page-model) cmd_page_model "$@" ;;
+  page-skill) cmd_page_skill "$@" ;;
+  page-look) cmd_page_look "$@" ;;
   confirm-alerts) cmd_confirm_alerts "$@" ;;
   protect-alerts) cmd_protect_alerts ;;
   subscribe-alerts) cmd_subscribe_alerts "$@" ;;

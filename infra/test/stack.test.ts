@@ -75,6 +75,25 @@ describe('CoyoteStack, domainless', () => {
     expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
   });
 
+  it('keeps the page-skill switch in SSM, starting on frontend-design, with the skills in a private bucket only generate reads', () => {
+    template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-skill', Value: 'frontend-design' });
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: { Variables: Match.objectLike({ PAGE_SKILL_PARAMETER: '/coyote/page-skill', PAGE_SKILLS_BUCKET: Match.anyValue() }) },
+    });
+    const [bucketId] = Object.keys(template.findResources('AWS::S3::Bucket')).filter((id) => id.startsWith('PageSkillsBucket'));
+    expect(template.findResources('AWS::S3::Bucket')[bucketId!]!.Properties.PublicAccessBlockConfiguration).toMatchObject({ BlockPublicAcls: true, RestrictPublicBuckets: true });
+    const readers = Object.entries(template.findResources('AWS::IAM::Policy'))
+      .filter(([id, p]) => !id.startsWith('Custom') && JSON.stringify(p).includes(bucketId!))
+      .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
+    expect(readers).toEqual(['GeneratorApiGenerate']);
+    template.hasOutput('PageSkillsBucketName', {});
+  });
+
+  it('keeps the page-look switch in SSM, starting on', () => {
+    template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-look', Value: 'on' });
+    template.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PAGE_LOOK_PARAMETER: '/coyote/page-look' }) } });
+  });
+
   it('keeps a framed draft out of the browser cache for top-level loads (Vary: Sec-Fetch-Dest)', () => {
     template.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
       ResponseHeadersPolicyConfig: Match.objectLike({

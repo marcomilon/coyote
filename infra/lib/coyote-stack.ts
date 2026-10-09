@@ -22,6 +22,7 @@ import {
 import type { Construct } from 'constructs';
 import { DEFAULT_MODEL_ID, DEFAULT_PRESCREEN_MODEL_ID } from '../../services/generator/src/core/models';
 import { createUrls } from '../../services/generator/src/core/urls';
+import { DEFAULT_PAGE_SKILL } from '../../services/generator/src/core/frontend-design';
 import { PAGE_FONT_HOSTS, PAGE_SCRIPT_HOSTS, PAGE_STYLE_HOSTS } from '../../services/generator/src/core/page-check';
 import { appCsp, sitesCsp } from './csp';
 import { GeneratorApi } from './generator-api';
@@ -118,6 +119,21 @@ export class CoyoteStack extends Stack {
       enforceSSL: true,
       removalPolicy,
       autoDeleteObjects: true,
+    });
+
+    // The page writer's skills (`./coyote.sh page-skill`): one `<name>.md` each, read by the generate Lambda per job,
+    // so skills are added and switched without a deploy. The bundled default is written here.
+    const pageSkillsBucket = new s3.Bucket(this, 'PageSkillsBucket', {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy,
+      autoDeleteObjects: true,
+    });
+    new s3deploy.BucketDeployment(this, 'PageSkillsDefault', {
+      sources: [s3deploy.Source.data(`${DEFAULT_PAGE_SKILL.name}.md`, DEFAULT_PAGE_SKILL.text)],
+      destinationBucket: pageSkillsBucket,
+      prune: false, // keep the skills added with ./coyote.sh page-skill add
     });
 
     const table = (name: string, partitionKey: string, ttl: boolean) =>
@@ -369,6 +385,7 @@ export class CoyoteStack extends Stack {
       accountsTable: this.accountsTable,
       mailIdentity,
       sitesBucket: this.sitesBucket,
+      pageSkillsBucket,
       sitesDistribution,
       guardrail: this.guardrail,
       abuseReports: this.abuseReports,
@@ -394,6 +411,7 @@ export class CoyoteStack extends Stack {
     new CfnOutput(this, 'ApiUrl', { value: apiUrl });
     new CfnOutput(this, 'SitesBaseUrl', { value: domain ? `https://${domain.sitesHost}` : sitesBaseUrl });
     new CfnOutput(this, 'SitesBucketName', { value: this.sitesBucket.bucketName });
+    new CfnOutput(this, 'PageSkillsBucketName', { value: pageSkillsBucket.bucketName });
     // For the admin commands in coyote.sh.
     new CfnOutput(this, 'SitesDistributionId', { value: sitesDistribution.distributionId });
     new CfnOutput(this, 'JobsTableName', { value: this.jobsTable.tableName });

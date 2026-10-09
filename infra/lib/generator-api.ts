@@ -28,6 +28,11 @@ export const ANTHROPIC_SECRET_NAME = 'coyote/anthropic-api-key';
  * CloudFormation writes the value only on create (or when this default changes), so the switch survives deploys.
  */
 export const PAGE_MODEL_PARAMETER = '/coyote/page-model';
+/** Which skill the page writer gets: a `<name>.md` in the skills bucket, or none. Set by `./coyote.sh page-skill`; survives deploys. */
+export const PAGE_SKILL_PARAMETER = '/coyote/page-skill';
+/** Whether a new site's request carries the look nudge (page-writer.ts `pickLook`): on or off. Set by `./coyote.sh page-look`; survives deploys. */
+export const PAGE_LOOK_PARAMETER = '/coyote/page-look';
+import { DEFAULT_PAGE_SKILL } from '../../services/generator/src/core/frontend-design';
 import type { CoyoteGuardrail } from './guardrail';
 
 export interface GeneratorApiProps {
@@ -41,6 +46,8 @@ export interface GeneratorApiProps {
   /** Where our emails come from. Unset = no email. */
   mailIdentity?: ses.IEmailIdentity;
   sitesBucket: s3.IBucket;
+  /** The page writer's skills, `<name>.md` each (`./coyote.sh page-skill`). */
+  pageSkillsBucket: s3.IBucket;
   /** Owner actions invalidate cached drafts. */
   sitesDistribution: cloudfront.IDistribution;
   guardrail: CoyoteGuardrail;
@@ -112,8 +119,18 @@ export class GeneratorApi extends Construct {
       stringValue: 'opus',
       description: 'Page writer model: opus or haiku. Set with ./coyote.sh page-model',
     });
+    const pageSkill = new ssm.StringParameter(this, 'PageSkill', {
+      parameterName: PAGE_SKILL_PARAMETER,
+      stringValue: DEFAULT_PAGE_SKILL.name,
+      description: 'Page writer skill: a <name>.md in the skills bucket, or none. Set with ./coyote.sh page-skill',
+    });
+    const pageLook = new ssm.StringParameter(this, 'PageLook', {
+      parameterName: PAGE_LOOK_PARAMETER,
+      stringValue: 'on',
+      description: 'Look nudge on new pages: on or off. Set with ./coyote.sh page-look',
+    });
     const generate = fn('Generate', 'generate', {
-      environment: { ...environment, ANTHROPIC_SECRET_NAME, PAGE_MODEL_PARAMETER, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
+      environment: { ...environment, ANTHROPIC_SECRET_NAME, PAGE_MODEL_PARAMETER, PAGE_SKILL_PARAMETER, PAGE_LOOK_PARAMETER, PAGE_SKILLS_BUCKET: props.pageSkillsBucket.bucketName, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
       memorySize: 1024,
       timeout: Duration.minutes(10), // the page writer takes 3–4 minutes
       retryAttempts: 0, // a retry would pay for the model calls twice
@@ -121,6 +138,9 @@ export class GeneratorApi extends Construct {
     });
     this.generate = generate;
     pageModel.grantRead(generate);
+    pageSkill.grantRead(generate);
+    pageLook.grantRead(generate);
+    props.pageSkillsBucket.grantRead(generate);
     // Not a secret: it only keeps raw IPs out of the tables. The stack ID is unique per deployment.
     const ipSalt = Fn.select(2, Fn.split('/', stack.stackId));
     const submit = fn('Submit', 'submit', {

@@ -1,4 +1,5 @@
 import { DetectModerationLabelsCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
+import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { sesSendEmail } from '../aws/mail';
 import { snsAnnounce } from '../aws/notices';
@@ -7,13 +8,14 @@ import { callTool, outputAllowed } from '../core/bedrock';
 import { runGenerateJob } from '../core/generate-job';
 import { emitMetrics } from '../core/metrics';
 import { modelId, prescreenModelId } from '../core/models';
-import { anthropicWritePage, pageEffort, pageModel } from '../core/page-writer';
+import { anthropicWritePage, DEFAULT_PAGE_SKILL, NO_SKILL, pageEffort, pageModel, skillText, type PageSkill } from '../core/page-writer';
 import { createUrls, urlConfigFromEnv } from '../core/urls';
 
 const stores = createStores(storeConfigFromEnv());
 const urls = createUrls(urlConfigFromEnv(process.env));
 const rekognition = new RekognitionClient({});
 const ssm = new SSMClient({});
+const s3 = new S3Client({});
 const writePage = anthropicWritePage();
 const sendEmail = sesSendEmail(urls.mailFrom);
 const announce = snsAnnounce(process.env.SITE_NOTICES_TOPIC_ARN);
@@ -28,19 +30,41 @@ async function moderate(key: string): Promise<string[]> {
   return [...new Set((ModerationLabels ?? []).map((label) => label.ParentName || label.Name || '').filter((name) => REFUSED.has(name)))];
 }
 
-/** The page-model switch (`./coyote.sh page-model`), read for every job so a change applies to the next one. */
-async function pageModelSetting(): Promise<string | undefined> {
-  if (!process.env.PAGE_MODEL_PARAMETER) return undefined;
+/** A switch in SSM (`./coyote.sh page-model`, `page-skill`, `page-look`), read for every job so a change applies to the next one. */
+async function setting(parameter: string | undefined): Promise<string | undefined> {
+  if (!parameter) return undefined;
   try {
-    return (await ssm.send(new GetParameterCommand({ Name: process.env.PAGE_MODEL_PARAMETER }))).Parameter?.Value;
+    return (await ssm.send(new GetParameterCommand({ Name: parameter }))).Parameter?.Value;
   } catch (error) {
-    console.error('page-model parameter unreadable, using the default', error);
+    console.error(`${parameter} unreadable, using the default`, error);
     return undefined;
   }
 }
 
+/** The page-skill switch: `none`, or a `<name>.md` in the skills bucket. Unreadable: the bundled frontend-design. */
+async function pageSkill(): Promise<PageSkill | null> {
+  const name = await setting(process.env.PAGE_SKILL_PARAMETER);
+  if (name === NO_SKILL) return null;
+  if (!name || name === DEFAULT_PAGE_SKILL.name || !process.env.PAGE_SKILLS_BUCKET) return DEFAULT_PAGE_SKILL;
+  try {
+    const { Body } = await s3.send(new GetObjectCommand({ Bucket: process.env.PAGE_SKILLS_BUCKET, Key: `${name}.md` }));
+    const text = skillText((await Body?.transformToString()) ?? '');
+    if (text) return { name, text };
+    console.error(`page skill ${name} is empty, using ${DEFAULT_PAGE_SKILL.name}`);
+  } catch (error) {
+    console.error(`page skill ${name} unreadable, using ${DEFAULT_PAGE_SKILL.name}`, error);
+  }
+  return DEFAULT_PAGE_SKILL;
+}
+
 // Invoked asynchronously with { jobId } by submit, by the answers route, and by an owner's edit.
 export const handler = async (event: { jobId: string }): Promise<void> => {
+  const [model, skill, look] = await Promise.all([
+    setting(process.env.PAGE_MODEL_PARAMETER).then((value) => pageModel(process.env, value)),
+    pageSkill(),
+    setting(process.env.PAGE_LOOK_PARAMETER).then((value) => value !== 'off'),
+  ]);
+  console.log(JSON.stringify({ pageModel: model, pageSkill: skill?.name ?? NO_SKILL, pageLook: look ? 'on' : 'off' }));
   const result = await runGenerateJob(event.jobId, {
     stores,
     callTool,
@@ -52,7 +76,9 @@ export const handler = async (event: { jobId: string }): Promise<void> => {
     now: Date.now,
     writePage,
     pageEffort: pageEffort(),
-    pageModel: pageModel(process.env, await pageModelSetting()),
+    pageModel: model,
+    pageSkill: skill,
+    pageLook: look,
     sendEmail,
     announce,
   });

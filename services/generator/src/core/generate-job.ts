@@ -4,7 +4,7 @@ import type { Media } from './content';
 import { loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
 import type { Job, Stores } from './jobs';
 import { checkPage } from './page-check';
-import { parsePage, pickLook, type PageEffort, type PagePhoto, type PageRequest, type WritePage } from './page-writer';
+import { parsePage, pickLook, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type WritePage } from './page-writer';
 import { PolicyRejection, type Violation } from './policy';
 import { isRejected, prescreen } from './prescreen';
 import { planSite } from './site-writer';
@@ -28,7 +28,7 @@ export interface GenerateJobDeps {
   moderate(key: string): Promise<string[]>;
   now(): number;
   newDraftId?: () => string;
-  /** The page writer: Opus (or Haiku, see `pageModel`) with the frontend-design skill. */
+  /** The page writer: Opus (or Haiku, see `pageModel`) with a skill (see `pageSkill`). */
   writePage: WritePage;
   /** For the look nudge (tests pass a fixed one). */
   random?: () => number;
@@ -36,6 +36,10 @@ export interface GenerateJobDeps {
   pageEffort?: PageEffort;
   /** The page writer's model ID (page-writer.ts `pageModel`). Unset: the writer's default. */
   pageModel?: string;
+  /** The page writer's skill (`./coyote.sh page-skill`); null: none. Unset: the writer's default. */
+  pageSkill?: PageSkill | null;
+  /** The look nudge on new sites (`./coyote.sh page-look`). Unset: on. */
+  pageLook?: boolean;
   /** The "your site is ready" email. Undefined when no sender is set up. */
   sendEmail?: SendEmail;
   /** Notices for the admin (notices.ts). Undefined: nobody is told. */
@@ -78,7 +82,7 @@ type PageResult = { page: string } | { problem: 'failed' | 'policy' | 'guardrail
 async function writeCheckedPage(request: PageRequest, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
   const effort = deps.pageEffort ?? 'high';
   const { answers } = request;
-  const ask = (photos: PagePhoto[]) => deps.writePage({ ...request, photos }, { effort: request.current !== undefined ? LOWER[effort] : effort, model: deps.pageModel });
+  const ask = (photos: PagePhoto[]) => deps.writePage({ ...request, photos }, { effort: request.current !== undefined ? LOWER[effort] : effort, model: deps.pageModel, ...(deps.pageSkill !== undefined && { skill: deps.pageSkill }) });
   let reply;
   try {
     reply = await ask(request.photos).catch((error: unknown) => {
@@ -161,7 +165,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
 
     // Opus writes the page (a new site), or changes the current one (an edit).
     const photos = await pagePhotos(slug, media, stores);
-    const request = current ? { answers: job.answers, notes, photos, current: current.page, instruction: job.instruction } : { answers: job.answers, notes, photos, look: pickLook(deps.random) };
+    const request = current ? { answers: job.answers, notes, photos, current: current.page, instruction: job.instruction } : { answers: job.answers, notes, photos, ...(deps.pageLook !== false && { look: pickLook(deps.random) }) };
     const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
     const written = await writeCheckedPage(request, requests, slug, deps, usage);
     if ('problem' in written) {

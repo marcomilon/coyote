@@ -16,10 +16,13 @@ npx vitest run infra/test/stack.test.ts     # one file
 npx vitest run -t "domainless"              # by test name
 npm run synth          # cdk synth; must work with no AWS credentials
 npm run diff           # cdk diff against the deployed stack (--profile coyote)
+./coyote.sh status     # the deployed stack at a glance: URLs, page model/skill/look switches, Bedrock models
 ./coyote.sh deploy     # builds web, checks Lambda bundles, cdk deploy (--profile coyote); writes infra/cdk-outputs.json
 ./coyote.sh destroy    # deletes the stack and ALL data (asks for typed confirmation). Never run it without the user asking
 ./coyote.sh abuse-report | unpublish <slug> | restore <slug> | refill-all   # admin commands (see README runbook)
 ./coyote.sh page-model [opus|haiku]   # show or switch the page writer for the whole stack (haiku: cheap, for testing the workflow)
+./coyote.sh page-skill [<name>|none] | page-skill add <name> <SKILL.md>   # show, switch, or add the page writer's skill (no deploy)
+./coyote.sh page-look [on|off]   # show or switch the look nudge on new pages (no deploy)
 npm run dev            # astro dev for web/ on :5173 against the DEPLOYED API. Runs in the background; stop with `npx astro dev stop` in web/
 ```
 `coyote.sh` (repo root) is the home for project commands; add new operational commands there as `cmd_<name>` functions rather than as loose scripts.
@@ -48,7 +51,7 @@ Tests live in `infra/test/` and `services/*/test/` (see `vitest.config.ts`). The
 - Never commit (or push) unless the user explicitly asks for it in that message. Leave changes uncommitted and say so.
 
 ## Conventions
-- The page writer's prompt is the frontend-design skill (`frontend-design.ts`, verbatim) plus the chat-like request in `pagePrompt()`. Keep the request plain; put safety in `page-check.ts`, not in the prompt. To try a change, `npm run opus:sites -w services/generator` (real Opus calls, about $0.50 a page) and open `out/opus/skill.html`.
+- The page writer's prompt is the frontend-design skill (`frontend-design.ts`, verbatim) plus the chat-like request in `pagePrompt()`. For experiments the skill is switchable at runtime (`./coyote.sh page-skill`: SSM `/coyote/page-skill` + the skills bucket; `none` turns it off); frontend-design stays the default. Keep the request plain; put safety in `page-check.ts`, not in the prompt. To try a change, `npm run opus:sites -w services/generator -- --skills … --look on,off` (real Opus calls, about $0.50 a page; business examples in `examples/*.json`) and open `out/design/<run>/index.html`.
 - Our frontend (`web/`) is Astro, built to static files; interactive parts are plain TypeScript in Astro scripts, and the API URL comes from a runtime `config.js`. Generated business sites are never Astro: Opus writes them and `page-check.ts` finishes them in Lambda.
 - ESM TypeScript everywhere, `moduleResolution: "Bundler"`, extensionless relative imports. The CDK app runs through `tsx` (`infra/cdk.json`).
 - `npm run synth` and unit tests must keep passing without AWS credentials: domain mode's zone lookups are cached in `infra/cdk.context.json` (commit it after a lookup changes) and `account` in `cdk.json` stands in for the credentials.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
 import { checkPage, contactMissing, replaceContact } from '../src/core/page-check';
-import { DEFAULT_PAGE_SKILL, pageModel, pageParams, pagePrompt, parsePage, pickLook, skillText, TONES, type PageRequest } from '../src/core/page-writer';
+import { DEFAULT_PAGE_SKILL, pageModel, pageParams, pagePrompt, parsePage, pickLook, siteLanguage, skillText, TONES, type PageRequest } from '../src/core/page-writer';
 import { submit } from '../src/core/submit';
 import { body, harness } from './harness';
 
@@ -148,6 +148,24 @@ describe('contact details on a written page', () => {
     expect(pagePrompt({ answers, notes: [], photos: [], current: '<html></html>', instruction: 'x' })).not.toContain('For the look');
   });
 
+  it('asks for the language of the business\'s country, from its WhatsApp number', () => {
+    const answers = (whatsapp: string, lang: 'es' | 'pt' = 'es') => ({ businessName: 'Luna', about: 'Pan', lang, contact: { whatsapp } });
+    expect(siteLanguage(answers('51987654321'))).toBe('Spanish, written the way people in Peru talk');
+    expect(siteLanguage(answers('5491123456789'))).toBe('Spanish, written the way people in Argentina talk');
+    expect(siteLanguage(answers('5511912345678'))).toBe('Brazilian Portuguese');
+    expect(siteLanguage(answers('17875551234'))).toBe('Latin American Spanish'); // +1: Puerto Rico, the Dominican Republic, or the US
+    expect(siteLanguage(answers('5511912345678', 'pt'))).toBe('Brazilian Portuguese');
+    expect(pagePrompt({ answers: answers('51987654321'), notes: [], photos: [] })).toContain('- Language of the site: Spanish, written the way people in Peru talk');
+  });
+
+  it('says the owner\'s goal when there is one', () => {
+    const request = { answers: { businessName: 'Luna', about: 'Pan', lang: 'es' as const, contact }, notes: [], photos: [] };
+    expect(pagePrompt(request)).not.toContain('mostly wants');
+    expect(pagePrompt({ ...request, goal: 'call' })).toContain('The owner mostly wants visitors to call them.');
+    expect(pagePrompt(request)).toContain('- Phone and WhatsApp: +573001234567 (customers write on WhatsApp or call this number)');
+    expect(pagePrompt({ ...request, goal: 'visit' })).toContain('to come to the place.');
+  });
+
   it('picks the model from the page-model switch, with PAGE_MODEL over it and Opus by default', () => {
     expect(pageModel({}, 'haiku')).toBe('claude-haiku-4-5');
     expect(pageModel({}, 'opus')).toBe('claude-opus-5-5');
@@ -192,7 +210,7 @@ describe('contact details on a written page', () => {
 });
 
 describe('runGenerateJob with the page writer', () => {
-  it('a new site is written by the page writer alone: no theme content, no hero image', async () => {
+  it('a new site is written by the page writer alone: no theme content, no photos unless the owner asks', async () => {
     const t = harness();
     await submit(body, '1.2.3.4', t.submitDeps);
     expect(await runGenerateJob('job-1', t.generateDeps)).toMatchObject({ outcome: 'DONE' });
@@ -217,6 +235,13 @@ describe('runGenerateJob with the page writer', () => {
       await runGenerateJob('job-1', { ...t.generateDeps, pageLook });
       expect(t.writer.requests[0]!.look !== undefined).toBe(sent);
     }
+  });
+
+  it('sends the owner\'s goal with new sites and edits', async () => {
+    const t = harness();
+    await submit({ ...body, goal: 'visit' }, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    expect(t.writer.requests[0]!.goal).toBe('visit');
   });
 
   it('writes with the skill it is given, or none', async () => {

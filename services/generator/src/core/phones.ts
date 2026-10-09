@@ -43,10 +43,10 @@ export function countryOf(number: string): Country | undefined {
   return undefined;
 }
 
-/** True unless the number is for a listed country and has the wrong number of digits for it. */
+/** True when the number is for a listed country (the form's picker) and has the right number of digits for it. */
 export function validForCountry(number: string): boolean {
   const country = countryOf(number);
-  if (!country) return true;
+  if (!country) return false;
   const local = number.length - country.dial.length;
   return local >= country.digits[0] && local <= country.digits[1];
 }

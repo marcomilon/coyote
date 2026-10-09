@@ -4,8 +4,8 @@ import { validForCountry } from './phones';
 const text = (max: number) => z.string().trim().min(1).max(max);
 
 const phone = z.string().regex(/^[1-9]\d{7,14}$/, 'digits only, with country code');
-/** WhatsApp numbers must also have the right length for their country (phones.ts). */
-const whatsapp = phone.refine(validForCountry, 'wrong number of digits for its country');
+/** WhatsApp numbers must be from a country in the form's list, with the right length for it (phones.ts). */
+const whatsapp = phone.refine(validForCountry, 'not from a listed country, or the wrong number of digits for it');
 
 /**
  * The business's public contact details. Copied from what the owner typed (the form, a contact question,
@@ -34,5 +34,7 @@ export const Media = z.object({
   logo: assetPath.optional(),
   /** The owner's uploaded photos. */
   photos: z.array(assetPath).max(3),
+  /** Photos the page writer made (make_image) that the page uses. */
+  generated: z.array(assetPath).max(8).optional(),
 });
 export type Media = z.infer<typeof Media>;

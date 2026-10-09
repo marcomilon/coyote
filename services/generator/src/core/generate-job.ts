@@ -2,9 +2,10 @@ import { issueLogin, linkSite } from './account';
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
 import type { Media } from './content';
 import { loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
+import { imageMaker, type GenerateImage } from './images';
 import type { Job, Stores } from './jobs';
 import { checkPage } from './page-check';
-import { parsePage, pickLook, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type WritePage } from './page-writer';
+import { DEFAULT_PAGE_MODEL, DEFAULT_PAGE_SKILL, NO_SKILL, parsePage, pickLook, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type WritePage } from './page-writer';
 import { PolicyRejection, type Violation } from './policy';
 import { isRejected, prescreen } from './prescreen';
 import { planSite } from './site-writer';
@@ -12,7 +13,7 @@ import { readyEmail, type SendEmail } from './mail';
 import { issueToken, TOKEN_TTL_SECONDS } from './token';
 import { processUploads } from './uploads';
 import type { Urls } from './urls';
-import { announceNewSite, announceRejection, type Announce } from './notices';
+import { announceNewSite, announceRejection, type Announce, type PageWriterStatus } from './notices';
 
 export interface GenerateJobDeps {
   stores: Stores;
@@ -40,6 +41,13 @@ export interface GenerateJobDeps {
   pageSkill?: PageSkill | null;
   /** The look nudge on new sites (`./coyote.sh page-look`). Unset: on. */
   pageLook?: boolean;
+  /**
+   * Photos the page writer makes, for owners who left "Fotos creadas con IA" on: the text-to-image model, and the
+   * stack-wide switch (`./coyote.sh page-images`; unset: on). No generateImage: no photos.
+   */
+  generateImage?: GenerateImage;
+  imageModelId?: string;
+  pageImages?: boolean;
   /** The "your site is ready" email. Undefined when no sender is set up. */
   sendEmail?: SendEmail;
   /** Notices for the admin (notices.ts). Undefined: nobody is told. */
@@ -76,13 +84,17 @@ async function pagePhotos(slug: string, media: Media, stores: Stores): Promise<P
 
 const LOWER: Record<PageEffort, PageEffort> = { max: 'xhigh', xhigh: 'high', high: 'medium', medium: 'low', low: 'low' };
 
-type PageResult = { page: string } | { problem: 'failed' | 'policy' | 'guardrail'; detail: string; violations?: Violation[] };
+type PageResult = { page: string; made: string[] } | { problem: 'failed' | 'policy' | 'guardrail'; detail: string; violations?: Violation[] };
 
 /** Asks the page writer for a page and runs the page checks and the output guardrail on it. */
 async function writeCheckedPage(request: PageRequest, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
   const effort = deps.pageEffort ?? 'high';
   const { answers } = request;
-  const ask = (photos: PagePhoto[]) => deps.writePage({ ...request, photos }, { effort: request.current !== undefined ? LOWER[effort] : effort, model: deps.pageModel, ...(deps.pageSkill !== undefined && { skill: deps.pageSkill }) });
+  const made: string[] = [];
+  const images = answers.aiImages === true && deps.pageImages !== false && deps.generateImage;
+  const makeImage = images ? imageMaker(mediaPrefix(slug), { ...deps, generateImage: images }, made) : undefined;
+  const ask = (photos: PagePhoto[]) =>
+    deps.writePage({ ...request, photos }, { effort: request.current !== undefined ? LOWER[effort] : effort, model: deps.pageModel, ...(deps.pageSkill !== undefined && { skill: deps.pageSkill }), ...(makeImage && { makeImage }) });
   let reply;
   try {
     reply = await ask(request.photos).catch((error: unknown) => {
@@ -92,6 +104,8 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
     });
   } catch (error) {
     return { problem: 'failed', detail: String(error).slice(0, 300) };
+  } finally {
+    usage.push(...made.map(() => ({ step: 'make_image', modelId: deps.imageModelId ?? 'image', inputTokens: 0, outputTokens: 0 })));
   }
   usage.push(reply.usage);
   const page = parsePage(reply.text);
@@ -100,7 +114,7 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
   if (checked.violations.length > 0) return { problem: 'policy', detail: JSON.stringify(checked.violations).slice(0, 300), violations: checked.violations };
   if (!(await deps.outputAllowed(checked.texts.join('\n')))) return { problem: 'guardrail', detail: 'page text' };
   if (checked.repairs.length > 0) console.info('page repaired', { slug, repairs: checked.repairs });
-  return { page };
+  return { page, made };
 }
 
 /**
@@ -165,7 +179,10 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
 
     // Opus writes the page (a new site), or changes the current one (an edit).
     const photos = await pagePhotos(slug, media, stores);
-    const request = current ? { answers: job.answers, notes, photos, current: current.page, instruction: job.instruction } : { answers: job.answers, notes, photos, ...(deps.pageLook !== false && { look: pickLook(deps.random) }) };
+    const goal = job.answers.goal && { goal: job.answers.goal };
+    const request = current
+      ? { answers: job.answers, notes, photos, ...goal, current: current.page, instruction: job.instruction }
+      : { answers: job.answers, notes, photos, ...goal, ...(deps.pageLook !== false && { look: pickLook(deps.random) }) };
     const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
     const written = await writeCheckedPage(request, requests, slug, deps, usage);
     if ('problem' in written) {
@@ -173,7 +190,11 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       if (written.problem === 'guardrail') throw new GuardrailBlocked();
       throw new Error(`page writer failed: ${written.detail}`);
     }
-    const doc: SiteDoc = current ? { ...current, notes, page: written.page, requests } : { answers: job.answers, notes, media, page: written.page };
+    // The made photos the page uses, with the earlier ones it still uses (an edit keeps its page's photos).
+    const generated = [...new Set([...(media.generated ?? []), ...written.made])].filter((file) => written.page.includes(file)).slice(-8);
+    const { generated: _earlier, ...files } = media;
+    media = generated.length > 0 ? { ...files, generated } : files;
+    const doc: SiteDoc = current ? { ...current, notes, media, page: written.page, requests } : { answers: job.answers, notes, media, page: written.page };
 
     const draftId = await saveDraft(site, doc, deps);
     site = (await stores.getSite(slug)) ?? site;
@@ -199,7 +220,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     const previewUrl = site.previewId ? urls.draftUrl(site.previewId) : undefined;
     await finish({ status: 'DONE', draftUrl: urls.draftUrl(draftId), previewUrl, media, ownerToken });
     if (ownerToken && job.ownerEmail) await sendReady(job, slug, deps);
-    if (ownerToken) await announceNewSite(deps.announce, job, slug, deps.urls.draftUrl(draftId), usage);
+    if (ownerToken) await announceNewSite(deps.announce, job, slug, deps.urls.draftUrl(draftId), usage, pageWriterStatus(job, deps));
     return { outcome: 'DONE', ...tokens() };
   } catch (error) {
     await releaseNewSite(job, deps);
@@ -216,6 +237,18 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     }
     return { outcome: 'REJECTED', ...tokens() };
   }
+}
+
+/** The page writer's settings this job ran with (for the admin notice). */
+function pageWriterStatus(job: Job, deps: GenerateJobDeps): PageWriterStatus {
+  return {
+    model: deps.pageModel ?? DEFAULT_PAGE_MODEL,
+    effort: deps.pageEffort ?? 'high',
+    skill: deps.pageSkill === undefined ? DEFAULT_PAGE_SKILL.name : (deps.pageSkill?.name ?? NO_SKILL),
+    look: deps.pageLook !== false,
+    images: deps.pageImages !== false && !!deps.generateImage,
+    ownerImages: job.answers.aiImages === true,
+  };
 }
 
 /** "Tu sitio está listo", with a sign-in link to "Mis sitios". A failure is logged: the site is there either way. */

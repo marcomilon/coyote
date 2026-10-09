@@ -91,7 +91,7 @@ export async function saveDraft(site: SiteRecord, doc: SiteDoc, deps: DraftDeps)
   const draftId = (deps.newDraftId ?? newDraftId)();
   const prefix = draftPrefix(draftId);
 
-  for (const asset of [doc.media.logo, ...doc.media.photos]) {
+  for (const asset of [doc.media.logo, ...doc.media.photos, ...(doc.media.generated ?? [])]) {
     if (asset) await stores.copyObject(`${mediaPrefix(site.slug)}${asset}`, `${prefix}${asset}`, contentType(asset));
   }
   await stores.putPrivate(docKey(site.slug, draftId), JSON.stringify(doc), 'application/json');

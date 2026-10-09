@@ -136,11 +136,14 @@ function rememberMagic(jobId: string, job: JobView) {
 // The owner's answers, kept for this tab until the site is ready, so a rejection or a failure can go back to the
 // form filled in (the photos are not kept: a file input can't be filled from script).
 const ANSWERS_KEY = 'coyote:answers';
-const ANSWER_FIELDS = ['businessName', 'about', 'country', 'whatsapp', 'email', 'address', 'instagram', 'facebook', 'ownerEmail'] as const;
+const ANSWER_FIELDS = ['businessName', 'about', 'country', 'whatsapp', 'email', 'address', 'instagram', 'facebook', 'goal', 'ownerEmail'] as const;
+
+/** The "Fotos creadas con IA" switch: a checkbox, so not in FormData's string values when it is off. */
+const aiImages = () => form.elements.namedItem('aiImages') as HTMLInputElement;
 
 function keepAnswers(data: Record<string, string>) {
   try {
-    sessionStorage.setItem(ANSWERS_KEY, JSON.stringify(Object.fromEntries(ANSWER_FIELDS.map((f) => [f, data[f] ?? '']))));
+    sessionStorage.setItem(ANSWERS_KEY, JSON.stringify({ ...Object.fromEntries(ANSWER_FIELDS.map((f) => [f, data[f] ?? ''])), aiImages: aiImages().checked ? 'on' : 'off' }));
   } catch {
     // Storage blocked: the button still goes back to the form, empty.
   }
@@ -162,11 +165,13 @@ function backToForm() {
     // Nothing kept: the form stays as it is.
   }
   for (const field of ANSWER_FIELDS) {
-    const el = form.elements.namedItem(field) as HTMLInputElement | HTMLSelectElement | null;
+    const el = form.elements.namedItem(field) as HTMLInputElement | HTMLSelectElement | RadioNodeList | null;
     if (!el || kept[field] === undefined) continue;
     el.value = kept[field];
+    if (el instanceof RadioNodeList) continue;
     el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input')); // placeholder and counters
   }
+  if (kept.aiImages) aiImages().checked = kept.aiImages === 'on';
   history.replaceState(null, '', location.pathname + location.search);
   show('form');
   (form.elements.namedItem('about') as HTMLTextAreaElement).focus({ preventScroll: true });
@@ -243,15 +248,17 @@ form.addEventListener('submit', async (event) => {
   if (!apiUrl) return setErrors(['noApi']);
 
   const data = Object.fromEntries([...new FormData(form)].filter(([, value]) => typeof value === 'string')) as Record<string, string>;
-  const raw: Record<string, string | undefined> = {
+  const raw: Record<string, string | boolean | undefined> = {
     businessName: data.businessName ?? '',
     about: data.about ?? '',
     whatsapp: fullNumber(data.country ?? '', data.whatsapp ?? ''),
+    goal: data.goal || undefined,
     email: data.email || undefined,
     address: data.address || undefined,
     instagram: data.instagram || undefined,
     facebook: data.facebook || undefined,
     lang: strings.lang,
+    aiImages: aiImages().checked,
   };
   const ownerEmail = (data.ownerEmail ?? '').trim();
   try {

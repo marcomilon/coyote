@@ -4,10 +4,10 @@ import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { sesSendEmail } from '../aws/mail';
 import { snsAnnounce } from '../aws/notices';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
-import { callTool, outputAllowed } from '../core/bedrock';
+import { callTool, outputAllowed, stabilityImage } from '../core/bedrock';
 import { runGenerateJob } from '../core/generate-job';
 import { emitMetrics } from '../core/metrics';
-import { modelId, prescreenModelId } from '../core/models';
+import { imageModelId, modelId, prescreenModelId } from '../core/models';
 import { anthropicWritePage, DEFAULT_PAGE_SKILL, NO_SKILL, pageEffort, pageModel, skillText, type PageSkill } from '../core/page-writer';
 import { createUrls, urlConfigFromEnv } from '../core/urls';
 
@@ -17,6 +17,8 @@ const rekognition = new RekognitionClient({});
 const ssm = new SSMClient({});
 const s3 = new S3Client({});
 const writePage = anthropicWritePage();
+const imageModel = imageModelId();
+const generateImage = stabilityImage(imageModel);
 const sendEmail = sesSendEmail(urls.mailFrom);
 const announce = snsAnnounce(process.env.SITE_NOTICES_TOPIC_ARN);
 
@@ -30,7 +32,7 @@ async function moderate(key: string): Promise<string[]> {
   return [...new Set((ModerationLabels ?? []).map((label) => label.ParentName || label.Name || '').filter((name) => REFUSED.has(name)))];
 }
 
-/** A switch in SSM (`./coyote.sh page-model`, `page-skill`, `page-look`), read for every job so a change applies to the next one. */
+/** A switch in SSM (`./coyote.sh page-model`, `page-skill`, `page-look`, `page-images`), read for every job so a change applies to the next one. */
 async function setting(parameter: string | undefined): Promise<string | undefined> {
   if (!parameter) return undefined;
   try {
@@ -59,12 +61,13 @@ async function pageSkill(): Promise<PageSkill | null> {
 
 // Invoked asynchronously with { jobId } by submit, by the answers route, and by an owner's edit.
 export const handler = async (event: { jobId: string }): Promise<void> => {
-  const [model, skill, look] = await Promise.all([
+  const [model, skill, look, images] = await Promise.all([
     setting(process.env.PAGE_MODEL_PARAMETER).then((value) => pageModel(process.env, value)),
     pageSkill(),
     setting(process.env.PAGE_LOOK_PARAMETER).then((value) => value !== 'off'),
+    setting(process.env.PAGE_IMAGES_PARAMETER).then((value) => value !== 'off'),
   ]);
-  console.log(JSON.stringify({ pageModel: model, pageSkill: skill?.name ?? NO_SKILL, pageLook: look ? 'on' : 'off' }));
+  console.log(JSON.stringify({ pageModel: model, pageSkill: skill?.name ?? NO_SKILL, pageLook: look ? 'on' : 'off', pageImages: images ? 'on' : 'off' }));
   const result = await runGenerateJob(event.jobId, {
     stores,
     callTool,
@@ -79,6 +82,9 @@ export const handler = async (event: { jobId: string }): Promise<void> => {
     pageModel: model,
     pageSkill: skill,
     pageLook: look,
+    pageImages: images,
+    generateImage,
+    imageModelId: imageModel,
     sendEmail,
     announce,
   });

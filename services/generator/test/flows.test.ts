@@ -256,6 +256,29 @@ describe('the admin notice for new sites', () => {
     expect(notices).toHaveLength(1);
   });
 
+  it('says what the site cost, step by step, and how the page writer was set', async () => {
+    const t = harness();
+    const notices: string[] = [];
+    Object.assign(t.writer.options, { images: ['Bread'] });
+    const deps = {
+      ...t.generateDeps,
+      pageModel: 'claude-opus-5-5',
+      pageSkill: null,
+      pageLook: false,
+      generateImage: async () => new Uint8Array([1]),
+      imageModelId: 'stability.stable-image-core-v1:1',
+      writePage: async (...args: Parameters<typeof t.writer.writePage>) => ({ ...(await t.writer.writePage(...args)), usage: { step: 'write_page', modelId: 'claude-opus-5-5', inputTokens: 10_000, outputTokens: 30_000 } }),
+      announce: async (_: string, message: string) => void notices.push(message),
+    };
+    await submit({ ...body, aiImages: true }, '1.2.3.4', t.submitDeps);
+    expect(await runGenerateJob('job-1', deps)).toMatchObject({ outcome: 'DONE' });
+    const message = notices[0]!;
+    expect(message).toContain('  página (claude-opus-5-5): $0.64'); // 10k × $4 + 30k × $20 per million
+    expect(message).toContain('  fotos (1 × stability.stable-image-core-v1:1): $0.04');
+    expect(message).toMatch(/^Costo: \$0\.68 \+ desconocido$/m); // the fake models of the other steps have no price
+    expect(message).toContain('Redactor: claude-opus-5-5, esfuerzo high · skill none · look off · fotos IA on (dueño: on)');
+  });
+
   it('a failed notice never fails the job', async () => {
     const t = harness();
     await submit(body, '1.2.3.4', t.submitDeps);

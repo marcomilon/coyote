@@ -4,7 +4,7 @@ import { Contact } from './content';
 export const Lang = z.enum(['es', 'pt']);
 
 /** The form's "¿Qué quieres que hagan tus clientes?": what the owner most wants a visitor to do. */
-export const PAGE_GOALS = ['whatsapp', 'call', 'visit', 'book'] as const;
+export const PAGE_GOALS = ['info', 'whatsapp', 'call', 'visit', 'book'] as const;
 export const Goal = z.enum(PAGE_GOALS);
 export type PageGoal = z.infer<typeof Goal>;
 export type Lang = z.infer<typeof Lang>;

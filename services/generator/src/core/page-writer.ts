@@ -215,6 +215,7 @@ ${photosLine}Keep everything else as it is, and don't invent facts the owner did
   const goalLine = goal
     ? `${
         {
+          info: 'The owner mostly wants visitors to get to know the business.',
           whatsapp: 'The owner mostly wants visitors to message them on WhatsApp.',
           call: 'The owner mostly wants visitors to call them.',
           visit: 'The owner mostly wants visitors to come to the place.',

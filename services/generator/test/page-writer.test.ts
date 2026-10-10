@@ -150,12 +150,12 @@ describe('contact details on a written page', () => {
 
   it('asks for the language of the business\'s country, from its WhatsApp number', () => {
     const answers = (whatsapp: string, lang: 'es' | 'pt' = 'es') => ({ businessName: 'Luna', about: 'Pan', lang, contact: { whatsapp } });
-    expect(siteLanguage(answers('51987654321'))).toBe('Spanish, written the way people in Peru talk');
-    expect(siteLanguage(answers('5491123456789'))).toBe('Spanish, written the way people in Argentina talk');
+    expect(siteLanguage(answers('51987654321'))).toBe('Spanish as it is written in Peru, without slang');
+    expect(siteLanguage(answers('5491123456789'))).toBe('Spanish as it is written in Argentina, without slang');
     expect(siteLanguage(answers('5511912345678'))).toBe('Brazilian Portuguese');
     expect(siteLanguage(answers('17875551234'))).toBe('Latin American Spanish'); // +1: Puerto Rico, the Dominican Republic, or the US
     expect(siteLanguage(answers('5511912345678', 'pt'))).toBe('Brazilian Portuguese');
-    expect(pagePrompt({ answers: answers('51987654321'), notes: [], photos: [] })).toContain('- Language of the site: Spanish, written the way people in Peru talk');
+    expect(pagePrompt({ answers: answers('51987654321'), notes: [], photos: [] })).toContain('- Language of the site: Spanish as it is written in Peru, without slang');
   });
 
   it('says the owner\'s goal when there is one', () => {

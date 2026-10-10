@@ -43,7 +43,7 @@ describe('Mis sitios', () => {
     expect(t.jobs.get('job-1')).toMatchObject({ status: 'DONE', stage: 'write' });
     expect(t.emails).toHaveLength(1);
     const [email] = t.emails;
-    expect(email).toMatchObject({ to: 'luna@example.com', subject: 'Tu sitio está listo: Panadería Luna' });
+    expect(email).toMatchObject({ to: 'luna@example.com', subject: 'Tu página web está lista: Panadería Luna' });
     expect(email!.text).toContain(`${urls.appUrl}/mis-sitios#login=`);
     expect(email!.text).toContain('&site=panaderia-luna');
     expect(await startSession({ login: loginFrom(email!.text) }, t.accountDeps)).toMatchObject({ status: 200 });
@@ -130,8 +130,8 @@ describe('Mis sitios', () => {
 describe('emails', () => {
   it('are branded HTML with a plain-text version, the logo from the app, and the owner\'s text escaped', () => {
     const email = readyEmail('a@b.pe', 'es', 'Pan <b>& Café</b>', 'https://app.test/mis-sitios#login=x', 'https://app.test');
-    expect(email.subject).toBe('Tu sitio está listo: Pan <b>& Café</b>');
-    expect(email.text).toContain('Ver mi sitio: https://app.test/mis-sitios#login=x');
+    expect(email.subject).toBe('Tu página web está lista: Pan <b>& Café</b>');
+    expect(email.text).toContain('Ver mi página web: https://app.test/mis-sitios#login=x');
     expect(email.html).toContain('<img src="https://app.test/logo.png"');
     expect(email.html).toContain('href="https://app.test/mis-sitios#login=x"');
     expect(email.html).toContain('Pan &lt;b&gt;&amp; Café&lt;/b&gt;');

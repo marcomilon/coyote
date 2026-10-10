@@ -1,4 +1,5 @@
 import { issueLogin, linkSite } from './account';
+import { noteRedesignDone } from './chat-notes';
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
 import type { Media } from './content';
 import { loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
@@ -132,7 +133,11 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
   const stage = job.stage ?? 'clarify';
   const usage: Usage[] = [];
   const tokens = () => ({ tokensIn: usage.reduce((n, u) => n + u.inputTokens, 0), tokensOut: usage.reduce((n, u) => n + u.outputTokens, 0) });
-  const finish = (patch: Partial<Job>) => stores.updateJob(jobId, { usage: [...job.usage, ...usage], ...patch });
+  const finish = async (patch: Partial<Job>, draftId?: string) => {
+    await stores.updateJob(jobId, { usage: [...job.usage, ...usage], ...patch });
+    // A redesign from the chat: its note there says how it ended.
+    if (patch.status === 'DONE' || patch.status === 'REJECTED' || patch.status === 'FAILED') await noteRedesignDone(stores, job, patch.status, draftId);
+  };
 
   let site = await stores.getSite(slug);
   try {
@@ -218,7 +223,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     }
 
     const previewUrl = site.previewId ? urls.draftUrl(site.previewId) : undefined;
-    await finish({ status: 'DONE', draftUrl: urls.draftUrl(draftId), previewUrl, media, ownerToken });
+    await finish({ status: 'DONE', draftUrl: urls.draftUrl(draftId), previewUrl, media, ownerToken }, draftId);
     if (ownerToken && job.ownerEmail) await sendReady(job, slug, deps);
     if (ownerToken) await announceNewSite(deps.announce, job, slug, deps.urls.draftUrl(draftId), usage, pageWriterStatus(job, deps));
     return { outcome: 'DONE', ...tokens() };
@@ -251,7 +256,7 @@ function pageWriterStatus(job: Job, deps: GenerateJobDeps): PageWriterStatus {
   };
 }
 
-/** "Tu sitio está listo", with a sign-in link to "Mis sitios". A failure is logged: the site is there either way. */
+/** "Tu página web está lista", with a sign-in link to "Mis páginas web". A failure is logged: the site is there either way. */
 async function sendReady(job: Job, slug: string, deps: GenerateJobDeps): Promise<void> {
   if (!deps.sendEmail || !job.ownerEmail) return;
   try {

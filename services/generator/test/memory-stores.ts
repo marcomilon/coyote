@@ -1,4 +1,4 @@
-import type { Account, AccountToken, ChatMessage, Job, SiteRecord, Stores } from '../src/core/jobs';
+import type { Account, AccountToken, ChatMessage, DomainRecord, Job, SiteRecord, Stores } from '../src/core/jobs';
 
 /** In-memory Stores for tests. Exposes its state for assertions. */
 export function memoryStores() {
@@ -13,6 +13,7 @@ export function memoryStores() {
   const chat: ChatMessage[] = [];
   const accounts = new Map<string, Account>();
   const accountTokens = new Map<string, AccountToken>();
+  const domains = new Map<string, DomainRecord>();
 
   const stores: Stores = {
     async hitRateLimit(key, max) {
@@ -139,6 +140,26 @@ export function memoryStores() {
       accountTokens.delete(`${kind}#${id}`);
       return token;
     },
+    async claimDomain(record) {
+      const site = sites.get(record.slug);
+      if (!site || site.domain || domains.has(record.domain)) return false;
+      domains.set(record.domain, structuredClone(record));
+      sites.set(record.slug, { ...site, domain: record.domain });
+      return true;
+    },
+    async releaseDomain(domain, slug) {
+      domains.delete(domain);
+      const site = sites.get(slug);
+      if (site?.domain === domain) sites.set(slug, { ...site, domain: undefined });
+    },
+    async saveDomain({ domain, contact, ...fields }) {
+      const record = domains.get(domain);
+      if (!record) throw new Error('no such domain');
+      const next = { ...record, ...fields };
+      if (contact === null) delete next.contact;
+      domains.set(domain, next);
+    },
+    getDomain: async (domain) => structuredClone(domains.get(domain)),
   };
-  return { stores, jobs, sites, counters, blocked, objects, invalidated, pageCache, chat, accounts, accountTokens };
+  return { stores, jobs, sites, counters, blocked, objects, invalidated, pageCache, chat, accounts, accountTokens, domains };
 }

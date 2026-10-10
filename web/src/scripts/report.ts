@@ -2,7 +2,7 @@
 type Message = { title: string; text: string };
 
 const root = document.getElementById('report') as HTMLElement;
-const strings = JSON.parse(root.dataset.strings ?? '{}') as { sent: Message; missing: Message; error: string };
+const strings = JSON.parse(root.dataset.strings ?? '{}') as { sent: Message; missing: Message; error: string; limited: string };
 const $ = <T extends Element>(selector: string) => root.querySelector(selector) as T;
 const apiUrl = (window.COYOTE_CONFIG?.apiUrl ?? '').replace(/\/+$/, '');
 const slug = new URLSearchParams(location.search).get('sitio') ?? '';
@@ -28,7 +28,7 @@ $<HTMLFormElement>('form').addEventListener('submit', async (event) => {
     });
     // A site that is already gone is still a finished report from the visitor's point of view.
     if (response.status === 202 || response.status === 404) return showMessage(strings.sent);
-    $('[data-notice]').textContent = strings.error;
+    $('[data-notice]').textContent = response.status === 429 ? strings.limited : strings.error;
   } catch {
     $('[data-notice]').textContent = strings.error;
   } finally {

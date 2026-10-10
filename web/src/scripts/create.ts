@@ -6,7 +6,7 @@ import { api, apiUrl, sendAnswers, waitForJob, type JobView } from './jobs';
 import { fullNumber, setUpCountryPicker } from './phone';
 import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
 import { readSession } from './session';
-import { uploadImages } from './upload';
+import { UploadLimitError, uploadImages } from './upload';
 
 type State = 'form' | 'working' | 'questions' | 'message';
 /** `action`: a button back to the form, with the owner's answers filled in again. */
@@ -16,6 +16,7 @@ interface Strings {
   errors: Record<string, string>;
   uploading: string;
   uploadFailed: string;
+  uploadLimited: string;
   tooManyPhotos: string;
   notImage: string;
   submit: string;
@@ -288,8 +289,9 @@ form.addEventListener('submit', async (event) => {
       button.textContent = strings.uploading;
       try {
         raw.uploadId = await uploadImages(apiUrl, logo, photos);
-      } catch {
+      } catch (error) {
         button.textContent = strings.submit;
+        strings.errors.photos = error instanceof UploadLimitError ? strings.uploadLimited : strings.uploadFailed;
         return formErrors(['photos']);
       }
     }

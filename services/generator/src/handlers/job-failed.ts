@@ -1,4 +1,5 @@
 import { createStores, storeConfigFromEnv } from '../aws/stores';
+import { noteRedesignDone } from '../core/chat-notes';
 import { releaseNewSite } from '../core/generate-job';
 
 const stores = createStores(storeConfigFromEnv());
@@ -16,4 +17,5 @@ export const handler = async (event: FailureEvent): Promise<void> => {
   if (!job || job.status !== 'PENDING') return;
   await releaseNewSite(job, { stores });
   await stores.updateJob(jobId, { status: 'FAILED', error: (event.responsePayload?.errorMessage ?? 'generate crashed').slice(0, 500) });
+  await noteRedesignDone(stores, job, 'FAILED');
 };

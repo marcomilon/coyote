@@ -3,7 +3,7 @@ import { sesSendEmail } from '../aws/mail';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { accountView, checkSession, requestLogin, startSession, type AccountDeps } from '../core/account';
 import { createUrls, urlConfigFromEnv } from '../core/urls';
-import { json, parseBody } from './http';
+import { json, parseBody, perIpLimit } from './http';
 
 const urls = createUrls(urlConfigFromEnv(process.env));
 const deps: AccountDeps = {
@@ -15,7 +15,7 @@ const deps: AccountDeps = {
 };
 
 // POST /account/login · POST /account/session · GET /account ("Mis sitios").
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+export const handler: APIGatewayProxyHandlerV2 = perIpLimit(deps.stores, async (event) => {
   const body = () => parseBody(event.body, event.isBase64Encoded);
   switch (event.routeKey) {
     case 'POST /account/login': {
@@ -33,4 +33,4 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     default:
       return json(404, { error: 'not_found' });
   }
-};
+});

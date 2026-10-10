@@ -1,4 +1,5 @@
 import type { Answers } from './answers';
+import type { RegistrantContact } from './domains';
 import type { Usage } from './bedrock';
 import type { Media } from './content';
 import type { Note, Question } from './questions';
@@ -47,6 +48,8 @@ export interface Job {
   uploadId?: string;
   /** Create jobs: the owner's email (account.ts). Never sent to a model. */
   ownerEmail?: string;
+  /** Edit jobs: the `at` of the chat note that follows this redesign (chat-notes.ts). */
+  chatAt?: number;
 }
 
 /** quarantined: taken offline by visitor reports. blocked: removed by the admin for good. */
@@ -72,7 +75,31 @@ export interface SiteRecord {
   ownerEmailId?: string;
   /** The stable preview (`_draft/<previewId>/`): always a copy of the current draft (drafts.ts). */
   previewId?: string;
+  /** The owner's own domain (domains.ts), set when its registration starts. */
+  domain?: string;
 }
+
+/**
+ * A domain registered for a site (domains.ts). registering: claimed, the registrar not yet called back.
+ * contacts_pending: registered and paid, the owner not yet its contact. Kept when the site is deleted.
+ */
+export interface DomainRecord {
+  domain: string;
+  slug: string;
+  status: 'registering' | 'contacts_pending' | 'registered';
+  /** ms since epoch */
+  createdAt: number;
+  registeredAt?: number;
+  /** ms since epoch */
+  expiresAt?: number;
+  priceCents: number;
+  ownerEmail: string;
+  /** The registrant, kept only until the registrar has it. */
+  contact?: RegistrantContact;
+}
+
+/** Fields to change; `contact: null` removes the contact. */
+export type DomainPatch = Partial<Omit<DomainRecord, 'domain' | 'contact'>> & { domain: string; contact?: null };
 
 /** The sites linked to one email (account.ts). */
 export interface Account {
@@ -108,6 +135,10 @@ export interface ChatMessage {
   undone?: boolean;
   /** A change too big for the chat: the request to hand to the page writer ("Rediseñar"). */
   redesign?: string;
+  /** The owner pressed "Rediseñar" on this reply (POST /me/edit with `from`): the button is spent. */
+  redesignStarted?: boolean;
+  /** A redesign's note (chat-notes.ts): the edit job it follows. */
+  jobId?: string;
   /** DynamoDB TTL, seconds since epoch. */
   ttl: number;
 }
@@ -169,6 +200,12 @@ export interface Stores {
   getAccountToken(kind: AccountToken['kind'], id: string): Promise<AccountToken | undefined>;
   /** Atomic: removes the token and resolves to it (only the first caller gets it). */
   takeAccountToken(kind: AccountToken['kind'], id: string): Promise<AccountToken | undefined>;
+  /** Atomic: saves the record and sets `domain` on its site. False if the domain is taken or the site already has one. */
+  claimDomain(record: DomainRecord): Promise<boolean>;
+  /** Undoes claimDomain (the registration never happened). */
+  releaseDomain(domain: string, slug: string): Promise<void>;
+  saveDomain(patch: DomainPatch): Promise<void>;
+  getDomain(domain: string): Promise<DomainRecord | undefined>;
 }
 
 export const JOB_TTL_SECONDS = 90 * 24 * 60 * 60;

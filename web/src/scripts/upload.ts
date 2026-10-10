@@ -1,5 +1,8 @@
 // Images are resized in the browser before uploading: smaller uploads on mobile data, EXIF (GPS) stripped by the
 // re-encode, and no image library needed in the Lambdas. The server still moderates every file.
+/** The day's upload limit for this IP (POST /uploads answered 429). */
+export class UploadLimitError extends Error {}
+
 interface PresignedPost {
   url: string;
   fields: Record<string, string>;
@@ -35,6 +38,7 @@ export async function uploadImages(apiUrl: string, logo: File | undefined, photo
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ logo: Boolean(logo), photos: photos.length }),
   });
+  if (response.status === 429) throw new UploadLimitError();
   if (!response.ok) throw new Error(`uploads: ${response.status}`);
   const slots = (await response.json()) as { uploadId: string; logo?: PresignedPost; photos: PresignedPost[] };
   await Promise.all([

@@ -4,13 +4,14 @@
  *   restore <slug>      bring a quarantined site back
  *   abuse-report        who did what in the last 24 h
  *   refill-all          finish every site's current draft again (after a page-check or domain change); no model call
+ *   domains             the domains registered for owners (Mi sitio → Dominio)
  */
 import { readFileSync } from 'node:fs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, paginateScan } from '@aws-sdk/lib-dynamodb';
 import { createStores } from '../src/aws/stores';
 import { refillDraft } from '../src/core/drafts';
-import type { Job, SiteRecord } from '../src/core/jobs';
+import type { DomainRecord, Job, SiteRecord } from '../src/core/jobs';
 import { createUrls } from '../src/core/urls';
 
 const outputs = JSON.parse(readFileSync(new URL('../../../infra/cdk-outputs.json', import.meta.url), 'utf8')).Coyote as Record<string, string>;
@@ -21,6 +22,7 @@ const config = {
   blocklistTable: outputs.BlocklistTableName!,
   chatTable: outputs.ChatTableName!,
   accountsTable: outputs.AccountsTableName!,
+  domainsTable: outputs.DomainsTableName!,
   sitesBucket: outputs.SitesBucketName!,
   sitesDistributionId: outputs.SitesDistributionId!,
 };
@@ -102,7 +104,16 @@ switch (command) {
     console.log(`${sites.length - failed} site(s) done${failed ? `, ${failed} failed` : ''}.`);
     break;
   }
+  case 'domains': {
+    const domains = (await scan<DomainRecord>(config.domainsTable)).sort((a, b) => a.createdAt - b.createdAt);
+    for (const d of domains) {
+      const expires = d.expiresAt ? new Date(d.expiresAt).toISOString().slice(0, 10) : '-';
+      console.log(`  ${d.domain.padEnd(32)} ${d.status.padEnd(17)} ${d.slug.padEnd(24)} expires ${expires}  $${(d.priceCents / 100).toFixed(2)}`);
+    }
+    console.log(`${domains.length} domain(s).`);
+    break;
+  }
   default:
-    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | refill-all');
+    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | refill-all | domains');
     process.exit(1);
 }

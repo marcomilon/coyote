@@ -1,8 +1,8 @@
 import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-cloudfront';
-import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { BatchWriteCommand, DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { ConditionalCheckFailedException, DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dynamodb';
+import { BatchWriteCommand, DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import type { Account, AccountToken, ChatMessage, Job, SiteRecord, Stores } from '../core/jobs';
+import type { Account, AccountToken, ChatMessage, DomainRecord, Job, SiteRecord, Stores } from '../core/jobs';
 
 export interface StoreConfig {
   jobsTable: string;
@@ -11,6 +11,7 @@ export interface StoreConfig {
   blocklistTable: string;
   chatTable: string;
   accountsTable: string;
+  domainsTable: string;
   sitesBucket: string;
   /** Unset in Lambdas that never change a published site. */
   sitesDistributionId?: string;
@@ -29,12 +30,13 @@ export function storeConfigFromEnv(env: Record<string, string | undefined> = pro
     blocklistTable: need('BLOCKLIST_TABLE'),
     chatTable: need('CHAT_TABLE'),
     accountsTable: need('ACCOUNTS_TABLE'),
+    domainsTable: need('DOMAINS_TABLE'),
     sitesBucket: need('SITES_BUCKET'),
     sitesDistributionId: env.SITES_DISTRIBUTION_ID,
   };
 }
 
-const isConditionFailure = (error: unknown) => error instanceof ConditionalCheckFailedException;
+const isConditionFailure = (error: unknown) => error instanceof ConditionalCheckFailedException || error instanceof TransactionCanceledException;
 
 /** Builds "SET #a = :a, #b = :b" for the defined fields of a patch. */
 function setExpression(patch: Record<string, unknown>) {
@@ -413,6 +415,69 @@ export function createStores(config: StoreConfig): Stores {
         }
         token = page.NextContinuationToken;
       } while (token);
+    },
+
+    async claimDomain(record) {
+      try {
+        await db.send(
+          new TransactWriteCommand({
+            TransactItems: [
+              { Put: { TableName: config.domainsTable, Item: record, ConditionExpression: 'attribute_not_exists(#domain)', ExpressionAttributeNames: { '#domain': 'domain' } } },
+              {
+                Update: {
+                  TableName: config.sitesTable,
+                  Key: { slug: record.slug },
+                  UpdateExpression: 'SET #domain = :domain',
+                  ConditionExpression: 'attribute_exists(slug) AND attribute_not_exists(#domain)',
+                  ExpressionAttributeNames: { '#domain': 'domain' },
+                  ExpressionAttributeValues: { ':domain': record.domain },
+                },
+              },
+            ],
+          }),
+        );
+        return true;
+      } catch (error) {
+        if (isConditionFailure(error)) return false;
+        throw error;
+      }
+    },
+
+    async releaseDomain(domain, slug) {
+      await db.send(new DeleteCommand({ TableName: config.domainsTable, Key: { domain } }));
+      try {
+        await db.send(
+          new UpdateCommand({
+            TableName: config.sitesTable,
+            Key: { slug },
+            UpdateExpression: 'REMOVE #domain',
+            ConditionExpression: '#domain = :domain',
+            ExpressionAttributeNames: { '#domain': 'domain' },
+            ExpressionAttributeValues: { ':domain': domain },
+          }),
+        );
+      } catch (error) {
+        if (!isConditionFailure(error)) throw error; // the site is gone, or has another domain
+      }
+    },
+
+    async saveDomain({ domain, contact, ...fields }) {
+      const set = setExpression(fields);
+      const remove = contact === null ? ' REMOVE #contact' : '';
+      await db.send(
+        new UpdateCommand({
+          TableName: config.domainsTable,
+          Key: { domain },
+          UpdateExpression: set.UpdateExpression + remove,
+          ExpressionAttributeNames: { ...set.ExpressionAttributeNames, ...(remove ? { '#contact': 'contact' } : {}) },
+          ExpressionAttributeValues: set.ExpressionAttributeValues,
+        }),
+      );
+    },
+
+    async getDomain(domain) {
+      const { Item } = await db.send(new GetCommand({ TableName: config.domainsTable, Key: { domain } }));
+      return Item as DomainRecord | undefined;
     },
   };
 }

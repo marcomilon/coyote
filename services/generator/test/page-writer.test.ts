@@ -27,7 +27,7 @@ describe('checkPage', () => {
     expect(result.html).toContain('https://wa.me/573001234567?text=Hola');
     expect(result.html).toContain('<iframe src="https://maps.google.com/maps?q=');
     expect(result.html).toContain('overflow-x:clip');
-    expect(result.html).toMatch(/<a href="https:\/\/app\.test\/" style="color:inherit">Sitio creado con ventas314.com<\/a> · <a href="https:\/\/app\.test\/reportar\?sitio=x"/);
+    expect(result.html).toMatch(/<a href="https:\/\/app\.test\/" style="color:inherit">Página web creada con ventas314.com<\/a> · <a href="https:\/\/app\.test\/reportar\?sitio=x"/);
     expect(result.texts).toContain('Panadería Luna');
     expect(result.texts).toContain('Pan'); // alt text is visible text
   });

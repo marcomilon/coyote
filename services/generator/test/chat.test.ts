@@ -72,6 +72,43 @@ describe('chat', () => {
     const { reply } = await t.send('pon todo en verde');
     expect(reply).toMatchObject({ status: 'done', redesign: 'Cambia los colores del sitio a tonos verdes.' });
     expect(t.site().currentDraftId).toBe('draft1');
+
+    // Its button works once: the edit marks the reply.
+    expect(await editSite(t.site(), { instruction: reply.redesign!, from: reply.at }, t.ownerDeps)).toMatchObject({ status: 202 });
+    expect(t.chat.find((m) => m.at === reply.at)).toMatchObject({ redesignStarted: true });
+    // One redesign at a time, and the refused one doesn't count against the day's limit.
+    expect(await editSite(t.site(), { instruction: 'otra idea', from: 12345 }, t.ownerDeps)).toEqual({ status: 409, error: 'busy' });
+    t.jobs.get(t.site().jobIds!.at(-1)!)!.status = 'DONE';
+    expect(await editSite(t.site(), { instruction: 'otra idea', from: 12345 }, t.ownerDeps)).toMatchObject({ status: 202 }); // unknown reply: no harm
+  });
+
+  it('a redesign and an undo leave notes in the chat, so a reload shows them', async () => {
+    const t = await withDraft();
+    t.ownerDeps.now = () => NOW + 60_000;
+    expect(await editSite(t.site(), { instruction: 'pon todo en verde' }, t.ownerDeps)).toMatchObject({ status: 202, jobId: 'job-2' });
+    const note = () => t.chat.find((m) => m.jobId === 'job-2')!;
+    expect(note()).toMatchObject({ role: 'coyote', status: 'pending', text: expect.stringContaining('Rediseñando') });
+    expect(t.jobs.get('job-2')!.chatAt).toBe(note().at);
+    // While it runs (longer than a chat reply may take), the chat names the job to follow.
+    const later = { ...t.ownerDeps, now: () => NOW + 5 * 60_000 };
+    expect((await chatView(t.site(), undefined, later)).messages.at(-1)).toMatchObject({ status: 'pending', jobId: 'job-2' });
+
+    await runGenerateJob('job-2', t.generateDeps);
+    expect(note()).toMatchObject({ status: 'done', text: expect.stringContaining('Listo'), draftId: 'draft2' });
+    expect((await chatView(t.site(), undefined, later)).messages.at(-1)).toMatchObject({ changed: true, redesigned: true, jobId: undefined });
+
+    t.ownerDeps.now = () => NOW + 6 * 60_000;
+    expect(await undo(t.site(), t.ownerDeps)).toEqual({ status: 200 });
+    expect(note()).toMatchObject({ undone: true });
+    expect(t.chat.at(-1)).toMatchObject({ role: 'coyote', status: 'done', text: 'Listo, volví a la versión anterior.' });
+  });
+
+  it('a redesign that stops without a word gets its note failed on the next read', async () => {
+    const t = await withDraft();
+    await editSite(t.site(), { instruction: 'pon todo en verde' }, t.ownerDeps);
+    const stuck = { ...t.ownerDeps, now: () => NOW + 60 * 60_000 }; // past the job's cutoff
+    expect((await chatView(t.site(), undefined, stuck)).messages.at(-1)).toMatchObject({ status: 'failed', text: expect.stringContaining('Algo salió mal') });
+    expect(t.chat.at(-1)).toMatchObject({ status: 'failed' });
   });
 
   it('a question or a greeting is only a reply', async () => {

@@ -120,7 +120,11 @@ describe('edits', () => {
 
   it(`caps free-text edits at ${EDITS_PER_DAY} a day`, async () => {
     const t = await withDraft();
-    for (let i = 0; i < EDITS_PER_DAY; i++) expect((await editSite(t.site(), { instruction: `cambio ${i}` }, t.ownerDeps)).status).toBe(202);
+    const finish = () => (t.jobs.get(t.site().jobIds!.at(-1)!)!.status = 'DONE'); // one redesign at a time
+    for (let i = 0; i < EDITS_PER_DAY; i++) {
+      expect((await editSite(t.site(), { instruction: `cambio ${i}` }, t.ownerDeps)).status).toBe(202);
+      finish();
+    }
     expect(await editSite(t.site(), { instruction: 'uno más' }, t.ownerDeps)).toEqual({ status: 429 });
     expect(await editSite(t.site(), { contact: { instagram: 'otra' } }, t.ownerDeps)).toMatchObject({ status: 200 }); // contact edits cost nothing
   });

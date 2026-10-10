@@ -1,9 +1,11 @@
 // "Mi sitio": the owner's page. The magic-link token arrives in the URL hash (owner-token.ts keeps it and takes it
 // out of the address) and is sent as a Bearer token.
-// Two tabs: the current draft, and the chat that changes it (texts, contact details, undo, a redesign), with the
-// QR that opens the same chat on the owner's phone. The preview follows every change live. And delete.
+// Three tabs: the current draft; the chat that changes it (texts, contact details, undo, a redesign), with the
+// QR that opens the same chat on the owner's phone; and the owner's own domain (domain.ts). The preview follows
+// every change live. And delete.
 import { api as apiCall, apiUrl } from './jobs';
 import { startChat, type ChatStrings } from './chat-thread';
+import { startDomainTab, type DomainStrings } from './domain';
 import { qrCode } from './live-preview';
 import { forgetOwnerTokens, ownerHash, ownerToken, tokenHash } from './owner-token';
 
@@ -18,6 +20,7 @@ type Message = { title: string; text: string };
 interface Strings {
   noToken: Message;
   badToken: Message;
+  limited: Message;
   deleted: Message;
   heading: string;
   error: string;
@@ -26,6 +29,8 @@ interface Strings {
   chatPath: string;
   qr: { title: string; updated: string };
   chat: ChatStrings;
+  domain: DomainStrings;
+  lang: string;
 }
 
 const root = document.getElementById('mysite') as HTMLElement;
@@ -52,9 +57,16 @@ const api = <T>(path: string, method = 'GET', body?: unknown) =>
     body: body ? JSON.stringify(body) : undefined,
   });
 
+let slug = '';
+let domainStarted = false;
+
 function fill(view: View) {
   if (!view.draftUrl) return showMessage(strings.badToken);
+  slug = view.slug;
   $('[data-business]').textContent = view.businessName ?? strings.heading;
+  $('[data-crumb-name]').textContent = view.businessName ?? view.slug;
+  // Mis sitios opens with this site selected.
+  $<HTMLAnchorElement>('[data-crumb-list]').hash = `site=${encodeURIComponent(view.slug)}`;
   $('[data-chrome-name]').textContent = view.businessName ?? view.slug;
   const frame = $<HTMLIFrameElement>('.device iframe');
   if (frame.src !== view.draftUrl) frame.src = view.draftUrl;
@@ -74,7 +86,6 @@ function fill(view: View) {
 function showChatHandoff() {
   const chatLink = `${location.origin}${strings.chatPath}${tokenHash()}`;
   $<HTMLElement>('[data-qr]').replaceChildren(qrCode(chatLink, strings.qr.title));
-  $<HTMLAnchorElement>('[data-chat-open]').href = chatLink;
 }
 
 /**
@@ -87,6 +98,7 @@ function startSiteChat() {
     token,
     strings: strings.chat,
     scroll: 'box',
+    previewLink: () => `${strings.previewPath}${ownerHash()}`,
     onView(view) {
       if (!view.draftUrl || view.draftUrl === current) return;
       const first = !current;
@@ -104,6 +116,7 @@ async function load() {
   if (!token || !apiUrl) return showMessage(strings.noToken);
   try {
     const { status, body } = await api<View>('/me');
+    if (status === 429) return showMessage(strings.limited);
     if (status !== 200) return showMessage(strings.badToken);
     fill(body);
     startSiteChat();
@@ -113,7 +126,7 @@ async function load() {
 }
 
 // Tabs: the preview gets the whole width; the chat has its own tab.
-const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')].filter((tab) => getComputedStyle(tab).display !== 'none'); // global.css may hide one
 function showTab(name: string, focus = false) {
   for (const tab of tabs) {
     const selected = tab.dataset.tab === name;
@@ -123,6 +136,15 @@ function showTab(name: string, focus = false) {
     if (selected && focus) tab.focus();
   }
   $<HTMLElement>('[data-viewport]').hidden = name !== 'preview';
+  // The chat loads while its tab is hidden, so it can only show the latest message once the tab is open.
+  if (name === 'change') {
+    const thread = $<HTMLElement>('[data-thread]');
+    thread.scrollTop = thread.scrollHeight;
+  }
+  if (name === 'domain' && !domainStarted && slug) {
+    domainStarted = true;
+    startDomainTab($('[data-panel="domain"]'), { api, strings: strings.domain, lang: strings.lang, slug });
+  }
 }
 tabs.forEach((tab, i) => {
   tab.onclick = () => showTab(tab.dataset.tab!);

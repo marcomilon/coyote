@@ -29,7 +29,7 @@ describe('CoyoteStack, domainless', () => {
     template.resourceCountIs('AWS::CertificateManager::Certificate', 0);
     template.resourceCountIs('AWS::Route53::RecordSet', 0);
     template.resourceCountIs('AWS::CloudFront::Distribution', 2);
-    template.resourceCountIs('AWS::DynamoDB::GlobalTable', 6);
+    template.resourceCountIs('AWS::DynamoDB::GlobalTable', 7);
   });
 
   it('keeps both buckets private and versions the sites bucket', () => {
@@ -62,17 +62,25 @@ describe('CoyoteStack, domainless', () => {
   });
 
   it('lets only the generate Lambda read the Anthropic API key, and gives it time for the page writer', () => {
-    const readers = Object.values(template.findResources('AWS::IAM::Policy')).filter((p) => JSON.stringify(p).includes('secretsmanager:GetSecretValue'));
-    expect(readers).toHaveLength(1);
-    expect(JSON.stringify(readers[0])).toContain('coyote/anthropic-api-key');
+    const readers = Object.keys(template.findResources('AWS::IAM::Policy')).filter((id) => JSON.stringify(template.findResources('AWS::IAM::Policy')[id]).includes('coyote/anthropic-api-key'));
+    expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
     template.hasResourceProperties('AWS::Lambda::Function', { Timeout: 600, Environment: { Variables: Match.objectLike({ ANTHROPIC_SECRET_NAME: 'coyote/anthropic-api-key' }) } });
   });
 
   it('keeps the page-model switch in SSM, starting on Opus, readable only by the generate Lambda', () => {
     template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-model', Value: 'opus' });
     template.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PAGE_MODEL_PARAMETER: '/coyote/page-model' }) } });
-    const readers = Object.keys(template.findResources('AWS::IAM::Policy')).filter((id) => JSON.stringify(template.findResources('AWS::IAM::Policy')[id]).includes('ssm:GetParameter'));
+    const readers = Object.keys(template.findResources('AWS::IAM::Policy')).filter((id) => JSON.stringify(template.findResources('AWS::IAM::Policy')[id]).includes('GeneratorApiPageModel'));
     expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
+  });
+
+  it('lets only the domains Lambda read the registrar key and the domain-register switch, which starts off', () => {
+    template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/domain-register', Value: 'off' });
+    const policies = template.findResources('AWS::IAM::Policy');
+    const holders = (text: string) => Object.keys(policies).filter((id) => JSON.stringify(policies[id]).includes(text)).map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
+    expect(holders('coyote/porkbun-api')).toEqual(['GeneratorApiDomains']);
+    expect(holders('GeneratorApiDomainRegister')).toEqual(['GeneratorApiDomains']);
+    template.hasResourceProperties('AWS::DynamoDB::GlobalTable', { KeySchema: [{ AttributeName: 'domain', KeyType: 'HASH' }] });
   });
 
   it('keeps the page-skill switch in SSM, starting on frontend-design, with the skills in a private bucket only generate reads', () => {
@@ -129,7 +137,7 @@ describe('CoyoteStack, domainless', () => {
 
   it('throttles the API and lets the local frontend call it', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
-      DefaultRouteSettings: { ThrottlingRateLimit: 5, ThrottlingBurstLimit: 10 },
+      DefaultRouteSettings: { ThrottlingRateLimit: 50, ThrottlingBurstLimit: 100 },
     });
     template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
       CorsConfiguration: { AllowOrigins: Match.arrayWith(['http://localhost:5173']) },
@@ -155,8 +163,8 @@ describe('CoyoteStack, domainless', () => {
   it('exposes the routes', () => {
     const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')).map((r) => r.Properties.RouteKey).sort();
     expect(routes).toEqual([
-      'DELETE /me', 'GET /account', 'GET /jobs/{id}', 'GET /me', 'GET /me/chat', 'POST /account/login', 'POST /account/session', 'POST /generate',
-      'POST /jobs/{id}/answers', 'POST /me/chat', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads',
+      'DELETE /me', 'GET /account', 'GET /jobs/{id}', 'GET /me', 'GET /me/chat', 'GET /me/domain', 'GET /me/domain/check', 'POST /account/login', 'POST /account/session',
+      'POST /generate', 'POST /jobs/{id}/answers', 'POST /me/chat', 'POST /me/domain', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads',
     ]);
   });
 
@@ -169,13 +177,16 @@ describe('CoyoteStack, domainless', () => {
       TimeToLiveSpecification: { AttributeName: 'ttl', Enabled: true },
     });
     template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
-      DefaultRouteSettings: Match.objectLike({ ThrottlingRateLimit: 5 }),
-      RouteSettings: { 'GET /me/chat': Match.objectLike({ ThrottlingRateLimit: 25 }) },
+      DefaultRouteSettings: Match.objectLike({ ThrottlingRateLimit: 50 }),
+      RouteSettings: Match.objectLike({ 'GET /me/chat': Match.objectLike({ ThrottlingRateLimit: 25 }), 'POST /generate': Match.objectLike({ ThrottlingRateLimit: 5 }) }),
     });
     // Route settings fail to deploy if the stage is updated before the route exists.
-    const routes = template.findResources('AWS::ApiGatewayV2::Route', { Properties: { RouteKey: 'GET /me/chat' } });
     const stage = Object.values(template.findResources('AWS::ApiGatewayV2::Stage'))[0]!;
-    expect(stage.DependsOn).toEqual(expect.arrayContaining(Object.keys(routes)));
+    for (const key of Object.keys(stage.Properties.RouteSettings)) {
+      const routes = template.findResources('AWS::ApiGatewayV2::Route', { Properties: { RouteKey: key } });
+      expect(Object.keys(routes)).toHaveLength(1);
+      expect(stage.DependsOn).toEqual(expect.arrayContaining(Object.keys(routes)));
+    }
   });
 
   it('only lets Lambdas call the text models with our guardrail attached', () => {

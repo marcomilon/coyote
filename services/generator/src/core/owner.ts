@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { checkSession } from './account';
+import { noteRedesign, noteUndo } from './chat-notes';
 import { cleanContact, type ContactField } from './answers';
 import { Contact } from './content';
 import { deleteDraft, draftPrefix, loadDraft, mediaPrefix, ownerText, refreshPreview, saveDraft, sourcePrefix, type SiteDoc } from './drafts';
-import { JOB_TTL_SECONDS, type Job, type SiteRecord, type Stores } from './jobs';
+import { JOB_TTL_SECONDS, publicJob, type Job, type SiteRecord, type Stores } from './jobs';
 import { checkPage, contactMissing, replaceContact } from './page-check';
 import { checkTexts } from './policy';
 import { parseToken, secretMatches } from './token';
@@ -75,9 +76,29 @@ export async function ownerView(site: SiteRecord, { stores, urls }: Pick<OwnerDe
 }
 
 const ContactInput = z.object(Object.fromEntries(Object.keys(Contact.shape).map((key) => [key, z.string().max(300).optional()])) as Record<ContactField, z.ZodOptional<z.ZodString>>).strict();
-const EditBody = z.object({ instruction: z.string().trim().min(3).max(1000).optional(), contact: ContactInput.optional() }).strict();
+const EditBody = z
+  .object({
+    instruction: z.string().trim().min(3).max(1000).optional(),
+    contact: ContactInput.optional(),
+    /** The chat reply whose "Rediseñar" button started this edit (its `at`). */
+    from: z.number().int().positive().optional(),
+  })
+  .strict();
 
-export type EditResult = { status: 200; missing: string[] } | { status: 202; jobId: string } | { status: 400; fields: string[] } | { status: 409 } | { status: 422 } | { status: 429 };
+export type EditResult =
+  | { status: 200; missing: string[] }
+  | { status: 202; jobId: string }
+  | { status: 400; fields: string[] }
+  | { status: 409; error?: 'busy' }
+  | { status: 422 }
+  | { status: 429 };
+
+/** The page writer is changing this site: its last edit job is still running or waiting for the owner's answers. */
+export async function runningEdit(site: SiteRecord, stores: Pick<Stores, 'getJob'>, now: number): Promise<string | undefined> {
+  const last = site.jobIds?.at(-1);
+  const job = last ? await stores.getJob(last) : undefined;
+  return job?.kind === 'edit' && ['PENDING', 'NEEDS_INPUT'].includes(publicJob(job, now).status) ? job.jobId : undefined;
+}
 
 /**
  * POST /me/edit. Contact changes refill the placeholders at once (a new draft, no model call). An instruction
@@ -88,10 +109,12 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   if (!site.currentDraftId) return { status: 409 };
   const parsed = EditBody.safeParse(body ?? {});
   if (!parsed.success) return { status: 400, fields: [...new Set(parsed.error.issues.map((i) => i.path.join('.') || 'body'))] };
-  const { instruction, contact } = parsed.data;
+  const { instruction, contact, from } = parsed.data;
   if (!instruction && !contact) return { status: 400, fields: ['instruction'] };
 
   const now = deps.now();
+  // One redesign at a time: a second one would start from the page the first is about to replace.
+  if (instruction && (await runningEdit(site, stores, now))) return { status: 409, error: 'busy' };
   if (instruction && !(await stores.hitRateLimit(`edits#${site.slug}#${day(now)}`, EDITS_PER_DAY, inTwoDays(now)))) return { status: 429 };
 
   let current = await loadDraft(site.slug, site.currentDraftId, stores);
@@ -109,8 +132,9 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   if (!instruction) return { status: 200, missing };
 
   const source = site.jobId ? await stores.getJob(site.jobId) : undefined;
+  const jobId = deps.newId();
   const job: Job = {
-    jobId: deps.newId(),
+    jobId,
     status: 'PENDING',
     kind: 'edit',
     stage: 'clarify',
@@ -122,10 +146,13 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
     instruction,
     slug: site.slug,
     usage: [],
+    chatAt: await noteRedesign(stores, site.slug, jobId, current.answers.lang, now),
   };
   await stores.putJob(job);
   await stores.saveSite({ slug: site.slug, jobIds: [...new Set([...(site.jobIds ?? []), job.jobId])] });
   await deps.startGenerate(job.jobId);
+  // Spends the chat's button. A stale or unknown `from` only leaves the button there.
+  if (from) await stores.updateChat(site.slug, from, { redesignStarted: true }).catch(() => undefined);
   return { status: 202, jobId: job.jobId };
 }
 
@@ -157,7 +184,7 @@ export async function applyContact(
 }
 
 /** "Deshacer": back to the previous version. The newer one is deleted. */
-export async function undo(site: SiteRecord, { stores }: Pick<OwnerDeps, 'stores'>): Promise<{ status: 200 } | { status: 409 }> {
+export async function undo(site: SiteRecord, { stores, now }: Pick<OwnerDeps, 'stores' | 'now'>): Promise<{ status: 200 } | { status: 409 }> {
   const drafts = site.drafts ?? [];
   if (drafts.length < 2) return { status: 409 };
   const dropped = drafts.at(-1)!;
@@ -168,6 +195,7 @@ export async function undo(site: SiteRecord, { stores }: Pick<OwnerDeps, 'stores
   // The chat reply that made it says so, so the chat model is not told the change is still there.
   const made = (await stores.listChat(site.slug, 0, UNDO_LOOKBACK)).find((m) => m.draftId === dropped);
   if (made) await stores.updateChat(site.slug, made.at, { undone: true });
+  await noteUndo(stores, site.slug, (await loadDraft(site.slug, drafts.at(-2)!, stores)).answers.lang, now());
   return { status: 200 };
 }
 

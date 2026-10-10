@@ -12,8 +12,14 @@ interface Message {
   changed?: boolean;
   undone?: boolean;
   redesign?: string;
-  /** Only in this browser: notes about a redesign in progress. */
+  /** Its "Rediseñar" button was used: it stays, disabled. */
+  redesignStarted?: boolean;
+  /** Only in this browser: a request that could not start. */
   local?: boolean;
+  /** A redesign's note while it runs: the edit job to follow (its questions, its end). */
+  jobId?: string;
+  /** A finished redesign: the note links to the full-screen page. */
+  redesigned?: boolean;
 }
 export interface ChatView {
   draftUrl?: string;
@@ -29,10 +35,11 @@ export interface ChatStrings {
   changed: string;
   undoneTag: string;
   undo: string;
-  undone: string;
+  undoConfirm: string;
+  undoYes: string;
+  undoNo: string;
   redesign: string;
-  redesigning: string;
-  redesigned: string;
+  openPreview: string;
   rejected: string;
   failed: string;
   busy: string;
@@ -41,6 +48,7 @@ export interface ChatStrings {
   error: string;
   noToken: Note;
   badToken: Note;
+  limited: Note;
   question: QuestionStrings & { invalid: string };
 }
 
@@ -49,14 +57,16 @@ export interface ChatOptions {
   strings: ChatStrings;
   /** 'page': the window scrolls (the phone); 'box': the thread scrolls inside its card (Mi sitio). */
   scroll: 'page' | 'box';
+  /** The full-screen page of the current draft (/ver), for "Abrir en otra pestaña". */
+  previewLink: () => string;
   /** Each answer from GET /me/chat: the host shows the business name or follows the draft. */
   onView?: (view: ChatView) => void;
   /** The chat can't start: no token or a bad token. */
-  onNote: (note: Note, reason: 'noToken' | 'badToken' | 'error') => void;
+  onNote: (note: Note, reason: 'noToken' | 'badToken' | 'limited' | 'error') => void;
 }
 
 /** Starts the chat in a ChatThread.astro element. */
-export function startChat(el: HTMLElement, { token, strings, scroll, onView, onNote }: ChatOptions) {
+export function startChat(el: HTMLElement, { token, strings, scroll, previewLink, onView, onNote }: ChatOptions) {
   const $ = <T extends Element>(selector: string) => el.querySelector(selector) as T;
   const thread = $<HTMLOListElement>('[data-thread]');
   const composer = $<HTMLFormElement>('form[data-composer]');
@@ -66,6 +76,8 @@ export function startChat(el: HTMLElement, { token, strings, scroll, onView, onN
   const messages = new Map<number, Message>();
   let canUndo = false;
   let redesigning = false;
+  /** "Deshacer" was tapped: the bubble asks before undoing. */
+  let confirmingUndo = false;
   let active = false;
   let pollTimer: number | undefined;
   /** What the thread last showed: a poll that changes nothing leaves the page (and its scroll) alone. */
@@ -82,6 +94,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, onView, onN
     });
 
   const pending = () => [...messages.values()].some((m) => m.status === 'pending');
+  const when = new Intl.DateTimeFormat(document.documentElement.lang || undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
   function button(label: string, className: string, onClick: () => void) {
     const b = Object.assign(document.createElement('button'), { type: 'button', className, textContent: label });
@@ -105,7 +118,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, onView, onN
    */
   function render(follow = false) {
     const sorted = [...messages.values()].sort((a, b) => a.at - b.at);
-    const state = JSON.stringify([sorted, canUndo, redesigning]);
+    const state = JSON.stringify([sorted, canUndo, redesigning, confirmingUndo]);
     if (state === shown) return;
     shown = state;
     follow ||= nearBottom();
@@ -122,14 +135,35 @@ export function startChat(el: HTMLElement, { token, strings, scroll, onView, onN
         if (m.changed) {
           const tag = Object.assign(document.createElement('span'), { className: m.undone ? 'tag undone' : 'tag', textContent: m.undone ? `↩ ${strings.undoneTag}` : `✓ ${strings.changed}` });
           li.append(tag);
-          if (m === lastChange && !m.undone && canUndo && !redesigning) li.append(button(strings.undo, 'linkbtn', () => void undo()));
+          if (m === lastChange && !m.undone && canUndo && !redesigning) {
+            if (!confirmingUndo) li.append(button(strings.undo, 'linkbtn', () => setConfirmingUndo(true)));
+            else {
+              const ask = Object.assign(document.createElement('div'), { className: 'confirm' });
+              const question = Object.assign(document.createElement('p'), { textContent: strings.undoConfirm });
+              ask.append(question, button(strings.undoYes, 'btn small', () => void undo()), button(strings.undoNo, 'linkbtn', () => setConfirmingUndo(false)));
+              li.append(ask);
+            }
+          }
         }
-        if (m.redesign && m === lastRedesign && !redesigning && !pending()) li.append(button(strings.redesign, 'btn small', () => void redesign(m.redesign!)));
+        if (m.redesigned) {
+          const open = Object.assign(document.createElement('a'), { className: 'linkbtn', href: previewLink(), target: '_blank', rel: 'noopener', textContent: strings.openPreview });
+          li.append(open);
+        }
+        if (m.redesign && m === lastRedesign) {
+          const start = button(strings.redesign, 'btn small', () => void redesign(m));
+          start.disabled = m.redesignStarted || redesigning || pending();
+          li.append(start);
+        }
+        if (m.at) {
+          const time = Object.assign(document.createElement('time'), { dateTime: new Date(m.at).toISOString(), textContent: when.format(m.at) });
+          li.append(time);
+        }
         return li;
       }),
     );
     composer.querySelector('button')!.disabled = pending() || redesigning;
     $<HTMLElement>('[data-examples]').hidden = sorted.length > 0;
+    if (confirmingUndo) $<HTMLElement>('.confirm .btn')?.focus();
     if (follow) toBottom();
   }
 
@@ -183,39 +217,48 @@ export function startChat(el: HTMLElement, { token, strings, scroll, onView, onN
     render();
   }
 
-  function localNote(text: string, status: Message['status'] = 'done', changed = false) {
-    const note: Message = { at: Date.now(), role: 'coyote', text, status, changed, local: true };
+  function localNote(text: string, status: Message['status'] = 'done') {
+    const note: Message = { at: Date.now(), role: 'coyote', text, status, local: true };
     messages.set(note.at, note);
     render(true);
     return note;
   }
 
+  function setConfirmingUndo(on: boolean) {
+    confirmingUndo = on;
+    render();
+  }
+
   async function undo() {
+    setConfirmingUndo(false);
     const { status, body } = await api<{ canUndo: boolean }>('/me/undo', 'POST');
     if (status !== 200) return notice(strings.error);
     canUndo = body.canUndo;
     const last = [...messages.values()].filter((m) => m.changed && !m.undone).sort((a, b) => a.at - b.at).at(-1);
     if (last) last.undone = true; // as the server now has it
-    localNote(strings.undone);
-    void poll(); // the host follows the draft
+    void poll(); // the server's note, and the host follows the draft
   }
 
-  async function redesign(instruction: string) {
+  async function redesign(offer: Message) {
     redesigning = true;
     render();
     try {
-      const { status, body } = await api<{ jobId?: string }>('/me/edit', 'POST', { instruction });
-      if (status === 202 && body.jobId) return void (await followRedesign(body.jobId, localNote(strings.redesigning, 'pending')));
+      const { status, body } = await api<{ jobId?: string }>('/me/edit', 'POST', { instruction: offer.redesign, from: offer.at });
+      if (status === 202 && body.jobId) {
+        offer.redesignStarted = true; // as the server now has it
+        void poll(); // the server's note about the redesign
+        return void (await followRedesign(body.jobId));
+      }
       redesigning = false;
-      localNote(status === 429 ? strings.editLimit : status === 422 ? strings.rejected : strings.failed, 'failed');
+      localNote(status === 429 ? strings.editLimit : status === 422 ? strings.rejected : status === 409 ? strings.busy : strings.failed, 'failed');
     } catch {
       redesigning = false;
       localNote(strings.error, 'failed');
     }
   }
 
-  /** Follows the page writer's edit job: its questions when it asks, then the new draft. */
-  async function followRedesign(jobId: string, note: Message) {
+  /** Follows the page writer's edit job: its questions when it asks, then its end (the server's note says how). */
+  async function followRedesign(jobId: string) {
     show('chat');
     const job = await waitForJob(jobId);
     if (job.status === 'NEEDS_INPUT') {
@@ -224,8 +267,8 @@ export function startChat(el: HTMLElement, { token, strings, scroll, onView, onN
       const answer = async (body: Parameters<typeof sendAnswers>[1]) => {
         const { status, body: result } = await sendAnswers(jobId, body);
         if (status === 400) return markInvalid(list, result.fields ?? [], strings.question.invalid);
-        if (status === 202 || status === 409) return void followRedesign(jobId, note);
-        finish(status === 422 ? strings.rejected : strings.failed, 'failed');
+        if (status === 202 || status === 409) return void followRedesign(jobId);
+        finish();
       };
       questionsForm.onsubmit = (event) => {
         event.preventDefault();
@@ -235,14 +278,11 @@ export function startChat(el: HTMLElement, { token, strings, scroll, onView, onN
       show('questions');
       return;
     }
-    if (job.status === 'DONE') finish(strings.redesigned, 'done', true);
-    else finish(job.status === 'REJECTED' ? strings.rejected : strings.failed, 'failed');
+    finish();
 
-    function finish(text: string, status: Message['status'], changed = false) {
-      messages.delete(note.at);
+    function finish() {
       redesigning = false;
       show('chat');
-      localNote(text, status, changed);
       void poll();
     }
   }
@@ -272,12 +312,20 @@ export function startChat(el: HTMLElement, { token, strings, scroll, onView, onN
     if (!token || !apiUrl) return onNote(strings.noToken, 'noToken');
     try {
       const { status, body } = await api<ChatView>('/me/chat');
+      if (status === 429) return onNote(strings.limited, 'limited');
       if (status !== 200 || !body.draftUrl) return onNote(strings.badToken, 'badToken');
       onView?.(body);
       active = true;
       show('chat');
       merge(body, true);
       schedule();
+      // A redesign still running (started before a reload, or on another device): follow it again.
+      const running = body.messages.find((m) => m.jobId && m.status === 'pending');
+      if (running) {
+        redesigning = true;
+        render();
+        void followRedesign(running.jobId!);
+      }
     } catch {
       onNote({ title: strings.error, text: '' }, 'error');
     }

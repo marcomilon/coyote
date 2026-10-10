@@ -7,7 +7,7 @@ import { emitMetrics } from '../core/metrics';
 import { chatView, postChat } from '../core/chat';
 import { authenticate, deleteSite, editSite, ownerView, POLL_CAP, undo, type OwnerDeps } from '../core/owner';
 import { createUrls, urlConfigFromEnv } from '../core/urls';
-import { json, parseBody } from './http';
+import { json, parseBody, perIpLimit } from './http';
 
 const stores = createStores(storeConfigFromEnv());
 const lambda = new LambdaClient({});
@@ -28,7 +28,7 @@ const deps: OwnerDeps = {
 const ERRORS: Record<number, string> = { 400: 'invalid', 409: 'not_available', 422: 'rejected', 429: 'rate_limited' };
 
 // GET /me · POST /me/edit · POST /me/undo · DELETE /me · GET /me/chat · POST /me/chat. The magic-link token is the credential.
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event) => {
   const polling = event.routeKey === 'GET /me/chat';
   const site = await authenticate(event.headers.authorization, deps, polling ? POLL_CAP : undefined);
   if (site === 'rate_limited') return json(429, { error: 'rate_limited' });
@@ -44,6 +44,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         return json(202, { jobId: result.jobId });
       }
       if (result.status === 200) return json(200, { ...(await ownerView((await stores.getSite(site.slug))!, deps)), missing: result.missing });
+      if (result.status === 409 && result.error) return json(409, { error: result.error });
       return json(result.status, { error: ERRORS[result.status], ...(result.status === 400 ? { fields: result.fields } : {}) });
     }
     case 'POST /me/undo': {
@@ -65,4 +66,4 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     default:
       return json(404, { error: 'not_found' });
   }
-};
+});

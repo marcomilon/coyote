@@ -10,8 +10,8 @@ ventas314.com cria e hospeda sites simples para negócios. Guardamos o mínimo p
 
 ## O que guardamos
 
-- **Suas respostas**: o nome do negócio, a descrição, o número de WhatsApp, o endereço e as redes que você informou. Com elas o site é gerado e exibido.
-- **Seu e-mail**, para avisar quando o site estiver pronto e para enviar o link de «Meus sites» quando você pedir. Ele não aparece no site, não é enviado aos modelos de inteligência artificial e não mandamos publicidade.
+- **Suas respostas**: o nome do negócio, a descrição, o número de WhatsApp, o endereço e as redes que você informou. Com elas seu site é gerado e exibido.
+- **Seu e-mail**, para avisar quando seu site estiver pronto e para enviar o link de «Meus sites» quando você pedir. Ele não aparece no seu site, não é enviado aos modelos de inteligência artificial e não mandamos publicidade.
 - **O conteúdo do seu site**, para que você possa editá-lo sem gerar de novo.
 - **Um registro de cada pedido** (respostas e resultado da revisão de segurança) por 90 dias, para investigar abusos.
 - **Seu endereço IP, apenas como um código irreversível (hash)**, para limitar quantos sites são criados por dia.
@@ -20,7 +20,9 @@ Não usamos cookies nem ferramentas de análise, nem neste aplicativo nem nos si
 
 ## Quem processa seus dados
 
-Tudo fica hospedado na Amazon Web Services, que também envia os nossos e-mails. O design e os textos são gerados por modelos de inteligência artificial da Anthropic (Claude) e do Amazon Bedrock, que recebem suas respostas e suas fotos para criar o site e não as usam para treinar seus modelos. Para que o seu site mostre os seus dados de contato, esses modelos também recebem o seu número de WhatsApp, o seu telefone, o seu endereço e as suas redes. O seu e-mail pessoal eles nunca recebem.
+Tudo fica hospedado na Amazon Web Services, que também envia os nossos e-mails. O design e os textos são gerados por modelos de inteligência artificial da Anthropic (Claude) e do Amazon Bedrock, que recebem suas respostas e suas fotos para criar o site e não as usam para treinar seus modelos. Para que seu site mostre os seus dados de contato, esses modelos também recebem o seu número de WhatsApp, o seu telefone, o seu endereço e as suas redes. O seu e-mail pessoal eles nunca recebem.
+
+Se você registrar um domínio em Meu site, o seu nome, e-mail, telefone e endereço vão para a Porkbun, a registradora do domínio, e para o registro do domínio (por exemplo, o do .mx ou do .co). São os dados do titular exigidos pelas regras dos domínios. Com a proteção de privacidade, eles não aparecem nas consultas públicas quando a terminação permite. Não os usamos para mais nada e os apagamos assim que a registradora os recebe.
 
 ## Os sites que criamos
 
@@ -28,7 +30,7 @@ Um site publicado é público: qualquer pessoa pode ver o nome, a descrição, o
 
 ## Como apagar seus dados
 
-Abra **Meu site** com o link que você recebeu ao criar o site e escolha «Apagar meu site e meus dados». Você também chega lá por **Meus sites**, com um link que enviamos para o seu e-mail. As páginas, o conteúdo e o texto dos seus pedidos são removidos; o seu e-mail é apagado junto com o seu último site.
+Abra **Meu site** com o link que você recebeu ao criar seu site e escolha «Apagar meu site e meus dados». Você também chega lá por **Meus sites**, com um link que enviamos para o seu e-mail. As páginas, o conteúdo e o texto dos seus pedidos são removidos; o seu e-mail é apagado junto com o seu último site.
 
 ## Seus direitos
 

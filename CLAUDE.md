@@ -24,6 +24,8 @@ npm run diff           # cdk diff against the deployed stack (--profile coyote)
 ./coyote.sh page-skill [<name>|none] | page-skill add <name> <SKILL.md>   # show, switch, or add the page writer's skill (no deploy)
 ./coyote.sh page-look [on|off]   # show or switch the look nudge on new pages (no deploy)
 ./coyote.sh page-images [on|off]   # show or switch made photos for everyone (owners choose per site on the form; no deploy)
+./coyote.sh domain-register [on|off]   # show or switch domain registration in Mi sitio → Dominio (Coyote pays from the Porkbun balance; no deploy)
+./coyote.sh domains    # the domains owners registered
 npm run dev            # astro dev for web/ on :5173 against the DEPLOYED API. Runs in the background; stop with `npx astro dev stop` in web/
 ```
 `coyote.sh` (repo root) is the home for project commands; add new operational commands there as `cmd_<name>` functions rather than as loose scripts.
@@ -46,6 +48,7 @@ Tests live in `infra/test/` and `services/*/test/` (see `vitest.config.ts`). The
   - Switching must stay a config change + redeploy + `refill-all`. So: **no domain literal anywhere in code, prompts, or tests**; `urls.ts` is the only module that knows the mode (CSP, CORS, Origin checks, footer links derive from it); pages use relative asset URLs.
 - **Local development has no mock backend.** `npm run dev` serves only the static frontend; the API, Lambdas, and generated sites are the deployed stack, which allows `http://localhost:5173` in CORS and in the sites' `frame-ancestors`.
 - **Safety is four independent layers** (Bedrock Guardrail incl. explicit `ApplyGuardrail` on output text, pre-screen classifier, `policy.ts` checks on content + rendered HTML, post-publication reports/quarantine). The rate limit runs before any Bedrock call.
+- **Owners' domains** (Mi sitio → Dominio, `core/domains.ts`): Porkbun is the registrar (`aws/porkbun.ts`, key in Secrets Manager `coyote/porkbun-api`, free DNS). The owner is the registrant; registering works only while `./coyote.sh domain-register` is on. The tab is hidden with CSS until the flow is finished, unless `PUBLIC_DOMAIN_TAB=on` at build/dev time (e.g. in `web/.env.development.local`, which only `npm run dev` reads). Connecting a domain to its site waits for publishing.
 - MVP sites carry only WhatsApp and call buttons (one number, "Teléfono" on the form). The contact form, SES email, WhatsApp flows, and custom domains are post-MVP and specified in the plans.
 
 ## Git

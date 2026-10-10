@@ -8,7 +8,7 @@ import { submitAnswers } from '../core/clarify';
 import { emitMetrics } from '../core/metrics';
 import { prescreenModelId } from '../core/models';
 import { submit } from '../core/submit';
-import { json, parseBody } from './http';
+import { json, parseBody, perIpLimit } from './http';
 
 const stores = createStores(storeConfigFromEnv());
 const lambda = new LambdaClient({});
@@ -18,7 +18,7 @@ const startGenerate = async (jobId: string) => {
 };
 
 // POST /generate · POST /jobs/{id}/answers (the owner's answers to the model's questions; the job ID is the credential)
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event) => {
   const body = parseBody(event.body, event.isBase64Encoded);
 
   if (event.routeKey === 'POST /jobs/{id}/answers') {
@@ -60,4 +60,4 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     case 429:
       return json(429, { error: 'rate_limited' });
   }
-};
+});

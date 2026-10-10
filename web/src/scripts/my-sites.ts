@@ -1,8 +1,8 @@
 // "Mis sitios": every site made with one email. The owner asks for a sign-in link by email; the link opens a
-// session kept in this browser. A site is reached with `<slug>.<session>`, the shape of a magic link, so the QR,
-// Mi sitio, and the chat work with it as they do with the link shown at creation.
+// session kept in this browser. A site is reached with `<slug>.<session>`, the shape of a magic link, so Mi sitio
+// and the chat work with it as they do with the link shown at creation.
 import { api as apiCall, apiUrl } from './jobs';
-import { followDraft, qrCode } from './live-preview';
+import { followDraft } from './live-preview';
 import { readSession, saveSession, type Session } from './session';
 
 interface Site {
@@ -16,7 +16,6 @@ interface Site {
 type Note = { title: string; text: string };
 interface Strings {
   lang: 'es' | 'pt';
-  chatPath: string;
   mySitePath: string;
   previewPath: string;
   sent: Note;
@@ -25,7 +24,7 @@ interface Strings {
   error: string;
   invalid: string;
   created: string;
-  qr: { title: string; updated: string };
+  updated: string;
 }
 const root = document.getElementById('mysites') as HTMLElement;
 const strings = JSON.parse(root.dataset.strings ?? '{}') as Strings;
@@ -34,9 +33,13 @@ const form = $<HTMLFormElement>('form[data-signin]');
 
 const show = (state: string) => (root.dataset.state = state);
 
-function showNote(note: Note) {
+/** `done`: nothing left to do here (the link is on its way), so offer the home page instead of another link. */
+function showNote(note: Note, done = false) {
   $('[data-message-title]').textContent = note.title;
   $('[data-message-text]').textContent = note.text;
+  $<HTMLElement>('[data-another]').hidden = done;
+  $<HTMLElement>('[data-home]').hidden = !done;
+  $<SVGElement>('[data-sent-art]').toggleAttribute('hidden', !done);
   show('message');
 }
 
@@ -47,12 +50,9 @@ let stopFollowing: (() => void) | undefined;
 function select(site: Site, session: Session, button: HTMLButtonElement) {
   root.querySelectorAll('[data-site-list] button').forEach((b) => b.setAttribute('aria-current', String(b === button)));
   const hash = `#token=${encodeURIComponent(`${site.slug}.${session.token}`)}`;
-  const chatLink = `${location.origin}${strings.chatPath}${hash}`;
   $('[data-detail-name]').textContent = site.businessName;
   $<HTMLAnchorElement>('[data-open]').href = `${strings.previewPath}${hash}`;
   $<HTMLAnchorElement>('[data-mysite]').href = `${strings.mySitePath}${hash}`;
-  $<HTMLAnchorElement>('[data-chat-open]').href = chatLink;
-  $('[data-qr]').replaceChildren(qrCode(chatLink, strings.qr.title));
   const frame = $<HTMLIFrameElement>('[data-detail] iframe');
   frame.src = site.draftUrl;
   $<HTMLElement>('[data-detail]').hidden = false;
@@ -61,7 +61,7 @@ function select(site: Site, session: Session, button: HTMLButtonElement) {
     site.draftUrl = next;
     frame.src = next;
     const updated = $<HTMLElement>('[data-updated]');
-    updated.textContent = strings.qr.updated;
+    updated.textContent = strings.updated;
     window.setTimeout(() => (updated.textContent = ''), 4000);
   });
 }
@@ -127,7 +127,7 @@ form.addEventListener('submit', async (event) => {
   button.disabled = true;
   try {
     const { status } = await apiCall('/account/login', json({ email, lang: strings.lang }));
-    if (status === 202) return showNote(strings.sent);
+    if (status === 202) return showNote(strings.sent, true);
     error.textContent = status === 400 ? strings.invalid : status === 503 ? strings.unavailable : strings.error;
   } catch {
     error.textContent = strings.error;

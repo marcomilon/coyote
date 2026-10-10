@@ -29,6 +29,9 @@ Commands:
   page-images [on|off]           Show or switch the photos the page writer makes (for owners who leave "Fotos creadas con IA" on),
                                  for the whole stack from the next job. No deploy needed. Survives deploys
   refill-all                     Finish every site's current draft again (after page-check or domain changes; no model call)
+  domains                        List the domains owners registered (Mi sitio → Dominio)
+  domain-register [on|off]       Show or switch whether owners may register a domain (Coyote pays from the Porkbun balance).
+                                 Search works either way. No deploy needed. Survives deploys
   subscribe-alerts <email>       Email alarms, visitor reports, site notices (new and rejected), and cost alerts to this address (then confirm-alerts)
   protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
                                  AWS sends new confirmation emails; confirm each with confirm-alerts, never by clicking
@@ -54,7 +57,7 @@ check_bundles() {
   for bundle in "$ROOT"/infra/cdk.out/asset.*/index.js; do
     grep -q "services/generator/src/handlers" "$bundle" 2>/dev/null || grep -q "JOBS_TABLE" "$bundle" || continue
     cp "$bundle" "$tmp/index.js"
-    if ! (cd "$tmp" && JOBS_TABLE=x SITES_TABLE=x RATE_LIMIT_TABLE=x BLOCKLIST_TABLE=x CHAT_TABLE=x ACCOUNTS_TABLE=x SITES_BUCKET=x \
+    if ! (cd "$tmp" && JOBS_TABLE=x SITES_TABLE=x RATE_LIMIT_TABLE=x BLOCKLIST_TABLE=x CHAT_TABLE=x ACCOUNTS_TABLE=x DOMAINS_TABLE=x SITES_BUCKET=x \
       APP_BASE_URL=https://a.invalid API_BASE_URL=https://b.invalid SITES_BASE_URL=https://c.invalid AWS_REGION=us-east-1 \
       node -e "if (typeof require('./index.js').handler !== 'function') { console.error('no handler export'); process.exit(1) }"); then
       echo "bundle failed to load: $bundle" >&2
@@ -172,7 +175,7 @@ cmd_status() {
   output() { "${aws[@]}" cloudformation describe-stacks --stack-name Coyote --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue"; }
   fn="$("${aws[@]}" lambda list-functions --query "Functions[?starts_with(FunctionName, 'Coyote-GeneratorApiGenerate')].FunctionName | [0]")"
   # name<TAB>value lines; missing parameters print nothing.
-  params="$("${aws[@]}" ssm get-parameters --names /coyote/page-model /coyote/page-skill /coyote/page-look /coyote/page-images --query "Parameters[].[Name, Value]")"
+  params="$("${aws[@]}" ssm get-parameters --names /coyote/page-model /coyote/page-skill /coyote/page-look /coyote/page-images /coyote/domain-register --query "Parameters[].[Name, Value]")"
   param() { awk -v n="/coyote/$1" '$1 == n { print $2 }' <<<"$params"; }
   env() { "${aws[@]}" lambda get-function-configuration --function-name "$fn" --query "Environment.Variables.$1"; }
   bucket="$(output PageSkillsBucketName)"
@@ -189,6 +192,8 @@ cmd_status() {
   echo "  skill     $(param page-skill)   available: $("${aws[@]}" s3 ls "s3://$bucket/" 2>/dev/null | awk '{print $4}' | sed -n 's/\.md$//p' | tr '\n' ' ')"
   echo "  look      $(param page-look)"
   echo "  images    $(param page-images)   model $(env IMAGE_MODEL_ID) (us-west-2), when the owner leaves \"Fotos creadas con IA\" on"
+  echo
+  echo "Domains     registering $(param domain-register) (Porkbun; ./coyote.sh domains lists them)"
   echo
   echo "Bedrock"
   echo "  questions   $(env BEDROCK_MODEL_ID)"
@@ -262,6 +267,18 @@ cmd_page_images() {
   esac
 }
 
+cmd_domain_register() {
+  local ssm=(aws ssm --profile "$PROFILE" --region us-east-1) name=/coyote/domain-register
+  case "${1:-}" in
+    '') "${ssm[@]}" get-parameter --name "$name" --query Parameter.Value --output text ;;
+    on | off)
+      "${ssm[@]}" put-parameter --name "$name" --value "$1" --overwrite >/dev/null
+      echo "Domain registration is now $1. While on, owners register domains paid from the Porkbun balance."
+      ;;
+    *) die "domain-register takes on or off" ;;
+  esac
+}
+
 cmd_admin() {
   cd "$ROOT/services/generator"
   AWS_PROFILE="$PROFILE" npx tsx scripts/admin.ts "$@"
@@ -273,7 +290,8 @@ case "$command" in
   status) cmd_status ;;
   deploy) cmd_deploy "$@" ;;
   destroy) cmd_destroy ;;
-  abuse-report | unpublish | restore | refill-all) cmd_admin "$command" "$@" ;;
+  abuse-report | unpublish | restore | refill-all | domains) cmd_admin "$command" "$@" ;;
+  domain-register) cmd_domain_register "$@" ;;
   page-model) cmd_page_model "$@" ;;
   page-skill) cmd_page_skill "$@" ;;
   page-look) cmd_page_look "$@" ;;

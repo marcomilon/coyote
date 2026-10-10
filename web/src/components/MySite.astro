@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import ChatThread from './ChatThread.astro';
 import { t, type Lang } from '../i18n/strings';
+import { countries, countryLabel } from '../scripts/phone';
 
 interface Props {
   lang: Lang;
@@ -10,11 +11,23 @@ const { lang } = Astro.props;
 const s = t(lang);
 const m = s.mySite;
 const other = t(s.otherLang.code);
-const clientStrings = { ...m, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, question: s.questions } };
+const d = m.domain;
+// The Dominio tab is hidden (global.css) unless PUBLIC_DOMAIN_TAB=on, e.g. in web/.env.development.local, which only `npm run dev` reads.
+const domainTab = import.meta.env.PUBLIC_DOMAIN_TAB === 'on';
+const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, question: s.questions } };
+const field = (name: string, label: string, type = 'text', autocomplete = 'off', max = 60) => ({ name, label, type, autocomplete, max });
+const fields = [
+  field('firstName', d.contact.firstName, 'text', 'given-name'),
+  field('lastName', d.contact.lastName, 'text', 'family-name'),
+  field('email', d.contact.email, 'email', 'email', 200),
+  field('address', d.contact.address, 'text', 'address-line1', 120),
+  field('city', d.contact.city, 'text', 'address-level2'),
+  field('postalCode', d.contact.postalCode, 'text', 'postal-code', 12),
+];
 ---
 
 <Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig noindex>
-  <div class="mysite wrap" id="mysite" data-state="loading" data-strings={JSON.stringify(clientStrings)}>
+  <div class="mysite wrap" id="mysite" data-state="loading" data-domain-tab={domainTab ? "on" : undefined} data-strings={JSON.stringify(clientStrings)}>
     <section data-view="loading" class="panel"><div class="paint" aria-hidden="true"></div></section>
 
     <section data-view="message" class="panel" aria-live="assertive">
@@ -23,12 +36,19 @@ const clientStrings = { ...m, question: s.questions, previewPath: s.paths.previe
     </section>
 
     <section data-view="editor">
+      <nav class="breadcrumb" aria-label={m.breadcrumb}>
+        <ol>
+          <li><a href={s.paths.mySites} data-crumb-list>{s.nav.mySites}</a></li>
+          <li aria-current="page" data-crumb-name>{m.heading}</li>
+        </ol>
+      </nav>
       <header>
         <h1 data-business>{m.heading}</h1>
       </header>
       <div class="tabs" role="tablist" aria-label={m.tabs.label}>
         <button type="button" role="tab" id="tab-preview" aria-controls="panel-preview" aria-selected="true" data-tab="preview">{m.tabs.preview}</button>
         <button type="button" role="tab" id="tab-change" aria-controls="panel-change" aria-selected="false" tabindex="-1" data-tab="change">{m.tabs.change}</button>
+        <button type="button" role="tab" id="tab-domain" aria-controls="panel-domain" aria-selected="false" tabindex="-1" data-tab="domain">{m.tabs.domain}</button>
       </div>
       <!-- Under the tabs on every tab; the Celular/Computador switch only on Vista previa. -->
       <div class="site-bar">
@@ -57,7 +77,6 @@ const clientStrings = { ...m, question: s.questions, previewPath: s.paths.previe
           <div>
             <h3>{m.qr.title}</h3>
             <p>{m.qr.text}</p>
-            <a class="linkbtn" data-chat-open target="_blank" rel="noopener">{m.qr.open}</a>
           </div>
         </div>
         </div>
@@ -65,6 +84,72 @@ const clientStrings = { ...m, question: s.questions, previewPath: s.paths.previe
         <div class="danger" hidden>
           <div class="line"><button class="linkbtn" type="button" data-delete>{m.delete}</button></div>
         </div>
+      </div>
+
+      <div class="tabpanel domain" role="tabpanel" id="panel-domain" aria-labelledby="tab-domain" data-panel="domain" data-domain="loading" hidden>
+        <section class="panel domain-owned" data-domain-view="owned">
+          <h2 data-domain-name></h2>
+          <p data-domain-status></p>
+          <p class="hint">{d.verify}</p>
+          <p class="hint">{d.later}</p>
+        </section>
+
+        <section data-domain-view="search">
+          <h2>{d.title}</h2>
+          <p>{d.intro}</p>
+          <form class="domain-search" data-domain-search role="search">
+            <label class="sub" for="domain-q">{d.searchLabel}</label>
+            <div class="domain-row">
+              <input type="text" id="domain-q" name="q" maxlength="70" autocomplete="off" autocapitalize="none" spellcheck="false" required />
+              <button class="btn small" type="submit">{d.searchButton}</button>
+            </div>
+          </form>
+          <p class="hint" data-domain-closed hidden>{d.closed}</p>
+          <p class="notice" data-kind="error" data-domain-search-error role="alert"></p>
+          <ul class="domain-results" data-domain-results aria-live="polite"></ul>
+        </section>
+
+        <form class="panel domain-contact" data-domain-view="contact" data-domain-contact novalidate>
+          <h2 data-domain-chosen></h2>
+          <p class="hint">{d.contact.intro}</p>
+          <div class="domain-fields">
+            {fields.slice(0, 3).map((f) => (
+              <div>
+                <label class="sub" for={`dc-${f.name}`}>{f.label}</label>
+                <input type={f.type} id={`dc-${f.name}`} name={f.name} maxlength={f.max} autocomplete={f.autocomplete} required data-field={f.name} />
+              </div>
+            ))}
+            <div>
+              <label class="sub" for="dc-country">{d.contact.country}</label>
+              <select id="dc-country" name="country" required data-field="country" data-fallback={lang === 'pt' ? 'BR' : ''}>
+                <option value="">{d.contact.countryPick}</option>
+                {countries(lang).map((country) => <option value={country.iso}>{countryLabel(country, lang)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label class="sub" for="dc-phone">{d.contact.phone}</label>
+              <input type="tel" id="dc-phone" name="phone" maxlength="24" autocomplete="tel-national" inputmode="tel" required data-field="phone" />
+            </div>
+            <div>
+              <label class="sub" for="dc-state">{d.contact.state}</label>
+              <select id="dc-state" name="state" required data-field="state" autocomplete="address-level1"></select>
+            </div>
+            {fields.slice(3).map((f) => (
+              <div>
+                <label class="sub" for={`dc-${f.name}`}>{f.label}</label>
+                <input type={f.type} id={`dc-${f.name}`} name={f.name} maxlength={f.max} autocomplete={f.autocomplete} required data-field={f.name} />
+              </div>
+            ))}
+          </div>
+          <p class="hint" data-domain-paid></p>
+          <p class="hint" data-domain-public hidden>{d.contact.public}</p>
+          <label class="agree"><input type="checkbox" name="agree" required /> {d.contact.agree}</label>
+          <p class="notice" data-kind="error" data-domain-error role="alert"></p>
+          <div class="domain-actions">
+            <button class="btn" type="submit" data-domain-submit>{d.contact.submit}</button>
+            <button class="linkbtn" type="button" data-domain-back>{d.contact.back}</button>
+          </div>
+        </form>
       </div>
 
     </section>

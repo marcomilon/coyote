@@ -10,7 +10,7 @@ A public web form asks 3 questions. Opus writes the page (a model first asks the
 - **Stack**: TypeScript everywhere (CDK, Lambda, Astro frontend).
 - **One environment.** A single stack, `Coyote`, in this AWS account, which is the development sandbox: `localhost:5173` may call the API, `cdk destroy` deletes all data, and the rate limit is relaxed. No dev/prod split in code, names, or URLs. If a real production environment is ever needed, it is a **separate AWS account** running the same stack (`COYOTE_AWS_PROFILE=<prod profile> ./coyote.sh deploy`). Real users only ever go on that account; nothing in this one is meant to survive.
 - **IaC**: every AWS resource is defined in CDK. Manual one-offs are marked 👤 in the phases.
-- **Region**: us-east-1 for everything, except the one image-model call (us-east-1 has no text-to-image model: Stable Image Core in us-west-2). One stack, no cross-region references. Bedrock, Route 53 Domains, CloudFront SaaS Manager, and ACM for CloudFront are native there. CloudFront edges in São Paulo, Bogotá, Santiago, Buenos Aires, and Mexico City serve the sites. Only the API round-trip (~100 ms per submission) is slower than sa-east-1.
+- **Region**: us-east-1 for everything, except the one image-model call (us-east-1 has no text-to-image model: Stable Image Core in us-west-2). One stack, no cross-region references. Bedrock, CloudFront SaaS Manager, and ACM for CloudFront are native there. CloudFront edges in São Paulo, Bogotá, Santiago, Buenos Aires, and Mexico City serve the sites. Only the API round-trip (~100 ms per submission) is slower than sa-east-1.
 - **Opus 5.5 writes each page, with the frontend-design skill as its system prompt** and a request written like a chat message. Rules in the prompt made the designs worse, so the rules are checks on the finished page (`page-check.ts`): what can be repaired is repaired; a page that fails a content check is rejected, and one that never arrives fails the job. There is no fallback. Opus uses the owner's photos when there are any, makes photos with a tool instead of drawing SVG illustrations when the owner left "Fotos creadas con IA" on, and otherwise draws its images as SVG. Pages may use inline JavaScript, Tailwind and libraries from a few CDNs; the sites CSP gives scripts no network access. Changes go through the chat (Mi sitio and the QR chat, below): Haiku 4.5 answers with text changes on an outline of the page, contact changes are swapped into the page with no model call, and a change that needs design work is offered as an Opus edit ("Rediseñar"), which sends the current page back to Opus.
 - **MVP sites have only the WhatsApp CTA.** The contact form and SES email are post-MVP. They are built with WhatsApp lead delivery first (`PLAN-PHASE2.md`), email second.
 - **Our frontend is Astro, built to static files.** Search and link previews: canonical, full `hreflang`, Open Graph (`/og.png`), JSON-LD on the home page, `robots.txt`, and `sitemap.xml` (public pages only), all built from the site's address (`astro.config.mjs` reads it from the CDK context through `urls.ts`; a domainless build leaves them out). Each owner's pages are `noindex`. Generated business sites are not Astro: Opus writes them and `page-check.ts` finishes them in Lambda.
@@ -128,7 +128,7 @@ A language selector (es / pt) sets the site's language. The owner's **email is r
 - **Contact details are never model output.** WhatsApp number, social handles, address, and email come from the owner (form, questions, chat) into `answers.contact`; the page writer gets them as they are, and the page checks reject any number or email the owner never wrote.
 - **Stored state**: per draft, the record (answers, notes, edit requests, the written page) under `_src/<slug>/`, the finished page and its images under `_draft/<draftId>/`. The `sites` item holds `currentDraftId` and the last 5 drafts. Finishing a page again (`refill-all`) is a pure function of the record.
 - **Slug**: slugify(business name). Claimed atomically in `submit` with a conditional put on `sites` (`attribute_not_exists(slug)`). Clean slug first; 4-char random suffix only on collision. Refused before claiming: reserved words (`www`, `api`, `app`, `mail`, `preview`, `draft`, `admin`, `static`, anything starting with `_`), the `blocklist` table, and the brand-impersonation list (`bancolombia.<sites-domain>` is the likeliest phishing vector).
-- **Rate limit** (ships with the API in phase 4): API GW route throttling (e.g. 5 rps / burst 10) + per-IP DynamoDB counter with TTL (e.g. 3 sites/IP/day). Checked before the pre-screen call, so a blocked request spends no Bedrock money. WAF deferred.
+- **Rate limit**: API Gateway throttles the whole API at 50 rps (burst 100), with lower limits on the costly routes (`POST /generate`, `/jobs/{id}/answers`, `/uploads`, `/me/chat`, `/me/edit` at 5 rps; `/report/{slug}` and `/account/login` at 2 rps; `GET /me/chat` at 25 rps), so a flood on one route leaves the others working. Every API Lambda first counts requests per IP per minute (`perIpLimit`, 240/min, a DynamoDB counter with TTL; it lets requests through if the count fails), then the daily quotas (e.g. 3 sites/IP/day). Checked before the pre-screen call, so a blocked request spends no Bedrock money. WAF deferred: add it in front of the API (through CloudFront) if a real attack ever comes.
 - **Guardrail on the input**: only the requester's text is sent as `guardContent`. Our own prompts name the banned categories and would otherwise trip the topic filters on every request.
 - **Bundling**: Lambdas are bundled to CommonJS with the AWS SDK included. `./coyote.sh deploy` loads every bundle before deploying, because unit tests run unbundled code and cannot see this kind of failure.
 - **Failures**: the `generate` async invoke has an on-failure destination that marks the job `FAILED` and frees the slug of a site with no draft. `status` also reports `FAILED` for any job `PENDING` longer than 12 min (counted from when the job last became PENDING). `generate` runs up to 10 minutes; the page writer stops at 9 (retries included) and the job becomes `FAILED`.
@@ -194,7 +194,7 @@ Infra: an `uploads` Lambda with `s3:PutObject` on `_uploads/*` (it signs the POS
 No passwords, no Cognito. Whoever has the link owns the site. The email given in the form is the recovery channel: "Mis sitios" (below) sends a sign-in link to it. The owner's phone (product phase 2) comes later.
 - When the first draft of a new site is ready, the create page goes straight to the link: `https://www.<domain>/mi-sitio#token=<slug>.<secret>` (the first `GET /jobs/{id}` after `DONE` takes it off the job). The token is in the fragment so it never reaches logs or referrers; the page then keeps it in the browser (localStorage) and leaves only `#sitio=<slug>` in the address, so a shared or screenshotted address does not hand over the site (the QR still carries the token, for the phone). Token = random 32 bytes, stored hashed in `sites`, 1-year expiry. The link is not shown for saving; the owner comes back through "Mis sitios".
 - A lost link is recovered through "Mis sitios" (email). WhatsApp re-issue (template `enlace_mi_sitio` to `sites.ownerPhone`) comes with product phase 2.
-- "Mi sitio" page, in tabs: "Vista previa" (the current draft at phone and desktop width, following every change live); "Actualizar tu página" (the chat, the same one the QR opens on the owner's phone: text and contact changes, undo, and a "Rediseñar" offer that starts an edit job (pre-screen, optional questions, Opus on the current page, the page checks and the output guardrail, a new draft); a site made before the chat can no longer be changed there); "Deshacer" (back to the previous draft; the last 5 are kept); delete my data. Post-MVP: last 30 days of messages, pause notifications, add/verify email, buy a domain.
+- "Mi sitio" page, in tabs: "Vista previa" (the current draft at phone and desktop width, following every change live); "Actualizar tu página" (the chat, the same one the QR opens on the owner's phone: text and contact changes, undo, and a "Rediseñar" offer that starts an edit job (pre-screen, optional questions, Opus on the current page, the page checks and the output guardrail, a new draft); a site made before the chat can no longer be changed there); "Deshacer" (back to the previous draft; the last 5 are kept); delete my data. "Dominio" (search a name, register it to the owner; see Custom domains). Post-MVP: last 30 days of messages, pause notifications, add/verify email, connect the domain to the site.
 - API: `GET /me`, `POST /me/edit { instruction?, contact? }`, `POST /me/undo`, `DELETE /me`, `GET /me/chat`, `POST /me/chat { text }`, all with `Authorization: Bearer <token>`, 60 requests per site per day (`GET /me/chat` has its own cap of 3000, for polling), 5 free-text edits per site per day, 30 chat messages per site per day. `POST /jobs/{id}/answers` answers the model's questions (the job ID is the credential). Unpublish and republish come back with the publishing plan.
 
 ## Mis sitios (email sign-in)
@@ -204,7 +204,7 @@ Every site made with one email is listed at `/mis-sitios` (`/pt/meus-sites`), fr
 - The create page says "no cierres esta pestaña" while questions may still come (job `stage: clarify`); once `plan_site` has none (`stage: write`, returned by `GET /jobs/{id}`) it says the page can be closed and the email will follow.
 - `POST /account/login { email, lang }` always answers 202; the email goes out only to an existing account, at most 3 per email and 10 per IP a day. The link (`#login=<secret>`) works once, for an hour: `POST /account/session` turns it into a session `@<id>.<secret>` (30 days, `localStorage`). `GET /account` lists the sites with their drafts.
 - A site is reached with `<slug>.@<id>.<secret>`: the shape of a magic link, so Mi sitio, the chat, the QR, and the live preview take it unchanged; `authenticate` checks the session and that the site is in its account.
-- The page lists the sites; one selected shows its preview (following the chat's changes), the QR to the chat, and Mi sitio.
+- The page lists the sites; one selected shows its preview (following the chat's changes) and Mi sitio.
 - Deleting a site unlinks it; the account goes with its last site. Sites made before this are not linked.
 - Email: SES `SendEmail`, branded HTML with a plain-text version, fixed subjects, business names the only owner text. From: domainless, the CDK context `senderEmail` (an address verified in SES; unset = no email, sign-in answers 503); domain mode, `no-reply@<domain>` with DKIM (`urls.ts` `mailFrom`). While SES is in the sandbox, recipients must be verified too, so `ses:SendEmail` covers the account's identities. Test runs send to `success@simulator.amazonses.com`.
 
@@ -214,7 +214,8 @@ The owner looks at the draft on a computer and asks for changes from their phone
 - `POST /me/chat` stores the owner's message and a pending reply in the `chat` table and starts the `chat` Lambda. One reply at a time; no messages while an Opus edit job runs (its result would drop the chat's changes). Drafts made before the page writer have no chat.
 - The `chat` Lambda (`chat.ts` `runChatTurn`): pre-screen on the message (Nova), then Haiku 4.5 (`edit_page` tool) with the last 10 messages (guarded) and an outline of the page (`page-outline.ts`: styles, scripts, SVG, data URIs, and long class attributes replaced by `⟦n⟧` placeholders; phone numbers masked as for Opus). Actions: `edit` (find/replace changes, each `find` must match once; one retry with the problems), contact changes (only details the owner wrote; applied like the contact form), `ask`, `redesign`, `none`.
 - An edit goes through the usual checks (`checkPage`, output guardrail on the new text and the reply) and saves a new draft. A change that does not apply or fails the checks gets a reply and a "Rediseñar" offer.
-- "Rediseñar" on the phone calls `POST /me/edit { instruction }` (the Opus edit job, with its questions) and follows it in the chat. "Deshacer" is `POST /me/undo`.
+- "Rediseñar" on the phone calls `POST /me/edit { instruction, from }` (the Opus edit job, with its questions) and follows it in the chat. `from` is the reply that offered it: the job marks that reply `redesignStarted`, and its button stays disabled from then on. One redesign at a time: while an edit job is running or waiting for answers, another `POST /me/edit` with an instruction gets 409 `busy` (before the daily limit counts it). "Deshacer" is `POST /me/undo`; the chat asks before undoing.
+- Redesigns and undos leave notes in the chat (`chat-notes.ts`), stored like the replies, so a reload or another device shows them: `POST /me/edit` stores a pending "Rediseñando…" note that names its job (`job.chatAt` points back), and the generate job (or the failure handler) fills it in with how it ended. A finished redesign's note carries the new draft, so it can be undone, and an "Abrir en otra pestaña" link. If the job ends without a word (stuck past its cutoff), `GET /me/chat` fails the note. While a note is pending the chat follows its job again after a reload, questions included. Undo adds a "volví a la versión anterior" note.
 - The phone polls `GET /me/chat?after=<at>` every 2 s while a reply is pending, 6 s otherwise. The create page polls it every 5 s while visible (for an hour after the last change) and swaps the preview when the draft changes. `GET /me/chat` has its own API Gateway throttle (25 rps, burst 50), above the stage's 5/10.
 - Messages expire after 90 days and are deleted with the site.
 
@@ -252,9 +253,9 @@ The owner looks at the draft on a computer and asks for changes from their phone
   - Domainless CSP: `frame-ancestors` uses the app distribution URL. Where an exact URL would make the distributions and the API depend on each other in a circle, a wildcard is used instead: sites `form-action https://*.execute-api.<region>.amazonaws.com`, app `connect-src` the same, app `frame-src https://*.cloudfront.net`. Domain mode uses exact origins everywhere.
   - Cache: default TTL 5 min, so an owner's edit shows up without an invalidation. Missing pages (S3 answers 403) return a small 404 page from `_errors/`.
 - `BucketDeployment` of `web/dist/` (the Astro build) plus the generated `config.js` → `appBucket`.
-- DynamoDB, MVP: `jobs` (pk `jobId`, TTL 90 d; answers, safety outcomes, usage), `sites` (pk `slug`; status, currentDraftId, drafts, ownerWhatsApp, tokenHash, createdAt), `ratelimit` (pk `ip`, TTL), `blocklist` (pk `slug`), `chat` (pk `slug`, sk `at`, TTL 90 d), `accounts` (pk `pk`, sk `sk`, TTL; "Mis sitios"). Post-MVP: `messages`, `suppression`, `wa_*` (`PLAN-PHASE2.md`), `domains`, GSI on `sites.ownerPhone`.
+- DynamoDB, MVP: `jobs` (pk `jobId`, TTL 90 d; answers, safety outcomes, usage), `sites` (pk `slug`; status, currentDraftId, drafts, ownerWhatsApp, tokenHash, createdAt), `ratelimit` (pk `ip`, TTL), `blocklist` (pk `slug`), `chat` (pk `slug`, sk `at`, TTL 90 d), `accounts` (pk `pk`, sk `sk`, TTL; "Mis sitios"), `domains` (pk `domain`; slug, status, expiresAt, price; kept when the site is deleted). Post-MVP: `messages`, `suppression`, `wa_*` (`PLAN-PHASE2.md`), GSI on `sites.ownerPhone`.
 - `CfnGuardrail` + `CfnGuardrailVersion` (Standard tier; filters, denied topics, word filters as above). ID/version passed to Lambdas via env.
-- Lambdas: `NodejsFunction`, Node 22, esbuild. MVP: `submit` (sync, 15 s), `generate` (async, 5 min, 1 GB, on-failure destination → `job-failed` handler), `status`, `uploads`, `owner` (`/me`), `chat` (async, 2 min, started by `owner`), `account` (`/account/*`), `report`. SES email identity (`senderEmail` in domainless mode, `<domain>` with DKIM in domain mode, sender `no-reply@<domain>`). `submit` also serves `POST /jobs/{id}/answers`. Post-MVP: `contact`, `ses-events`, `digest`, `domains`, `wa-*`.
+- Lambdas: `NodejsFunction`, Node 22, esbuild. MVP: `submit` (sync, 15 s), `generate` (async, 5 min, 1 GB, on-failure destination → `job-failed` handler), `status`, `uploads`, `owner` (`/me`), `chat` (async, 2 min, started by `owner`), `account` (`/account/*`), `report`, `domains` (`/me/domain*`, the registrar's API). SES email identity (`senderEmail` in domainless mode, `<domain>` with DKIM in domain mode, sender `no-reply@<domain>`). `submit` also serves `POST /jobs/{id}/answers`. Post-MVP: `contact`, `ses-events`, `digest`, `wa-*`.
 - HTTP API on `api.<domain>`: `POST /generate`, `GET /jobs/{id}`, `POST /jobs/{id}/publish`, `POST /uploads`, `/me/*`, `POST /report/{slug}`. CORS locked to `https://www.<domain>`. Throttling.
 - SNS topic `abuse-reports` with email subscription.
 - IAM: `bedrock:InvokeModel` scoped to the model/profile ARN with the `bedrock:GuardrailIdentifier` condition, plus the image model (us-west-2, `generate` only) without it, since its scene goes through `ApplyGuardrail` first; `bedrock:ApplyGuardrail` on the guardrail; `s3:PutObject`/`DeleteObject` on the sites bucket; DynamoDB RW on the MVP tables; `rekognition:DetectModerationLabels`.
@@ -374,7 +375,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 
 ### Phase 5e — Mis sitios (email sign-in)
 - [x] Required email in the form, `accounts` table, sites linked on their first draft, "ready" email with a sign-in link, "you may close this page" once no questions are left
-- [x] `/account/login`, `/account/session`, `GET /account`; sessions reach sites as `<slug>.@<session>`; `/mis-sitios` page with preview, QR, and Mi sitio; privacy pages updated; unit and stack tests
+- [x] `/account/login`, `/account/session`, `GET /account`; sessions reach sites as `<slug>.@<session>`; `/mis-sitios` page with preview and Mi sitio; privacy pages updated; unit and stack tests
 - [ ] 👤 Deploy (the sender is `senderEmail` in `infra/cdk.json`, a personal address until the product is published) and click the SES verification email; verify the test recipients too (SES sandbox)
 - [ ] Check live: close the tab after the questions, get the ready email, sign in, scan the QR, change the site from the phone
 - [ ] 👤 SES sandbox exit (the brand domain is verified now; ask when outside testers start). First lower the per-IP limit (`rateLimitPerDay`, 100 in this sandbox): out of the sandbox, the form can send the ready email to any address typed in it
@@ -404,13 +405,15 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [ ] Digest mode + reputation kill switch + alarms
 
 ### Phase 8 — Custom domains
+- [ ] 👤 Porkbun account: prepaid credit, API access for all domains, WHOIS privacy on by default, API spend limit; API key (read, domains, purchase, dns) in Secrets Manager `coyote/porkbun-api` as `{apikey, secretapikey}`
+- [ ] Confirm `.com`, `.com.mx`, `.mx`, `.co` are `apiRegisterable` (`getRegistrationRequirements`), else trim `TLDS`
+- [x] Registrar (`aws/porkbun.ts`) + availability check across the TLDs (`core/domains.ts`)
+- [x] Mi sitio "Dominio" tab: search, owner's contact form, register behind `./coyote.sh domain-register` (off by default) and a daily cap; status on the tab. The tab stays hidden (CSS) until the whole flow is finished, unless `PUBLIC_DOMAIN_TAB=on`
+- [ ] 👤 One real `.com` end to end: registrant is the owner, privacy on, auto-renew off
+- [ ] Connect a domain to its site (after publishing): distribution tenant + managed cert, DNS records through Porkbun's API
 - [ ] 👤 Payment provider chosen (Mercado Pago vs Stripe vs dLocal)
-- [ ] 👤 Route 53 Domains quota increase
-- [ ] `registrar.ts` + availability check
-- [ ] Checkout + webhook (`payments.ts`)
-- [ ] `domains` Lambda: register, DNS, distribution tenant + managed cert
+- [ ] Checkout + webhook (`payments.ts`); registration opens to everyone
 - [ ] Renewal scheduler + notifications
-- [ ] One real `.com` end to end
 
 ## Post-MVP: Contact form
 Built in product phase 2 (Flow C). WhatsApp delivery first; SES email (phase 7) is the fallback. Plain HTML form → our API → owner. No JS, no paid CAPTCHA.
@@ -446,34 +449,37 @@ AWS reviews accounts at 5% bounces / 0.1% complaints and pauses them at 10% / 0.
 - **Sandbox exit request** wording: transactional contact notifications, double opt-in recipients, automated bounce/complaint processing, expected volume.
 
 ## Post-MVP: Custom domains (phase 8)
-Every site is free at `{slug}.<sites-domain>`. A `.com` is a paid upsell after publishing.
+Every site is free at `{slug}.<sites-domain>`. Its own domain is an upsell, chosen in Mi sitio → "Dominio".
 
-**Economics (verified Sep 2026)**: Verisign wholesale .com = $10.26, rising to $10.97 on 2026-11-01, and possibly 7%/yr to ~$13.42 by 2030. Plus $0.18 ICANN fee. Floor ≈ $11/yr.
+**Economics (verified Oct 2026)**: Verisign wholesale .com = $10.26, rising to $10.97 on 2026-11-01, and possibly 7%/yr to ~$13.42 by 2030. Plus $0.18 ICANN fee. Floor ≈ $11/yr.
 
 | Registrar | .com/yr | DNS | All-in/yr | API register | Notes |
 |---|---|---|---|---|---|
-| **Route 53 Domains** (chosen) | $15.00 | $6.00 (hosted zone) | **$21.00** | Native `route53domains` (us-east-1 endpoint) | One vendor, IAM auth, billed to the AWS account, DNS + ACM validation automated in CDK/SDK |
-| Dynadot | $10.88 | $0 (free DNS, apex ALIAS) | $10.88 | Yes, prepaid balance, reseller program | Switch when ~$10/domain/yr matters (≈ 500 domains ≈ $5k/yr) |
-| Porkbun | ~$11 | $0 | ~$11 | Yes | Backup to Dynadot |
-| Cloudflare | $9.15 | $0 | $9.15 | No new-registration API | Not usable |
+| **Porkbun** (chosen) | $11.08 | $0 (free DNS with API, ALIAS at the apex) | **$11.08** | Yes: dry run, `Idempotency-Key`, prepaid balance | Sandbox keys, per-key scopes and spend limit |
+| Route 53 Domains | $16.00 | $6.00 (hosted zone) | $22.00 | Native `route53domains` | One vendor, but twice the cost |
+| Dynadot | ~$11 | $0 | ~$11 | Yes, prepaid balance | Thinner API docs |
+| Cloudflare | ~$10 | $0 | ~$10 | No new-registration API | Not usable |
 
-- Route 53 first: no second vendor, no API keys, no balance top-ups. That is worth ~$10/domain/yr at small scale.
-- The registrar sits behind `services/domains/src/registrar.ts` (`check`, `register`, `renew`, `setDns`), so Dynadot can replace it without touching checkout or DNS.
-- Route 53 Domains defaults to 20 domains per account. Request the quota increase before launch.
+- The registrar sits behind `Registrar` in `core/domains.ts` (`prices`, `check`, `register`, `setContacts`, `setAutoRenew`, `get`); `aws/porkbun.ts` implements it.
+- TLDs (`TLDS`): `.com`, `.com.mx`, `.mx`, `.co`. Porkbun doesn't sell `.com.br`, `.com.ar`, `.cl` or `.pe` (Route 53 can't register them either), so Brazil gets `.com`. `.com.mx` and `.co` renew at about twice their first-year price; the tab shows both.
+- The domain's DNS stays at Porkbun (free). The site is still served by our CloudFront.
 
-**Flow**
-1. Site page → "Compra tu dominio .com": `GET /domains/check?name=` → `CheckDomainAvailability` (cache 1 h). Suggest `{slug}.com`, `{slug}{city}.com`.
-2. Checkout in local currency (cards/PIX/OXXO), ≈ USD 25/yr ($21 cost + margin). Webhook → `domains` Lambda. **Payment provider is undecided**: Mercado Pago accounts are per country and each needs a local legal entity. Compare Stripe (OXXO and PIX from one account) and dLocal. Keep it behind `services/domains/src/payments.ts`.
-3. `domains` Lambda: `RegisterDomain` with the customer as registrant/admin/tech contact (name, email, phone, address collected at checkout), privacy protection on, `AutoRenew=false` (we renew after payment). Poll `GetOperationDetail` until `SUCCESSFUL` (async, minutes). Store in `domains` (slug, domain, expiresAt, status, operationId, hostedZoneId).
-4. DNS: Route 53 creates the hosted zone. Add A/AAAA alias records for apex + `www` → the CloudFront tenant domain (`ChangeResourceRecordSets`).
-5. TLS + routing: CloudFront multi-tenant distribution (SaaS Manager). One multi-tenant distribution + connection group; per customer, a distribution tenant with the custom domain and a CloudFront-managed ACM cert (validation CNAME written to the customer's hosted zone, no customer steps). Tenant origin path = `/{slug}/`. Standard CloudFront pricing, no per-tenant fee.
-6. Renewal: daily EventBridge scan of `domains` expiring in 30/7/1 days → WhatsApp utility template or email → payment link → on payment, `RenewDomain`. Unpaid → expires; tenant + hosted zone deleted; the site stays on the free subdomain.
+**Flow (built)**
+1. Mi sitio → Dominio: `GET /me/domain` (the site's domain, whether registering is open, prices, the account email to prefill). The search starts with the slug: `GET /me/domain/check?q=` → one bulk `checkDomain` over every TLD (or the one typed). A name the registry didn't answer is "unknown", not taken; premium names count as taken. 100 checks per site per day; no cache.
+2. "Elegir" → the owner's contact (name, email, phone, address, city, state, postal code, country from the form's list; Mexico's states spelled the .mx way) → `POST /me/domain`.
+3. `domains` Lambda: switch on? (`/coyote/domain-register`, off by default; Coyote pays while there is no checkout) → fresh quote → atomic claim (one domain per site, one site per domain) → global cap of 3 per day → `domain/create` with the quoted cost and an `Idempotency-Key` (synchronous) → `updateContacts` with the owner as every role → auto-renew off → `registered`. The contact is kept only until the registrar has it.
+4. A failure after the charge leaves `contacts_pending`; the next `GET /me/domain` retries. A registration cut off mid-way (`registering` for over 2 minutes) is finished if Porkbun has the domain, else freed.
+
+**Later**
+5. Connect to the site (after publishing): CloudFront multi-tenant distribution (SaaS Manager): one multi-tenant distribution + connection group; per domain, a distribution tenant with a CloudFront-managed cert, origin path `/{slug}/`. Through Porkbun's DNS API: the cert's validation CNAME, `www` CNAME and an apex ALIAS → the tenant's endpoint.
+6. Checkout in local currency (cards/PIX/OXXO). **Payment provider is undecided**: Mercado Pago accounts are per country and each needs a local legal entity. Compare Stripe (OXXO and PIX from one account) and dLocal. Keep it behind `payments.ts`. Registering then opens to everyone and the switch goes.
+7. Renewal: daily EventBridge scan of `domains` expiring in 30/7/1 days → WhatsApp utility template or email → payment link → on payment, renew. Unpaid → expires; the tenant is deleted; the site stays on the free subdomain.
 
 **Rules**
-- .com only at first. LatAm ccTLDs (.com.br, .com.ar, .mx, .co, .cl) need local IDs/registries; later.
-- The customer is the registrant of record (ICANN transfer/ownership rights); we hold the AWS account. The terms page states this and the "bring your own domain" option (customer adds 2 DNS records shown on their site page).
-- Route 53 Domains is billed monthly to the AWS account, so the AWS Budget alarm covers it. Add a `domains` cost metric (count × $21) to the dashboard.
-- Amazon Registrar sends the registrant an ICANN verification email. The site page explains this so customers click it (unverified → domain suspended after 15 days).
+- The owner is the registrant of record (ownership and transfer rights); we hold the Porkbun account. The terms state this; "bring your own domain" (the owner adds 2 DNS records) comes with step 5.
+- One year, auto-renew off, WHOIS privacy on where the TLD allows it.
+- The registry sends the registrant a verification email; the tab explains it (unverified → domain suspended after 15 days).
+- `./coyote.sh domains` lists the registered domains; the Porkbun balance is the cost control while Coyote pays.
 
 ## Risks / open items
 - **`coyote` profile and Bedrock model access** not set up yet. They block phase 3 onward and the Bedrock part of phase 2. Phases 1, 2a, and the pure-function parts of 2/2b can proceed.

@@ -11,6 +11,7 @@ startChat($('[data-chat]'), {
   token,
   strings,
   scroll: 'page',
+  previewLink: () => `${strings.previewPath}${ownerHash()}`,
   onView(view) {
     if (view.businessName) $('[data-business]').textContent = view.businessName;
     // Drafts open only inside the app (cf-rewrite.js), so "Ver sitio" goes to the full-screen page.

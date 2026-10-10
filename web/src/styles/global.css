@@ -189,7 +189,7 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .toggle-label { font-weight: 600; }
 .toggle .hint { margin: 0; }
 .two { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
-.two[hidden] { display: none; }
+.two[hidden], .btn[hidden] { display: none; }
 .submit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem; border-top: 3px dashed var(--ink); padding-top: 1.5rem; }
 .submit-row p { font-size: .82rem; opacity: .75; flex: 1 1 14rem; }
 
@@ -202,6 +202,16 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 
 .panel { max-width: 44rem; margin-inline: auto; text-align: left; }
 .panel h2 { font-size: clamp(1.8rem, 5vw, 2.8rem); margin-bottom: 1.2rem; }
+.sent-art { display: block; width: min(15rem, 70%); height: auto; margin-bottom: 1.4rem; overflow: visible; }
+.sent-art[hidden] { display: none; }
+.sent-art .letter { transform-box: fill-box; transform-origin: center; animation: sent-fly .7s cubic-bezier(.2, .8, .3, 1.2) both, sent-bob 3s ease-in-out .7s infinite; }
+.sent-art .trail { animation: sent-trail .5s ease-out .2s both; }
+.sent-art .spark { transform-box: fill-box; transform-origin: center; animation: sent-spark .5s ease-out .6s both; }
+@keyframes sent-fly { from { transform: translate(-40px, 10px) rotate(-12deg); opacity: 0; } to { transform: rotate(-4deg); opacity: 1; } }
+@keyframes sent-bob { 0%, 100% { transform: rotate(-4deg); } 50% { transform: translateY(-5px) rotate(-2deg); } }
+@keyframes sent-trail { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+@keyframes sent-spark { from { opacity: 0; transform: scale(0) rotate(-90deg); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sent-art * { animation: none !important; } }
 /* The working bar: stripes that scroll on the element itself. One stripe cycle is 3rem along the -45° gradient,
    so 3rem × √2 across: moving the background by that much loops without a jump. */
 .paint { height: 1.4rem; border: 3px solid var(--ink); border-radius: 999px; overflow: hidden; margin-bottom: 1.6rem; background: repeating-linear-gradient(-45deg, var(--rojo) 0 1rem, var(--amarillo) 1rem 2rem, var(--azul) 2rem 3rem); animation: stripes .9s linear infinite; }
@@ -245,6 +255,10 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 /* ---- Mis sitios ---- */
 .mysites { padding-block: 1.5rem 4rem; }
 .mysites .ticket { max-width: 36rem; }
+.mysites .lead { font-size: 1.1rem; margin-bottom: 1rem; }
+.mysites .signin-steps { padding-left: 1.4rem; margin-bottom: 1.6rem; display: grid; gap: .45rem; }
+.mysites .signin-steps li { padding-left: .2rem; }
+.mysites .signin-steps li::marker { font-weight: 700; }
 .sites-head { display: flex; flex-wrap: wrap; gap: .6rem 1.5rem; align-items: baseline; justify-content: space-between; margin-bottom: 1.4rem; }
 .sites-head h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); }
 .sites-head p { margin: 0; overflow-wrap: anywhere; }
@@ -255,9 +269,9 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .site-card b { font-weight: 700; overflow-wrap: anywhere; }
 .site-card span { font-size: .85rem; opacity: .75; }
 .site-card[aria-current='true'] { background: var(--amarillo); }
-.site-detail .bar { display: flex; flex-wrap: wrap; gap: .8rem 1.2rem; align-items: center; justify-content: space-between; }
+.site-detail .bar { display: flex; flex-direction: column; gap: .8rem; }
 .site-detail .bar h2 { font-size: clamp(1.4rem, 4vw, 2rem); overflow-wrap: anywhere; }
-.site-detail .actions { margin-top: 0; }
+.site-detail .actions { margin-top: 0; align-self: flex-end; justify-content: flex-end; }
 .site-detail .handoff { margin-top: 1.2rem; }
 .site-detail .frame { border: 4px solid var(--ink); border-radius: .5rem; overflow: hidden; box-shadow: 8px 8px 0 var(--ink); background: #fff; margin-top: 1.2rem; }
 .site-detail iframe { display: block; width: 100%; height: min(70vh, 46rem); border: 0; }
@@ -278,6 +292,13 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .bubble .tag.undone { color: rgb(27 23 18 / .55); }
 .bubble .linkbtn { margin-left: .6rem; font-size: .9rem; }
 .bubble .btn { margin-top: .7rem; }
+/* A spent or blocked "Rediseñar": not available, rather than loading */
+.bubble .btn[disabled] { cursor: not-allowed; }
+.bubble .confirm { margin-top: .6rem; padding-top: .6rem; border-top: 2px dashed var(--ink); }
+.bubble .confirm p { font-weight: 600; }
+.bubble .confirm .btn { margin-top: .5rem; }
+.bubble time { display: block; margin-top: .35rem; font-size: .75rem; opacity: .65; }
+.bubble.owner time { text-align: right; }
 .examples { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
 .examples[hidden] { display: none; }
 .chip { font: inherit; font-size: .9rem; font-weight: 600; color: var(--ink); background: var(--paper); border: 2px dashed var(--ink); border-radius: 999px; padding: .5rem .9rem; min-height: 44px; cursor: pointer; text-align: left; }
@@ -295,6 +316,11 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 
 /* ---- Mi sitio ---- */
 .mysite { padding-block: 1.5rem 4rem; }
+.breadcrumb ol { list-style: none; padding: 0; margin: 0 0 .6rem; display: flex; flex-wrap: wrap; gap: .3rem .5rem; font-size: .95rem; }
+.breadcrumb li { overflow-wrap: anywhere; }
+.breadcrumb li + li::before { content: '›'; margin-right: .5rem; font-weight: 700; }
+.breadcrumb a { color: inherit; font-weight: 600; text-underline-offset: .2em; }
+.breadcrumb [aria-current] { opacity: .75; }
 .mysite header { display: flex; flex-wrap: wrap; gap: .8rem 1.5rem; align-items: center; justify-content: space-between; margin-bottom: 1.6rem; }
 .mysite header h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); }
 /* Tabs: Vista previa (full width) · Cambiar */
@@ -349,3 +375,31 @@ input[type='file']::file-selector-button { font: 400 .8rem/1 var(--display); bac
 .not-found { padding-block: 3rem 4rem; max-width: 40rem; }
 .not-found h1 { font-size: clamp(2rem, 6vw, 3rem); margin-bottom: 1rem; }
 .not-found .hint { margin-top: 2rem; }
+/* Mi sitio → Dominio */
+/* Hidden until the whole domain flow is finished, unless PUBLIC_DOMAIN_TAB=on (MySite.astro). */
+.mysite:not([data-domain-tab]) #tab-domain,
+.mysite:not([data-domain-tab]) #panel-domain {
+  display: none !important;
+}
+.domain:not([hidden]) { display: grid; gap: 1.2rem; }
+.domain [data-domain-view] { display: none; }
+.domain[data-domain='owned'] [data-domain-view='owned'], .domain[data-domain='search'] [data-domain-view='search'], .domain[data-domain='contact'] [data-domain-view='contact'] { display: block; }
+.domain[data-domain='loading']::before { content: ''; display: block; height: 6rem; }
+.domain h2 { font-size: clamp(1.5rem, 4vw, 2.2rem); margin: 1rem 0 .6rem; }
+.domain-owned h2 { overflow-wrap: anywhere; }
+.domain-row { display: flex; gap: .7rem; flex-wrap: wrap; }
+.domain-row input { flex: 1 1 14rem; }
+.domain-results { list-style: none; padding: 0; margin: 1rem 0 0; display: grid; gap: .6rem; max-width: 44rem; }
+.domain-results li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; border: 3px solid var(--ink); border-radius: .4rem; padding: .8rem 1rem; background: #fffaf0; }
+.domain-results strong { font-size: 1.1rem; overflow-wrap: anywhere; }
+.domain-results .state { font-weight: 600; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; }
+.domain-results li[data-status='available'] .state { color: var(--azul); }
+.domain-results li[data-status='taken'] { opacity: .65; }
+.domain-results .price { font-size: .9rem; flex: 1 1 12rem; }
+.domain-results .btn { margin-left: auto; }
+.domain-results .btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+.domain-fields { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.domain-contact [aria-invalid='true'] { border-color: var(--rojo); outline: 2px solid var(--rojo); }
+.domain-contact .agree { display: flex; gap: .6rem; align-items: flex-start; margin: 1rem 0 .4rem; font-weight: 600; }
+.domain-contact .agree input { width: 1.3rem; height: 1.3rem; margin-top: .15rem; flex: none; }
+.domain-actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-top: .6rem; }

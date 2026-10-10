@@ -68,6 +68,7 @@ export class CoyoteStack extends Stack {
   readonly blocklistTable: dynamodb.TableV2;
   readonly chatTable: dynamodb.TableV2;
   readonly accountsTable: dynamodb.TableV2;
+  readonly domainsTable: dynamodb.TableV2;
   readonly api: apigwv2.HttpApi;
   readonly guardrail: CoyoteGuardrail;
   readonly abuseReports: sns.Topic;
@@ -147,6 +148,8 @@ export class CoyoteStack extends Stack {
     this.sitesTable = table('SitesTable', 'slug', false);
     this.rateLimitTable = table('RateLimitTable', 'ip', true);
     this.blocklistTable = table('BlocklistTable', 'slug', false);
+    // Owners' own domains (domains.ts). Kept when a site is deleted: the domain stays registered.
+    this.domainsTable = table('DomainsTable', 'domain', false);
     // The chat of each site (chat.ts): one row per message, ordered by `at` (ms). Rows expire after 90 days.
     this.chatTable = new dynamodb.TableV2(this, 'ChatTable', {
       partitionKey: { name: 'slug', type: dynamodb.AttributeType.STRING },
@@ -310,8 +313,8 @@ export class CoyoteStack extends Stack {
       httpApi: this.api,
       stageName: '$default',
       autoDeploy: true,
-      // Global flood protection. The per-IP daily quota lives in the submit Lambda.
-      throttle: { rateLimit: 5, burstLimit: 10 },
+      // Shared by everyone. Per visitor: a per-minute limit in every API Lambda (perIpLimit) and the daily quotas.
+      throttle: { rateLimit: 50, burstLimit: 100 },
       domainMapping: domain ? { domainName: domain.apiDomain } : undefined,
     });
     const apiUrl = domain ? domain.urls.apiUrl : this.api.apiEndpoint;
@@ -383,6 +386,7 @@ export class CoyoteStack extends Stack {
       blocklistTable: this.blocklistTable,
       chatTable: this.chatTable,
       accountsTable: this.accountsTable,
+      domainsTable: this.domainsTable,
       mailIdentity,
       sitesBucket: this.sitesBucket,
       pageSkillsBucket,
@@ -396,9 +400,29 @@ export class CoyoteStack extends Stack {
       urlEnv: this.urlEnv,
     });
 
-    // The chat and the result page poll GET /me/chat every few seconds; a few of them would use up the stage limit.
-    (apiStage.node.defaultChild as apigwv2.CfnStage).addPropertyOverride('RouteSettings', { 'GET /me/chat': { ThrottlingRateLimit: 25, ThrottlingBurstLimit: 50 } });
-    apiStage.node.addDependency(generatorApi.chatPollRoute); // the route must exist before its settings
+    // Routes that do costly work (model calls, emails, uploads) get their own, lower limit, so a flood on one of them
+    // leaves the rest of the API to everyone else. The chat polls every few seconds.
+    const routeThrottles: Record<string, [rate: number, burst: number]> = {
+      'POST /generate': [5, 10],
+      'POST /jobs/{id}/answers': [5, 10],
+      'POST /uploads': [5, 10],
+      'POST /report/{slug}': [2, 5],
+      'POST /account/login': [2, 5],
+      'POST /me/chat': [5, 10],
+      'POST /me/edit': [5, 10],
+      'GET /me/chat': [25, 50],
+      'GET /me/domain/check': [2, 5], // each check asks the registry about every TLD; the registrar allows 10 per 10 s
+      'POST /me/domain': [1, 2],
+    };
+    (apiStage.node.defaultChild as apigwv2.CfnStage).addPropertyOverride(
+      'RouteSettings',
+      Object.fromEntries(Object.entries(routeThrottles).map(([key, [rate, burst]]) => [key, { ThrottlingRateLimit: rate, ThrottlingBurstLimit: burst }])),
+    );
+    for (const key of Object.keys(routeThrottles)) {
+      const route = generatorApi.routes.get(key);
+      if (!route) throw new Error(`No API route ${key}`);
+      apiStage.node.addDependency(route); // the route must exist before its settings
+    }
 
     new Monitoring(this, 'Monitoring', {
       api: this.api,
@@ -420,6 +444,7 @@ export class CoyoteStack extends Stack {
     new CfnOutput(this, 'BlocklistTableName', { value: this.blocklistTable.tableName });
     new CfnOutput(this, 'ChatTableName', { value: this.chatTable.tableName });
     new CfnOutput(this, 'AccountsTableName', { value: this.accountsTable.tableName });
+    new CfnOutput(this, 'DomainsTableName', { value: this.domainsTable.tableName });
     new CfnOutput(this, 'GuardrailId', { value: this.guardrail.guardrailId });
     new CfnOutput(this, 'GuardrailVersion', { value: this.guardrail.version });
   }

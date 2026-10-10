@@ -10,7 +10,9 @@ Ao criar um site com ventas314.com você aceita estas regras.
 
 ## O que oferecemos
 
-Um site de uma página para o seu negócio, gerado a partir das suas respostas e hospedado por nós. O serviço é oferecido como está, sem garantia de disponibilidade. Os textos são gerados por inteligência artificial: revise o site antes de publicar e corrija o que for preciso em Meu site.
+Um site de uma página para o seu negócio, gerado a partir das suas respostas e hospedado por nós. O serviço é oferecido como está, sem garantia de disponibilidade. Os textos são gerados por inteligência artificial: revise seu site antes de publicar e corrija o que for preciso em Meu site.
+
+Em Meu site você também pode registrar um domínio próprio. Ele é registrado no seu nome, por um ano e sem renovação automática: você é o titular. Ao registrá-lo você aceita as regras da registradora (Porkbun) e do registro do domínio. Você precisa confirmar o e-mail enviado pelo registro; se não confirmar em 15 dias, o domínio é suspenso.
 
 ## O que não é permitido
 
@@ -20,7 +22,7 @@ Podemos recusar um pedido ou retirar um site sem aviso prévio se ele descumprir
 
 ## Seu conteúdo
 
-Você é responsável por a informação do site ser verdadeira e por ter o direito de usá-la. O site é seu: você pode editar, tirar do ar ou apagar quando quiser em Meu site.
+Você é responsável por a informação do seu site ser verdadeira e por ter o direito de usá-la. O site é seu: você pode editar, tirar do ar ou apagar quando quiser em Meu site.
 
 ## Seu link de acesso
 

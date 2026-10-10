@@ -9,7 +9,7 @@ const { lang } = Astro.props;
 const s = t(lang);
 const m = s.mySites;
 const other = t(s.otherLang.code);
-const clientStrings = { ...m, lang, chatPath: s.paths.chat, mySitePath: s.paths.mySite, previewPath: s.paths.preview };
+const clientStrings = { ...m, lang, mySitePath: s.paths.mySite, previewPath: s.paths.preview };
 ---
 
 <Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySites} withConfig noindex>
@@ -20,11 +20,15 @@ const clientStrings = { ...m, lang, chatPath: s.paths.chat, mySitePath: s.paths.
       <form class="ticket" data-signin novalidate>
         <header>
           <h1>{m.heading}</h1>
-          <p>{m.signIn.intro}</p>
         </header>
+        <p class="lead">{m.signIn.intro}</p>
+        <ol class="signin-steps">
+          {m.signIn.steps.map((step) => <li>{step}</li>)}
+        </ol>
         <fieldset>
           <label class="q" for="email">{m.signIn.label}</label>
-          <input type="email" id="email" name="email" maxlength="120" autocomplete="email" autocapitalize="none" inputmode="email" required />
+          <p class="hint" id="email-hint">{m.signIn.hint}</p>
+          <input type="email" id="email" name="email" maxlength="120" autocomplete="email" autocapitalize="none" inputmode="email" aria-describedby="email-hint" required />
           <p class="error" data-error role="alert"></p>
         </fieldset>
         <div class="submit-row"><button class="btn" type="submit">{m.signIn.submit}</button></div>
@@ -32,9 +36,25 @@ const clientStrings = { ...m, lang, chatPath: s.paths.chat, mySitePath: s.paths.
     </section>
 
     <section data-view="message" class="panel" aria-live="assertive">
+      <svg class="sent-art" data-sent-art hidden viewBox="0 0 240 150" width="240" height="150" aria-hidden="true">
+        <g class="trail" stroke="var(--ink)" stroke-width="5" stroke-linecap="round">
+          <path d="M8 62h34M20 82h26M4 102h40" />
+        </g>
+        <g class="letter">
+          <rect x="68" y="28" width="150" height="100" rx="8" fill="var(--ink)" transform="translate(7 7)" />
+          <rect x="68" y="28" width="150" height="100" rx="8" fill="#fffaf0" stroke="var(--ink)" stroke-width="5" />
+          <path d="M70 124l52-44M216 124l-52-44" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linejoin="round" />
+          <path d="M70 31l73 58 73-58z" fill="var(--rojo)" stroke="var(--ink)" stroke-width="5" stroke-linejoin="round" />
+          <circle cx="143" cy="80" r="13" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="5" />
+        </g>
+        <path class="spark" d="M222 8l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="3.5" stroke-linejoin="round" />
+      </svg>
       <h2 data-message-title></h2>
       <p data-message-text></p>
-      <div class="actions"><button class="btn ghost" type="button" data-another>{m.another}</button></div>
+      <div class="actions">
+        <button class="btn ghost" type="button" data-another>{m.another}</button>
+        <a class="btn ghost" href={s.paths.home} data-home hidden>{m.home}</a>
+      </div>
     </section>
 
     <section data-view="editor">
@@ -51,14 +71,6 @@ const clientStrings = { ...m, lang, chatPath: s.paths.chat, mySitePath: s.paths.
             <div class="actions">
               <a class="btn small ghost" data-open target="_blank" rel="noopener">{m.open}</a>
               <a class="btn small" data-mysite>{m.mySite}</a>
-            </div>
-          </div>
-          <div class="handoff">
-            <div class="qr" data-qr></div>
-            <div>
-              <h3>{m.qr.title}</h3>
-              <p>{m.qr.text}</p>
-              <a class="linkbtn" data-chat-open target="_blank" rel="noopener">{m.qr.open}</a>
             </div>
           </div>
           <p class="notice updated" data-updated role="status" aria-live="polite"></p>

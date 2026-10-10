@@ -3,7 +3,7 @@ import type { Lang } from './answers';
 /** The platform footer page-check.ts adds to every page. */
 const STRINGS = {
   es: {
-    madeWith: 'Sitio creado con ventas314.com',
+    madeWith: 'Página web creada con ventas314.com',
     report: 'Reportar',
     privacy: 'Privacidad',
   },

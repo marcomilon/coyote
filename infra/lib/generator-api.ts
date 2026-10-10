@@ -34,6 +34,10 @@ export const PAGE_SKILL_PARAMETER = '/coyote/page-skill';
 export const PAGE_LOOK_PARAMETER = '/coyote/page-look';
 /** Whether the page writer may make photos (for owners who left "Fotos creadas con IA" on): on or off. Set by `./coyote.sh page-images`; survives deploys. */
 export const PAGE_IMAGES_PARAMETER = '/coyote/page-images';
+/** The registrar's API key (`{apikey, secretapikey}`, aws/porkbun.ts), created by hand (👤). */
+export const PORKBUN_SECRET_NAME = 'coyote/porkbun-api';
+/** Whether owners may register a domain (Coyote pays for now): on or off. Set by `./coyote.sh domain-register`; survives deploys. */
+export const DOMAIN_REGISTER_PARAMETER = '/coyote/domain-register';
 import { DEFAULT_PAGE_SKILL } from '../../services/generator/src/core/frontend-design';
 import { DEFAULT_IMAGE_MODEL_ID, IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
 import type { CoyoteGuardrail } from './guardrail';
@@ -46,6 +50,7 @@ export interface GeneratorApiProps {
   blocklistTable: dynamodb.ITableV2;
   chatTable: dynamodb.ITableV2;
   accountsTable: dynamodb.ITableV2;
+  domainsTable: dynamodb.ITableV2;
   /** Where our emails come from. Unset = no email. */
   mailIdentity?: ses.IEmailIdentity;
   sitesBucket: s3.IBucket;
@@ -71,8 +76,8 @@ const handlers = `${root}services/generator/src/handlers`;
 /** The Lambdas behind the HTTP API: submit → (async) generate → status (→ answers → generate) → owner. */
 export class GeneratorApi extends Construct {
   readonly generate: lambda.IFunction;
-  /** GET /me/chat, which the stage gives its own throttle (the stage must wait for it). */
-  readonly chatPollRoute: apigwv2.HttpRoute;
+  /** Every route by its key ("POST /generate"): the stage gives some their own throttle and must wait for them. */
+  readonly routes = new Map<string, apigwv2.HttpRoute>();
 
   constructor(scope: Construct, id: string, props: GeneratorApiProps) {
     super(scope, id);
@@ -85,6 +90,7 @@ export class GeneratorApi extends Construct {
       BLOCKLIST_TABLE: props.blocklistTable.tableName,
       CHAT_TABLE: props.chatTable.tableName,
       ACCOUNTS_TABLE: props.accountsTable.tableName,
+      DOMAINS_TABLE: props.domainsTable.tableName,
       SITES_BUCKET: props.sitesBucket.bucketName,
       BEDROCK_MODEL_ID: props.modelId,
       PRESCREEN_MODEL_ID: props.prescreenModelId,
@@ -156,7 +162,7 @@ export class GeneratorApi extends Construct {
       environment: { ...environment, GENERATE_FUNCTION_NAME: generate.functionName, RATE_LIMIT_PER_DAY: String(props.rateLimitPerDay), IP_HASH_SALT: ipSalt, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
     });
     // Takes the magic link off a finished job, so it needs write access to jobs.
-    const status = fn('Status', 'status', { memorySize: 256 });
+    const status = fn('Status', 'status', { memorySize: 256, environment: { ...environment, IP_HASH_SALT: ipSalt } });
     const withInvalidation = { ...environment, SITES_DISTRIBUTION_ID: props.sitesDistribution.distributionId };
     // The chat's replies (chat.ts): Haiku changes the page's text, a new draft. Started by the owner Lambda.
     const chat = fn('Chat', 'chat', {
@@ -165,14 +171,14 @@ export class GeneratorApi extends Construct {
       retryAttempts: 0, // a retry would pay for the model calls twice; a stuck reply reads as failed
     });
     // Mi sitio and the chat: the draft, contact edits, free-text edits (started here, run by generate), undo, delete, chat messages.
-    const owner = fn('Owner', 'owner', { environment: { ...withInvalidation, GENERATE_FUNCTION_NAME: generate.functionName, CHAT_FUNCTION_NAME: chat.functionName } });
+    const owner = fn('Owner', 'owner', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, GENERATE_FUNCTION_NAME: generate.functionName, CHAT_FUNCTION_NAME: chat.functionName } });
 
     // Data access, least privilege per function.
     props.rateLimitTable.grantReadWriteData(submit);
     props.blocklistTable.grantReadData(submit);
     for (const f of [submit, generate, jobFailed, owner, status]) props.jobsTable.grantReadWriteData(f);
     for (const f of [submit, generate, jobFailed, owner, chat]) props.sitesTable.grantReadWriteData(f);
-    for (const f of [owner, chat]) props.chatTable.grantReadWriteData(f);
+    for (const f of [owner, chat, generate, jobFailed]) props.chatTable.grantReadWriteData(f);
     // "Mis sitios": sessions reach sites through the owner Lambda; generate links new sites and sends the ready email.
     const account = fn('Account', 'account', { memorySize: 256, environment: { ...environment, IP_HASH_SALT: ipSalt } });
     for (const f of [account, owner, generate]) props.accountsTable.grantReadWriteData(f);
@@ -203,6 +209,24 @@ export class GeneratorApi extends Construct {
     props.sitesBucket.grantRead(generate, '_uploads/*');
     generate.addToRolePolicy(new iam.PolicyStatement({ actions: ['rekognition:DetectModerationLabels'], resources: ['*'] }));
 
+    // Mi sitio → Dominio (domains.ts): search and register the owner's own domain through the registrar's API.
+    const domainRegister = new ssm.StringParameter(this, 'DomainRegister', {
+      parameterName: DOMAIN_REGISTER_PARAMETER,
+      stringValue: 'off',
+      description: 'Owners may register a domain (Coyote pays): on or off. Set with ./coyote.sh domain-register',
+    });
+    const domains = fn('Domains', 'domains', {
+      memorySize: 256,
+      timeout: Duration.minutes(1), // a registration is several registrar calls
+      environment: { ...environment, IP_HASH_SALT: ipSalt, PORKBUN_SECRET_NAME, DOMAIN_REGISTER_PARAMETER },
+    });
+    domainRegister.grantRead(domains);
+    secretsmanager.Secret.fromSecretNameV2(this, 'PorkbunKey', PORKBUN_SECRET_NAME).grantRead(domains);
+    props.domainsTable.grantReadWriteData(domains);
+    props.sitesTable.grantReadWriteData(domains);
+    props.accountsTable.grantReadData(domains); // checkSession, and the email that prefills the form
+    props.rateLimitTable.grantReadWriteData(domains);
+
     const report = fn('Report', 'report', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, ABUSE_TOPIC_ARN: props.abuseReports.topicArn } });
     props.rateLimitTable.grantReadWriteData(report);
     props.sitesTable.grantReadWriteData(report);
@@ -212,7 +236,8 @@ export class GeneratorApi extends Construct {
     props.siteNotices.grantPublish(generate);
     props.siteNotices.grantPublish(submit);
     for (const f of [owner, report]) props.sitesDistribution.grantCreateInvalidation(f);
-    props.rateLimitTable.grantReadWriteData(owner);
+    // Every API Lambda counts requests per IP per minute (perIpLimit in handlers/http.ts).
+    for (const f of [owner, status]) props.rateLimitTable.grantReadWriteData(f);
 
     // Bedrock: text model calls are only allowed with our guardrail attached.
     const modelResources = (modelId: string) => [
@@ -243,8 +268,10 @@ export class GeneratorApi extends Construct {
     secretsmanager.Secret.fromSecretNameV2(this, 'AnthropicKey', ANTHROPIC_SECRET_NAME).grantRead(generate);
     owner.addToRolePolicy(applyGuardrail); // an edited address is checked by the guardrail; the owner Lambda never calls a model
 
-    const route = (path: string, method: apigwv2.HttpMethod, handler: lambda.IFunction) =>
-      props.api.addRoutes({ path, methods: [method], integration: new HttpLambdaIntegration(`${handler.node.id}Integration`, handler) });
+    const route = (path: string, method: apigwv2.HttpMethod, handler: lambda.IFunction) => {
+      const [added] = props.api.addRoutes({ path, methods: [method], integration: new HttpLambdaIntegration(`${handler.node.id}Integration`, handler) });
+      this.routes.set(`${method} ${path}`, added!);
+    };
     route('/generate', apigwv2.HttpMethod.POST, submit);
     route('/jobs/{id}', apigwv2.HttpMethod.GET, status);
     route('/jobs/{id}/answers', apigwv2.HttpMethod.POST, submit);
@@ -253,8 +280,11 @@ export class GeneratorApi extends Construct {
     route('/me', apigwv2.HttpMethod.GET, owner);
     route('/me', apigwv2.HttpMethod.DELETE, owner);
     for (const action of ['edit', 'undo', 'chat']) route(`/me/${action}`, apigwv2.HttpMethod.POST, owner);
-    this.chatPollRoute = route('/me/chat', apigwv2.HttpMethod.GET, owner)[0]!;
+    route('/me/chat', apigwv2.HttpMethod.GET, owner);
     for (const action of ['login', 'session']) route(`/account/${action}`, apigwv2.HttpMethod.POST, account);
     route('/account', apigwv2.HttpMethod.GET, account);
+    route('/me/domain', apigwv2.HttpMethod.GET, domains);
+    route('/me/domain', apigwv2.HttpMethod.POST, domains);
+    route('/me/domain/check', apigwv2.HttpMethod.GET, domains);
   }
 }

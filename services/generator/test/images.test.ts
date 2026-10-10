@@ -39,22 +39,22 @@ describe('make_image', () => {
   it('saves a screened photo next to the page and reports its file', async () => {
     const { d, saved, prompts } = deps();
     const made: string[] = [];
-    const result = await imageMaker('_media/luna/', d, made)({ description: 'Warm bread on a wooden table', aspect: '4:3' });
+    const result = await imageMaker('_media/luna/', d, made)({ description: 'Warm bread on a wooden table', aspect: '3:2' });
     expect(result).toMatchObject({ file: expect.stringMatching(/^assets\/gen-[0-9a-f]{8}\.jpg$/) });
     expect(made).toEqual(['file' in result && result.file]);
     expect([...saved.keys()]).toEqual([`_media/luna/${made[0]}`]);
-    expect(prompts).toEqual([['Warm bread on a wooden table', IMAGE_NEGATIVE, '4:3']]);
+    expect(prompts).toEqual([['Warm bread on a wooden table', IMAGE_NEGATIVE, '3:2']]);
   });
 
   it('refuses a scene the guardrail blocks, one the model filters, and a photo that fails moderation', async () => {
     const blocked = deps({ outputAllowed: async () => false });
-    expect(await imageMaker('p/', blocked.d)({ description: 'x', aspect: '1:1' })).toEqual({ error: 'the scene was refused' });
+    expect(await imageMaker('p/', blocked.d)({ description: 'x', aspect: '1:1' })).toEqual({ error: 'the scene was refused', left: MAX_IMAGES - 1 });
     expect(blocked.prompts).toEqual([]);
     const filtered = deps({ generateImage: async () => undefined });
     expect(await imageMaker('p/', filtered.d)({ description: 'x', aspect: '1:1' })).toHaveProperty('error');
     const flagged = deps({ moderate: async () => ['Violence'] });
     const made: string[] = [];
-    expect(await imageMaker('p/', flagged.d, made)({ description: 'x', aspect: '1:1' })).toEqual({ error: 'the photo did not pass moderation' });
+    expect(await imageMaker('p/', flagged.d, made)({ description: 'x', aspect: '1:1' })).toEqual({ error: 'the photo did not pass moderation', left: MAX_IMAGES - 1 });
     expect(flagged.deleted).toHaveLength(1);
     expect(made).toEqual([]);
   });
@@ -65,6 +65,16 @@ describe('make_image', () => {
     const results = await Promise.all(Array.from({ length: MAX_IMAGES + 2 }, () => make({ description: 'x', aspect: '16:9' })));
     expect(results.filter((r) => 'file' in r)).toHaveLength(MAX_IMAGES);
     expect(prompts).toHaveLength(MAX_IMAGES);
+    expect(results.map((r) => r.left)).toEqual([...Array.from({ length: MAX_IMAGES }, (_, i) => MAX_IMAGES - 1 - i), 0, 0]);
+  });
+
+  it('does not count a failed image model call against the limit', async () => {
+    let fail = true;
+    const { d } = deps({ generateImage: async () => (fail ? Promise.reject(new Error('ValidationException')) : new Uint8Array([1])) });
+    const make = imageMaker('p/', d);
+    await expect(make({ description: 'x', aspect: '16:9' })).rejects.toThrow('ValidationException');
+    fail = false;
+    expect(await make({ description: 'x', aspect: '16:9' })).toMatchObject({ left: MAX_IMAGES - 1 });
   });
 });
 
@@ -74,10 +84,11 @@ describe('the page writer with make_image', () => {
   it('offers the tool and says so only when it may make photos', () => {
     expect(pageParams(request, 'claude-opus-5-5', 'high', null, true)).toMatchObject({ tools: [MAKE_IMAGE_TOOL] });
     expect(pageParams(request, 'claude-opus-5-5', 'high', null)).not.toHaveProperty('tools');
-    expect(pagePrompt(request, null, true)).toContain('make photos with the make_image tool (describe each scene in English), or draw them as SVG');
+    expect(pagePrompt(request, null, true)).toContain('make photos with the make_image tool (describe each scene in English) instead of drawing them as SVG');
     expect(pagePrompt(request, null)).not.toContain('make_image');
+    expect(pagePrompt(request, null)).toContain('draw them as SVG');
     const photos = [{ file: 'assets/photo-1.jpg', label: '', bytes: new Uint8Array(), mediaType: 'image/jpeg' as const }];
-    expect(pagePrompt({ ...request, photos }, null, true)).toContain('Where the page needs more images, you can make photos with the make_image tool');
+    expect(pagePrompt({ ...request, photos }, null, true)).toContain('Where the page needs more images, make photos with the make_image tool');
   });
 
   it('runs the tool calls, sends back the photos, and returns the page with the usage of every round', async () => {
@@ -87,7 +98,7 @@ describe('the page writer with make_image', () => {
         stop_reason: 'tool_use',
         usage: { input_tokens: 10, output_tokens: 5 } as Anthropic.Usage,
         content: [
-          { type: 'tool_use', id: 't1', name: 'make_image', input: { description: 'Bread', aspect: '4:3' } },
+          { type: 'tool_use', id: 't1', name: 'make_image', input: { description: 'Bread', aspect: '3:2' } },
           { type: 'tool_use', id: 't2', name: 'make_image', input: { description: 'A sign with the name', aspect: 'square' } },
         ] as Anthropic.ContentBlock[],
       },
@@ -101,10 +112,33 @@ describe('the page writer with make_image', () => {
     const reply = await anthropicWritePage({ ANTHROPIC_API_KEY: 'k' }, api)(request, { effort: 'high', model: 'claude-opus-5-5', makeImage });
     expect(reply.text).toContain('gen-1.jpg');
     expect(reply.usage).toMatchObject({ inputTokens: 30, outputTokens: 12 });
-    expect(asked).toEqual([{ description: 'Bread', aspect: '4:3' }, { description: 'A sign with the name', aspect: '16:9' }]);
+    expect(asked).toEqual([{ description: 'Bread', aspect: '3:2' }, { description: 'A sign with the name', aspect: '16:9' }]);
     const results = sent[1]!.messages.at(-1)!.content as Anthropic.ToolResultBlockParam[];
-    expect(results[0]).toMatchObject({ tool_use_id: 't1', content: [{ type: 'image' }, { type: 'text', text: 'Saved as assets/gen-1.jpg' }] });
-    expect(results[1]).toMatchObject({ tool_use_id: 't2', is_error: true, content: expect.stringContaining('Draw this image as SVG instead') });
+    expect(results[0]).toMatchObject({ tool_use_id: 't1', content: [{ type: 'image' }, { type: 'text', text: 'Saved as assets/gen-1.jpg.' }] });
+    expect(results[1]).toMatchObject({ tool_use_id: 't2', is_error: true, content: expect.stringContaining('Leave this image out') });
+  });
+
+  it('says how many photos are left, and to write the page once they are used up', async () => {
+    const page = '```html\n<!doctype html><html><body><img src="assets/gen-1.jpg"></body></html>\n```';
+    const call = (id: string) => ({ type: 'tool_use', id, name: 'make_image', input: { description: 'Bread', aspect: '3:2' } });
+    const replies: Partial<Anthropic.Message>[] = [
+      { stop_reason: 'tool_use', usage: { input_tokens: 1, output_tokens: 1 } as Anthropic.Usage, content: [call('t1')] as Anthropic.ContentBlock[] },
+      { stop_reason: 'tool_use', usage: { input_tokens: 1, output_tokens: 1 } as Anthropic.Usage, content: [call('t2')] as Anthropic.ContentBlock[] },
+      { stop_reason: 'end_turn', usage: { input_tokens: 1, output_tokens: 1 } as Anthropic.Usage, content: [{ type: 'text', text: page }] as Anthropic.ContentBlock[] },
+    ];
+    const sent: Anthropic.MessageStreamParams[] = [];
+    const api = { messages: { stream: (params: Anthropic.MessageStreamParams) => (sent.push(structuredClone(params)), { finalMessage: async () => replies.shift() }) } } as unknown as Pick<Anthropic, 'messages'>;
+    let left = 2;
+    const makeImage: MakeImage = async () => ({ file: 'assets/gen-1.jpg', bytes: new Uint8Array([9]), left: --left });
+
+    await anthropicWritePage({ ANTHROPIC_API_KEY: 'k' }, api)(request, { effort: 'high', model: 'claude-opus-5-5', makeImage });
+    const text = (params: Anthropic.MessageStreamParams) => ((params.messages.at(-1)!.content as Anthropic.ToolResultBlockParam[])[0]!.content as Anthropic.TextBlockParam[])[1]!.text;
+    expect(text(sent[1]!)).toBe('Saved as assets/gen-1.jpg. 1 photo left.');
+    expect(sent[1]).not.toHaveProperty('tool_choice');
+    expect(text(sent[2]!)).toBe('Saved as assets/gen-1.jpg. That was the last photo.');
+    expect(sent[2]).not.toHaveProperty('tool_choice');
+    expect(sent[2]!.messages.at(-1)!.content).toContainEqual({ type: 'text', text: 'No photos are left. Write the page now.' });
+    expect(sent[1]!.messages.at(-1)!.content).toHaveLength(1);
   });
 });
 

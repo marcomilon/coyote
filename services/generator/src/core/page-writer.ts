@@ -162,7 +162,7 @@ export function siteLanguage(answers: Answers): string {
   const country = countryOf(answers.contact.whatsapp);
   if (answers.lang === 'pt' || !country || country.iso === 'BR') return 'Brazilian Portuguese';
   if (country.dial === '1') return 'Latin American Spanish';
-  return `Spanish, written the way people in ${new Intl.DisplayNames(['en'], { type: 'region' }).of(country.iso)} talk`;
+  return `Spanish as it is written in ${new Intl.DisplayNames(['en'], { type: 'region' }).of(country.iso)}, without slang`;
 }
 
 function contactLines(contact: Contact): string {

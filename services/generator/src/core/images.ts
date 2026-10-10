@@ -23,23 +23,27 @@ export interface ImageDeps {
 /**
  * The make_image tool for one page: the scene passes the guardrail, the photo is made, saved as
  * `<prefix>assets/gen-<id>.jpg`, and passes image moderation. `made` collects the files (for Media.generated).
+ * Every result says how many photos are left: a refused scene uses one up too, a failed image model call doesn't.
  */
 export function imageMaker(prefix: string, deps: ImageDeps, made: string[] = []): MakeImage {
   let started = 0;
   return async ({ description, aspect }) => {
-    if (started >= MAX_IMAGES) return { error: `the limit of ${MAX_IMAGES} photos per page is reached` };
-    started++;
-    if (!(await deps.outputAllowed(description))) return { error: 'the scene was refused' };
-    const bytes = await deps.generateImage(description, IMAGE_NEGATIVE, aspect);
-    if (!bytes) return { error: 'the image model refused the scene' };
+    if (started >= MAX_IMAGES) return { error: `the limit of ${MAX_IMAGES} photos per page is reached`, left: 0 };
+    const left = MAX_IMAGES - ++started;
+    if (!(await deps.outputAllowed(description))) return { error: 'the scene was refused', left };
+    const bytes = await deps.generateImage(description, IMAGE_NEGATIVE, aspect).catch((error: unknown) => {
+      started--; // our bug or an outage, not the scene: give the photo back
+      throw error;
+    });
+    if (!bytes) return { error: 'the image model refused the scene', left };
     const file = `assets/gen-${randomUUID().slice(0, 8)}.jpg`;
     const key = `${prefix}${file}`;
     await deps.stores.putAsset(key, bytes, 'image/jpeg');
     if ((await deps.moderate(key)).length > 0) {
       await deps.stores.deletePrefix(key);
-      return { error: 'the photo did not pass moderation' };
+      return { error: 'the photo did not pass moderation', left };
     }
     made.push(file);
-    return { file, bytes };
+    return { file, bytes, left };
   };
 }

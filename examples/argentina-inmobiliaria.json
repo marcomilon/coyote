@@ -1,0 +1,14 @@
+{
+  "form": {
+    "businessName": "Inmobiliaria Altos del Norte",
+    "about": "Desde hace 30 años que nos mantenemos jóvenes como el primer día, destacándonos en la comercialización de propiedades en countries de Zona Norte con un trato exclusivo y personalizado.\nEstos años nos dan la experiencia para reconocer el valor de cada propiedad y de cada cliente, logrando encontrar soluciones específicas para cada caso.\n\nServicios:\n* Venta\n* Alquiler\n* Tasación de propiedades",
+    "whatsapp": "+54 9 351 555 0142",
+    "email": "altosdelnorte.propiedades@example.com",
+    "address": "Av. Colón 1200, Córdoba",
+    "instagram": "altosdelnorte.prop",
+    "facebook": "altosdelnorte.prop",
+    "lang": "es"
+  },
+  "details": "Vendemos y alquilamos casas, departamentos, lotes y terrenos, en countries y barrios de Zona Norte. Lo que nos diferencia: compromiso, integridad y profesionalismo.",
+  "goal": "info"
+}

@@ -23,6 +23,11 @@ const clientStrings = { ...m, lang, mySitePath: s.paths.mySite, previewPath: s.p
     <section data-view="loading" class="loader" role="status" aria-label={s.loading}><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></section>
 
     <section data-view="form">
+      {/* The sign-in link was used or expired: say so above the form that sends a new one. */}
+      <div class="panel expired" data-expired hidden role="alert">
+        <h2>{m.badLink.title}</h2>
+        <p>{m.badLink.text}</p>
+      </div>
       <form class="ticket" data-signin novalidate>
         <header>
           <h1>{m.signIn.title}</h1>

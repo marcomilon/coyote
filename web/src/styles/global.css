@@ -363,6 +363,7 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 /* ---- Mis sitios ---- */
 .mysites { padding-block: 1.5rem 4rem; }
 .mysites .ticket { max-width: 36rem; }
+.mysites .expired { max-width: 36rem; margin-bottom: 2rem; }
 .mysites .lead { font-size: 1.1rem; margin-bottom: 1rem; }
 .mysites .signin-steps { padding-left: 1.4rem; margin-bottom: 1.6rem; display: grid; gap: .45rem; }
 .mysites .signin-steps li { padding-left: .2rem; }

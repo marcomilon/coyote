@@ -20,7 +20,6 @@ interface Strings {
   mySitePath: string;
   previewPath: string;
   sent: Note;
-  badLink: Note;
   unavailable: string;
   error: string;
   invalid: string;
@@ -97,7 +96,10 @@ async function load() {
     history.replaceState(null, '', location.pathname + location.search);
     try {
       const { status, body } = await apiCall<Session>('/account/session', json({ login }));
-      if (status !== 200) return showNote(strings.badLink);
+      if (status !== 200) {
+        $<HTMLElement>('[data-expired]').hidden = false;
+        return show('form');
+      }
       saveSession(body);
     } catch {
       return showNote({ title: strings.error, text: '' });

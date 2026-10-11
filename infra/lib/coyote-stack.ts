@@ -23,6 +23,8 @@ import type { Construct } from 'constructs';
 import { DEFAULT_MODEL_ID, DEFAULT_PRESCREEN_MODEL_ID } from '../../services/generator/src/core/models';
 import { createUrls } from '../../services/generator/src/core/urls';
 import { DEFAULT_PAGE_SKILL } from '../../services/generator/src/core/frontend-design';
+import { EXAMPLE_SITES } from '../../services/generator/src/core/examples';
+import { VOSEO_COUNTRIES } from '../../services/generator/src/core/i18n';
 import { PAGE_FONT_HOSTS, PAGE_SCRIPT_HOSTS, PAGE_STYLE_HOSTS } from '../../services/generator/src/core/page-check';
 import { appCsp, sitesCsp } from './csp';
 import { GeneratorApi } from './generator-api';
@@ -35,10 +37,8 @@ import { Monitoring } from './monitoring';
  * production switch added then (see PLAN.md, launch gate).
  */
 export interface CoyoteStackProps extends StackProps {
-  /** Brand domain (app, API, email). Unset = domainless mode. */
+  /** Our one domain: app, API, email, private drafts (draft.<domain>), and the landing examples ({slug}.<domain>). Unset = domainless mode. */
   domainName?: string;
-  /** Registrable domain for user sites. Unset = domainless mode. */
-  sitesDomainName?: string;
   /** Bedrock model or inference profile that writes the sites. Defaults to the one in services/generator/src/core/models.ts. */
   modelId?: string;
   /** Bedrock model or inference profile of the pre-screen classifier. Defaults to the one in models.ts. */
@@ -47,8 +47,6 @@ export interface CoyoteStackProps extends StackProps {
   webDist?: string;
   /** Route 53 zone that holds `domainName`. Defaults to `domainName`. */
   hostedZoneName?: string;
-  /** Route 53 zone that holds `sitesDomainName`. Defaults to `sitesDomainName`. */
-  sitesHostedZoneName?: string;
   /**
    * Domainless mode: the address our emails come from, verified in SES (👤 click the verification email). Unset =
    * no email ("Mis sitios" sign-in answers 503). Domain mode sends from no-reply@<domainName> instead.
@@ -80,19 +78,12 @@ export class CoyoteStack extends Stack {
   constructor(scope: Construct, id: string, props: CoyoteStackProps) {
     super(scope, id, props);
 
-    if (Boolean(props.domainName) !== Boolean(props.sitesDomainName)) {
-      throw new Error('Set both domainName and sitesDomainName, or neither (domainless mode).');
-    }
-
     Tags.of(this).add('project', 'coyote');
 
     const removalPolicy = RemovalPolicy.DESTROY;
 
     // Domain mode: every hostname is a plain string from urls.ts. Domainless: they are CloudFormation tokens.
-    const domain =
-      props.domainName && props.sitesDomainName
-        ? this.domainSetup(props as CoyoteStackProps & { domainName: string; sitesDomainName: string })
-        : undefined;
+    const domain = props.domainName ? this.domainSetup(props as CoyoteStackProps & { domainName: string }) : undefined;
 
     // ---------------------------------------------------------------------------------------
     // Storage
@@ -170,6 +161,30 @@ export class CoyoteStack extends Stack {
     // ---------------------------------------------------------------------------------------
     // App distribution (our frontend, JS allowed)
     // ---------------------------------------------------------------------------------------
+    const appOrigin = origins.S3BucketOrigin.withOriginAccessControl(this.appBucket);
+    const appHeaders = new cloudfront.ResponseHeadersPolicy(this, 'AppHeaders', {
+      securityHeadersBehavior: {
+        contentSecurityPolicy: {
+          override: true,
+          contentSecurityPolicy: appCsp({
+            // Domainless uses wildcards: the exact API and sites URLs would make the two
+            // distributions and the API depend on each other in a circle.
+            connectSrc: [
+              "'self'", // /geo, the visitor's country
+              domain ? domain.urls.apiUrl : `https://*.execute-api.${this.region}.amazonaws.com`,
+              `https://${this.sitesBucket.bucketRegionalDomainName}`, // presigned photo uploads
+            ],
+            frameSrc: [domain ? domain.urls.draftOrigin : 'https://*.cloudfront.net'],
+          }),
+        },
+        ...commonSecurityHeaders,
+        frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
+      },
+    });
+    // CloudFront passes its geolocation headers to a function only when a policy lists them (/geo, and the vos rewrite).
+    const viewerCountry = new cloudfront.OriginRequestPolicy(this, 'GeoHeaders', {
+      headerBehavior: cloudfront.OriginRequestHeaderBehavior.allowList('CloudFront-Viewer-Country'),
+    });
     const appDistribution = new cloudfront.Distribution(this, 'AppDistribution', {
       comment: 'coyote app',
       domainNames: domain ? [domain.appHost, domain.bareHost] : undefined,
@@ -184,7 +199,7 @@ export class CoyoteStack extends Stack {
         ttl: Duration.minutes(5),
       })),
       defaultBehavior: {
-        origin: origins.S3BucketOrigin.withOriginAccessControl(this.appBucket),
+        origin: appOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         functionAssociations: [
           {
@@ -194,29 +209,34 @@ export class CoyoteStack extends Stack {
               code: cloudfront.FunctionCode.fromInline(
                 readFileSync(asset('./cf-app-rewrite.js'), 'utf8')
                   .replace('__BARE_HOST__', domain ? domain.bareHost : '')
-                  .replace('__APP_URL__', domain ? domain.urls.appUrl : ''),
+                  .replace('__APP_URL__', domain ? domain.urls.appUrl : '')
+                  .replace('__VOSEO__', VOSEO_COUNTRIES.join(',')),
               ),
             }),
           },
         ],
-        responseHeadersPolicy: new cloudfront.ResponseHeadersPolicy(this, 'AppHeaders', {
-          securityHeadersBehavior: {
-            contentSecurityPolicy: {
-              override: true,
-              contentSecurityPolicy: appCsp({
-                // Domainless uses wildcards: the exact API and sites URLs would make the two
-                // distributions and the API depend on each other in a circle.
-                connectSrc: [
-                  domain ? domain.urls.apiUrl : `https://*.execute-api.${this.region}.amazonaws.com`,
-                  `https://${this.sitesBucket.bucketRegionalDomainName}`, // presigned photo uploads
-                ],
-                frameSrc: [domain ? domain.urls.draftOrigin : 'https://*.cloudfront.net'],
+        // The rewrite picks the vos pages by the visitor's country.
+        originRequestPolicy: viewerCountry,
+        responseHeadersPolicy: appHeaders,
+      },
+      additionalBehaviors: {
+        // The visitor's country, answered by a function at the edge (cf-geo.js); the origin is never reached.
+        '/geo': {
+          origin: appOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: viewerCountry,
+          responseHeadersPolicy: appHeaders,
+          functionAssociations: [
+            {
+              eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+              function: new cloudfront.Function(this, 'AppGeo', {
+                runtime: cloudfront.FunctionRuntime.JS_2_0,
+                code: cloudfront.FunctionCode.fromFile({ filePath: asset('./cf-geo.js') }),
               }),
             },
-            ...commonSecurityHeaders,
-            frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
-          },
-        }),
+          ],
+        },
       },
     });
     const appUrl = domain ? domain.urls.appUrl : `https://${appDistribution.distributionDomainName}`;
@@ -225,12 +245,14 @@ export class CoyoteStack extends Stack {
     // Sites distribution (generated pages, no JS)
     // ---------------------------------------------------------------------------------------
     const rewriteSource = readFileSync(asset('./cf-rewrite.js'), 'utf8')
-      .replace('__SITES_HOST__', domain ? domain.sitesHost : '')
-      .replace('__APP_URL__', appUrl);
+      .replace('__DOMAIN__', domain ? domain.bareHost : '')
+      .replace('__APP_URL__', appUrl)
+      .replace('__EXAMPLES__', EXAMPLE_SITES.join(','));
 
     const sitesDistribution = new cloudfront.Distribution(this, 'SitesDistribution', {
       comment: 'coyote sites',
-      domainNames: domain ? [domain.sitesHost, `*.${domain.sitesHost}`] : undefined,
+      // draft.<domain> and the examples. The apex and www are the app distribution's (the more specific name wins).
+      domainNames: domain ? [`*.${domain.bareHost}`] : undefined,
       certificate: domain?.sitesCertificate,
       httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
       // A private bucket answers 403 for a missing key.
@@ -275,7 +297,7 @@ export class CoyoteStack extends Stack {
             },
             ...commonSecurityHeaders,
           },
-          // Nothing is published yet: every page served here is a private draft. Vary: a draft loaded in the app's
+          // Nothing is published yet: every page served here is a private draft or a landing example. Vary: a draft loaded in the app's
           // frame must not be reused by the browser cache when the same URL is opened in a tab (cf-rewrite.js
           // refuses top-level loads, but only for requests that reach CloudFront).
           customHeadersBehavior: {
@@ -295,6 +317,16 @@ export class CoyoteStack extends Stack {
       destinationKeyPrefix: '_errors/',
       prune: false, // never delete generated sites
     });
+
+    // The landing page's example sites (examples.ts). Pruning stays inside the _examples/ prefix.
+    new s3deploy.BucketDeployment(this, 'SitesExamples', {
+      sources: [s3deploy.Source.asset(asset('../../examples/sites'))],
+      destinationBucket: this.sitesBucket,
+      destinationKeyPrefix: '_examples/',
+    });
+    const exampleUrls = Object.fromEntries(
+      EXAMPLE_SITES.map((slug) => [slug, domain ? domain.urls.exampleUrl(slug) : `${sitesBaseUrl}/${slug}/`]),
+    );
 
     // ---------------------------------------------------------------------------------------
     // API (the routes are added by GeneratorApi below)
@@ -325,7 +357,7 @@ export class CoyoteStack extends Stack {
       sources: [
         // config.js is excluded: a local one (written for `astro dev`) must never reach the bucket.
         s3deploy.Source.asset(webDist, { exclude: ['config.js'] }),
-        s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl })};\n`),
+        s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl, examples: exampleUrls })};\n`),
       ],
       destinationBucket: this.appBucket,
       distribution: appDistribution,
@@ -350,8 +382,8 @@ export class CoyoteStack extends Stack {
       };
       alias('AppRecord', domain.zone, domain.appHost, new targets.CloudFrontTarget(appDistribution));
       alias('AppBareRecord', domain.zone, domain.bareHost, new targets.CloudFrontTarget(appDistribution)); // redirects to www
-      alias('SitesApexRecord', domain.sitesZone, domain.sitesHost, new targets.CloudFrontTarget(sitesDistribution));
-      alias('SitesWildcardRecord', domain.sitesZone, `*.${domain.sitesHost}`, new targets.CloudFrontTarget(sitesDistribution));
+      // draft.<domain> and the examples; www, api and the validation/DKIM records are explicit, so they win.
+      alias('SitesWildcardRecord', domain.zone, `*.${domain.bareHost}`, new targets.CloudFrontTarget(sitesDistribution));
       alias(
         'ApiRecord',
         domain.zone,
@@ -361,7 +393,7 @@ export class CoyoteStack extends Stack {
     }
 
     this.urlEnv = domain
-      ? { DOMAIN_NAME: props.domainName!, SITES_DOMAIN_NAME: props.sitesDomainName! }
+      ? { DOMAIN_NAME: props.domainName! }
       : { APP_BASE_URL: appUrl, API_BASE_URL: apiUrl, SITES_BASE_URL: sitesBaseUrl, ...(props.senderEmail ? { SENDER_EMAIL: props.senderEmail } : {}) };
 
     // ---------------------------------------------------------------------------------------
@@ -433,7 +465,9 @@ export class CoyoteStack extends Stack {
 
     new CfnOutput(this, 'AppUrl', { value: appUrl });
     new CfnOutput(this, 'ApiUrl', { value: apiUrl });
-    new CfnOutput(this, 'SitesBaseUrl', { value: domain ? `https://${domain.sitesHost}` : sitesBaseUrl });
+    new CfnOutput(this, 'SitesBaseUrl', { value: domain ? domain.urls.draftOrigin : sitesBaseUrl });
+    // The landing examples' URLs, for the local config.js (scripts/write-config.mjs).
+    new CfnOutput(this, 'ExampleUrls', { value: this.toJsonString(exampleUrls) });
     new CfnOutput(this, 'SitesBucketName', { value: this.sitesBucket.bucketName });
     new CfnOutput(this, 'PageSkillsBucketName', { value: pageSkillsBucket.bucketName });
     // For the admin commands in coyote.sh.
@@ -450,22 +484,13 @@ export class CoyoteStack extends Stack {
   }
 
   /** Certificates, hosted zones, and hostnames. Needs AWS credentials at synth (hosted-zone lookup). */
-  private domainSetup(props: CoyoteStackProps & { domainName: string; sitesDomainName: string }) {
-    const urls = createUrls({
-      mode: 'domain',
-      domainName: props.domainName,
-      sitesDomainName: props.sitesDomainName,
-    });
+  private domainSetup(props: CoyoteStackProps & { domainName: string }) {
+    const urls = createUrls({ mode: 'domain', domainName: props.domainName });
     const appHost = new URL(urls.appUrl).host; // www.<domain>
     const bareHost = props.domainName;
     const apiHost = new URL(urls.apiUrl).host;
-    const sitesHost = new URL(urls.draftOrigin).host.replace(/^draft\./, '');
 
-    const zoneName = props.hostedZoneName ?? props.domainName;
-    const sitesZoneName = props.sitesHostedZoneName ?? props.sitesDomainName;
-    const zone = route53.HostedZone.fromLookup(this, 'Zone', { domainName: zoneName });
-    const sitesZone =
-      sitesZoneName === zoneName ? zone : route53.HostedZone.fromLookup(this, 'SitesZone', { domainName: sitesZoneName });
+    const zone = route53.HostedZone.fromLookup(this, 'Zone', { domainName: props.hostedZoneName ?? props.domainName });
 
     // The stack is in us-east-1, which is where CloudFront needs its certificates.
     const appCertificate = new acm.Certificate(this, 'AppCertificate', {
@@ -474,9 +499,8 @@ export class CoyoteStack extends Stack {
       validation: acm.CertificateValidation.fromDns(zone),
     });
     const sitesCertificate = new acm.Certificate(this, 'SitesCertificate', {
-      domainName: sitesHost,
-      subjectAlternativeNames: [`*.${sitesHost}`],
-      validation: acm.CertificateValidation.fromDns(sitesZone),
+      domainName: `*.${bareHost}`,
+      validation: acm.CertificateValidation.fromDns(zone),
     });
     const apiDomain = new apigwv2.DomainName(this, 'ApiDomain', {
       domainName: apiHost,
@@ -486,7 +510,7 @@ export class CoyoteStack extends Stack {
       }),
     });
 
-    return { urls, appHost, bareHost, apiHost, sitesHost, zone, sitesZone, appCertificate, sitesCertificate, apiDomain };
+    return { urls, appHost, bareHost, apiHost, zone, appCertificate, sitesCertificate, apiDomain };
   }
 }
 

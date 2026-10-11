@@ -28,6 +28,7 @@
     "build": "tsc --noEmit",
     "prescreen:fixtures": "tsx scripts/prescreen-fixtures.ts",
     "verify:live": "tsx scripts/verify-live.ts",
-    "opus:sites": "tsx scripts/opus-sites.ts"
+    "opus:sites": "tsx scripts/opus-sites.ts",
+    "example-page": "tsx scripts/example-page.ts"
   }
 }

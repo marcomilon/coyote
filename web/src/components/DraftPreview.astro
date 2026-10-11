@@ -6,9 +6,11 @@ import { t, type Lang } from '../i18n/strings';
 
 interface Props {
   lang: Lang;
+  /** Spanish with vos (the pages under /vos/). */
+  vos?: boolean;
 }
-const { lang } = Astro.props;
-const s = t(lang);
+const { lang, vos = false } = Astro.props;
+const s = t(lang, vos);
 const p = s.preview;
 const clientStrings = { noToken: s.mySite.noToken, badToken: s.mySite.badToken, limited: s.mySite.limited };
 ---

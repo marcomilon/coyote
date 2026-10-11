@@ -16,7 +16,7 @@ ventas314.com crea y aloja páginas web sencillas para negocios. Guardamos lo m�
 - **Un registro de cada solicitud** (respuestas y resultado de la revisión de seguridad) durante 90 días, para investigar abusos.
 - **Tu dirección IP, solo como un código irreversible (hash)**, para limitar cuántas páginas web se crean por día.
 
-No usamos cookies ni herramientas de analítica, ni en esta aplicación ni en las páginas web que creamos. No vendemos ni compartimos tus datos con terceros con fines publicitarios.
+No usamos herramientas de analítica, ni en esta aplicación ni en las páginas web que creamos. Esta aplicación usa una sola cookie, y solo si eliges un país en la página de inicio: guarda ese país para mostrarte sus precios y su forma de hablar. Las páginas web que creamos no usan cookies. No vendemos ni compartimos tus datos con terceros con fines publicitarios.
 
 ## Quién procesa tus datos
 

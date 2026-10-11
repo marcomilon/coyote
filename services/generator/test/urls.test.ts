@@ -9,35 +9,33 @@ describe('domainless mode', () => {
     sitesBaseUrl: 'https://dsites.cloudfront.test',
   });
 
-  it('serves sites and drafts by path', () => {
-    expect(urls.siteUrl('luna')).toBe('https://dsites.cloudfront.test/luna/');
+  it('serves examples and drafts by path', () => {
+    expect(urls.exampleUrl('luna')).toBe('https://dsites.cloudfront.test/luna/');
     expect(urls.draftUrl('d1')).toBe('https://dsites.cloudfront.test/_draft/d1/');
-    expect(urls.siteOrigin('luna')).toBe('https://dsites.cloudfront.test');
     expect(urls.draftOrigin).toBe('https://dsites.cloudfront.test');
   });
 
   it('builds app links without a double slash', () => {
     expect(urls.appUrl).toBe('https://dapp.cloudfront.test');
     expect(urls.reportUrl('luna')).toBe('https://dapp.cloudfront.test/reportar?sitio=luna');
-    expect(urls.miSitioUrl('a/b')).toBe('https://dapp.cloudfront.test/mi-sitio#token=a%2Fb');
+    expect(urls.miSitioUrl('a/b')).toBe('https://dapp.cloudfront.test/mi-pagina-web#token=a%2Fb');
   });
 });
 
 describe('domain mode', () => {
-  it('uses subdomains', () => {
-    const urls = createUrls({ mode: 'domain', domainName: 'brand.test', sitesDomainName: 'sites.test' });
+  it('uses subdomains of the one domain', () => {
+    const urls = createUrls({ mode: 'domain', domainName: 'brand.test' });
     expect(urls.appUrl).toBe('https://www.brand.test');
     expect(urls.apiUrl).toBe('https://api.brand.test');
-    expect(urls.siteUrl('luna')).toBe('https://luna.sites.test/');
-    expect(urls.draftUrl('d1')).toBe('https://draft.sites.test/d1/');
-    expect(urls.siteOrigin('luna')).toBe('https://luna.sites.test');
-    expect(urls.draftOrigin).toBe('https://draft.sites.test');
+    expect(urls.exampleUrl('luna')).toBe('https://luna.brand.test/');
+    expect(urls.draftUrl('d1')).toBe('https://draft.brand.test/d1/');
+    expect(urls.draftOrigin).toBe('https://draft.brand.test');
   });
 });
 
 describe('urlConfigFromEnv', () => {
-  it('prefers domain mode when both domains are set', () => {
-    expect(urlConfigFromEnv({ DOMAIN_NAME: 'brand.test', SITES_DOMAIN_NAME: 'sites.test' }).mode).toBe('domain');
+  it('prefers domain mode when the domain is set', () => {
+    expect(urlConfigFromEnv({ DOMAIN_NAME: 'brand.test', APP_BASE_URL: 'https://a.test', API_BASE_URL: 'https://b.test', SITES_BASE_URL: 'https://c.test' }).mode).toBe('domain');
   });
   it('falls back to domainless', () => {
     expect(urlConfigFromEnv({ APP_BASE_URL: 'https://a.test', API_BASE_URL: 'https://b.test', SITES_BASE_URL: 'https://c.test' }).mode).toBe('domainless');
@@ -49,7 +47,7 @@ describe('urlConfigFromEnv', () => {
 
 describe('pageLinks', () => {
   it('points generated pages at the report and privacy pages in their language', () => {
-    const urls = createUrls({ mode: 'domain', domainName: 'brand.test', sitesDomainName: 'sites.test' });
+    const urls = createUrls({ mode: 'domain', domainName: 'brand.test' });
     expect(urls.pageLinks('luna', 'es')).toEqual({ homeUrl: 'https://www.brand.test/', reportUrl: 'https://www.brand.test/reportar?sitio=luna', privacyUrl: 'https://www.brand.test/privacidad' });
     expect(urls.pageLinks('lua', 'pt')).toEqual({ homeUrl: 'https://www.brand.test/pt/', reportUrl: 'https://www.brand.test/pt/denunciar?sitio=lua', privacyUrl: 'https://www.brand.test/pt/privacidade' });
   });

@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salón Luna · Peluquería y estética en Palermo</title>
+<meta name="description" content="Peluquería y estética en Palermo, Buenos Aires. Cortes, color sin amoníaco, balayage, peinados y manicura semipermanente. Turnos por WhatsApp.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gloock&amp;family=Jost:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#F6EFE3;
+    --paper:#FBF8F2;
+    --ink:#1D2742;
+    --ink-soft:#3B4560;
+    --gold:#B8893B;
+    --gold-soft:#E4CC97;
+    --blush:#EDCFC4;
+    --blush-deep:#D9A898;
+    --line:1.5px solid var(--ink);
+    --shadow:6px 6px 0 var(--gold);
+    --display:"Gloock", Georgia, serif;
+    --body:"Jost", "Futura", sans-serif;
+    --wrap:1180px;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html{scroll-behavior:smooth;scroll-padding-top:84px}
+  body{
+    margin:0;font-family:var(--body);font-size:1.075rem;line-height:1.6;color:var(--ink);
+    background:var(--cream);
+    background-image:radial-gradient(rgba(184,137,59,.10) 1px, transparent 1.2px);
+    background-size:22px 22px;
+    overflow-wrap:break-word;
+  }
+  img{display:block;max-width:100%}
+  a{color:inherit}
+  .wrap{width:min(var(--wrap), 100% - 2.5rem);margin-inline:auto}
+  .eyebrow{
+    font-size:.78rem;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);
+    display:inline-flex;align-items:center;gap:.7rem;margin:0 0 1rem;
+  }
+  .eyebrow::before{content:"";width:28px;height:1.5px;background:var(--gold)}
+  h1,h2,h3{font-family:var(--display);font-weight:400;line-height:1.02;letter-spacing:-.01em;margin:0}
+  h2{font-size:clamp(2.2rem, 4.6vw, 3.6rem)}
+  h3{font-size:1.65rem}
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:.6rem;
+    min-height:52px;padding:.85rem 1.5rem;border:var(--line);
+    font-family:var(--body);font-weight:600;font-size:1rem;letter-spacing:.04em;text-decoration:none;
+    transition:transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s ease, background .2s;
+  }
+  .btn svg{width:20px;height:20px;flex:none}
+  .btn-main{background:var(--ink);color:var(--paper);box-shadow:5px 5px 0 var(--gold)}
+  .btn-main:hover{transform:translate(-2px,-3px);box-shadow:8px 8px 0 var(--gold)}
+  .btn-ghost{background:var(--paper);color:var(--ink);box-shadow:5px 5px 0 var(--ink)}
+  .btn-ghost:hover{transform:translate(-2px,-3px);box-shadow:8px 8px 0 var(--ink)}
+  .btn:active{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--gold)}
+  .btn:focus-visible,.nav a:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+
+  /* ---------- Top bar ---------- */
+  .top{
+    position:sticky;top:0;z-index:50;background:rgba(246,239,227,.94);backdrop-filter:blur(8px);
+    border-bottom:var(--line);
+  }
+  .top .wrap{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:72px}
+  .logo{display:flex;align-items:center;gap:.55rem;text-decoration:none;font-family:var(--display);font-size:1.6rem;line-height:1}
+  .logo svg{width:30px;height:30px;color:var(--gold)}
+  .nav{display:flex;align-items:center;gap:2rem}
+  .nav ul{display:flex;gap:1.8rem;list-style:none;margin:0;padding:0}
+  .nav ul a{text-decoration:none;font-weight:500;font-size:.95rem;letter-spacing:.06em;position:relative;padding:.3rem 0}
+  .nav ul a::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1.5px;background:var(--gold);transform:scaleX(0);transition:transform .25s}
+  .nav ul a:hover::after{transform:scaleX(1)}
+  .nav .btn{min-height:44px;padding:.55rem 1.1rem;font-size:.92rem}
+  .menu-btn{display:none;background:none;border:var(--line);width:46px;height:46px;cursor:pointer;color:var(--ink)}
+  .menu-btn span{display:block;width:20px;height:1.5px;background:currentColor;margin:5px auto;transition:transform .25s, opacity .2s}
+
+  /* ---------- Hero ---------- */
+  .hero{padding:clamp(2.5rem,6vw,5rem) 0 clamp(3rem,6vw,5.5rem)}
+  .hero .wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:clamp(2rem,5vw,4.5rem);align-items:center}
+  .hero h1{font-size:clamp(3rem, 6.4vw, 5.8rem);margin:.2rem 0 1.4rem}
+  .hero h1 em{font-style:normal;position:relative;white-space:nowrap;color:var(--ink)}
+  .hero h1 em::after{
+    content:"";position:absolute;left:-2%;right:-2%;bottom:.04em;height:.22em;z-index:-1;
+    background:var(--blush);border-radius:2px;
+  }
+  .hero p.lead{font-size:clamp(1.08rem,1.5vw,1.22rem);max-width:34rem;color:var(--ink-soft);margin:0 0 2rem}
+  .cta-row{display:flex;flex-wrap:wrap;gap:1rem 1.2rem;margin-bottom:2rem}
+  .practical{display:flex;flex-wrap:wrap;gap:.6rem 1.6rem;font-size:.98rem;font-weight:500;padding-top:1.4rem;border-top:1.5px dashed rgba(29,39,66,.35);max-width:34rem}
+  .practical span{display:inline-flex;align-items:center;gap:.5rem}
+  .practical svg{width:18px;height:18px;color:var(--gold);flex:none}
+
+  .arch-wrap{position:relative;justify-self:center;width:min(100%, 440px)}
+  .arch-wrap::before{ /* sunburst behind */
+    content:"";position:absolute;inset:-9% -14% 12% -14%;z-index:-1;border-radius:999px 999px 0 0;
+    background:repeating-conic-gradient(from 270deg at 50% 62%, rgba(184,137,59,.22) 0deg 3deg, transparent 3deg 12deg);
+    -webkit-mask:linear-gradient(#000 55%, transparent);mask:linear-gradient(#000 55%, transparent);
+  }
+  .arch{
+    position:relative;aspect-ratio:2/3;border-radius:999px 999px 0 0;overflow:hidden;
+    border:var(--line);outline:1.5px solid var(--gold);outline-offset:8px;
+    box-shadow:14px 14px 0 var(--ink);
+  }
+  .arch img{width:100%;height:100%;object-fit:cover;object-position:55% 40%}
+  .stamp{
+    position:absolute;left:-40px;bottom:46px;width:132px;height:132px;border-radius:50%;
+    background:var(--blush);border:var(--line);box-shadow:4px 4px 0 var(--ink);
+    display:grid;place-items:center;transform:rotate(-10deg);
+  }
+  .stamp svg{position:absolute;inset:0;width:100%;height:100%}
+  .stamp text{font-family:var(--body);font-weight:600;font-size:10.6px;letter-spacing:.2em;fill:var(--ink);text-transform:uppercase}
+  .stamp .moon{width:38px;height:38px;color:var(--gold);position:static}
+
+  /* ---------- Moon divider ---------- */
+  .phases{display:flex;justify-content:center;align-items:center;gap:clamp(.7rem,2vw,1.3rem);padding:.5rem 0}
+  .phases i{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--gold);display:block}
+  .phases i:nth-child(2),.phases i:nth-child(6){box-shadow:inset 6px 0 0 var(--gold)}
+  .phases i:nth-child(3),.phases i:nth-child(5){box-shadow:inset 10px 0 0 var(--gold)}
+  .phases i:nth-child(6){box-shadow:inset -6px 0 0 var(--gold)}
+  .phases i:nth-child(5){box-shadow:inset -10px 0 0 var(--gold)}
+  .phases i:nth-child(4){background:var(--gold);width:26px;height:26px}
+  .phases::before,.phases::after{content:"";flex:1;max-width:220px;height:1.5px;background:linear-gradient(90deg,transparent,var(--gold))}
+  .phases::after{background:linear-gradient(270deg,transparent,var(--gold))}
+
+  section{padding:clamp(4rem,8vw,6.5rem) 0}
+  .head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.5rem 3rem;align-items:end;margin-bottom:3rem}
+  .head p{margin:0;color:var(--ink-soft);max-width:30rem}
+
+  /* ---------- Services ---------- */
+  .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2rem}
+  .card{
+    background:var(--paper);border:var(--line);box-shadow:var(--shadow);
+    display:flex;flex-direction:column;transition:transform .3s cubic-bezier(.34,1.56,.64,1), box-shadow .3s;
+  }
+  .card:hover{transform:translate(-3px,-5px);box-shadow:10px 11px 0 var(--gold)}
+  .card-img{aspect-ratio:4/3.4;margin:14px 14px 0;border-radius:999px 999px 0 0;overflow:hidden;border:var(--line);background:var(--blush)}
+  .card-img img{width:100%;height:100%;object-fit:cover}
+  .card-img.deco{
+    position:relative;display:grid;place-items:center;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 22px, rgba(29,39,66,.07) 22px 23.5px),
+      radial-gradient(circle at 50% 110%, var(--blush-deep) 0 34%, transparent 34.5%),
+      var(--blush);
+  }
+  .card-img.deco .big-moon{width:42%;color:var(--ink)}
+  .card-img.deco .dots{position:absolute;bottom:18%;display:flex;gap:10px}
+  .card-img.deco .dots b{width:18px;height:28px;border-radius:9px 9px 4px 4px;border:1.5px solid var(--ink);display:block}
+  .card-img.deco .dots b:nth-child(1){background:var(--paper)}
+  .card-img.deco .dots b:nth-child(2){background:var(--blush-deep)}
+  .card-img.deco .dots b:nth-child(3){background:#9E2F3A}
+  .card-img.deco .dots b:nth-child(4){background:var(--ink)}
+  .card-body{padding:1.5rem 1.6rem 1.7rem;display:flex;flex-direction:column;gap:.7rem;flex:1}
+  .card-body p{margin:0;color:var(--ink-soft)}
+  .tags{display:flex;flex-wrap:wrap;gap:.45rem;list-style:none;margin:.3rem 0 0;padding:0}
+  .tags li{font-size:.82rem;font-weight:500;letter-spacing:.04em;padding:.25rem .7rem;border:1px solid var(--ink);border-radius:999px}
+  .from{margin-top:auto !important;padding-top:.6rem;font-weight:600;color:var(--ink) !important;border-top:1px dashed rgba(29,39,66,.3)}
+  .from strong{font-family:var(--display);font-weight:400;font-size:1.45rem;color:var(--gold)}
+
+  /* ---------- Prices ---------- */
+  .prices{background:var(--paper);border-block:var(--line)}
+  .prices .wrap{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:clamp(2rem,5vw,4.5rem);align-items:center}
+  .prices-intro p{color:var(--ink-soft);max-width:28rem}
+  .menu{
+    position:relative;background:var(--ink);color:var(--paper);padding:clamp(2rem,4vw,3rem) clamp(1.4rem,4vw,3rem);
+    box-shadow:12px 12px 0 var(--gold);
+  }
+  .menu::before{content:"";position:absolute;inset:12px;border:1px solid var(--gold-soft);pointer-events:none}
+  .menu::after{content:"";position:absolute;inset:18px;border:1px solid rgba(228,204,151,.35);pointer-events:none}
+  .menu h3{color:var(--gold-soft);text-align:center;font-size:1.25rem;letter-spacing:.24em;text-transform:uppercase;font-family:var(--body);font-weight:600;margin-bottom:1.6rem}
+  .menu ul{list-style:none;margin:0;padding:0;position:relative;z-index:1}
+  .menu li{display:flex;align-items:baseline;gap:.8rem;padding:.75rem 0}
+  .menu li + li{border-top:1px solid rgba(228,204,151,.18)}
+  .menu .name{font-size:1.1rem}
+  .menu .name small{display:block;font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold-soft)}
+  .menu .fill{flex:1;border-bottom:1.5px dotted rgba(228,204,151,.55);transform:translateY(-.3rem);min-width:1rem}
+  .menu .price{font-family:var(--display);font-size:clamp(1.35rem,2.3vw,1.7rem);color:var(--gold-soft);white-space:nowrap}
+  .menu .note{position:relative;z-index:1;margin:1.4rem 0 0;font-size:.95rem;color:rgba(251,248,242,.8);text-align:center}
+
+  /* ---------- Brides ---------- */
+  .brides{padding:0;margin-top:clamp(4rem,8vw,6.5rem)}
+  .brides-box{
+    position:relative;background:var(--blush);border:var(--line);box-shadow:var(--shadow);
+    display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:1.5rem 2.5rem;align-items:center;
+    padding:clamp(1.8rem,4vw,2.8rem) clamp(1.5rem,4vw,3rem);
+  }
+  .brides-box .ring{width:86px;height:86px;border-radius:50%;border:1.5px solid var(--ink);display:grid;place-items:center;background:var(--paper)}
+  .brides-box .ring svg{width:44px;color:var(--gold)}
+  .brides-box h2{font-size:clamp(1.8rem,3.4vw,2.6rem)}
+  .brides-box p{margin:.5rem 0 0;color:var(--ink-soft);max-width:38rem}
+
+  /* ---------- About ---------- */
+  .about .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(2rem,5vw,4.5rem);align-items:start}
+  .about-text p{color:var(--ink-soft);margin:1.2rem 0 0;max-width:34rem}
+  .about-text .quote{font-family:var(--display);font-size:clamp(1.5rem,2.6vw,2rem);line-height:1.2;color:var(--ink);margin-top:1.6rem}
+  .facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.4rem}
+  .fact{background:var(--paper);border:var(--line);padding:1.5rem 1.4rem;position:relative;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+  .fact:hover{transform:translateY(-4px)}
+  .fact::before{content:"";position:absolute;top:-7px;left:1.4rem;width:12px;height:12px;background:var(--gold);transform:rotate(45deg);border:1.5px solid var(--ink)}
+  .fact b{display:block;font-family:var(--display);font-weight:400;font-size:2.4rem;line-height:1;margin-bottom:.4rem;color:var(--gold)}
+  .fact span{font-weight:500}
+  .fact p{margin:.3rem 0 0;font-size:.95rem;color:var(--ink-soft)}
+  .fact.wide{grid-column:1/-1;background:var(--ink);color:var(--paper)}
+  .fact.wide p{color:rgba(251,248,242,.8)}
+  .fact.wide b{color:var(--gold-soft)}
+
+  /* ---------- Info ---------- */
+  .info{background:var(--paper);border-block:var(--line)}
+  .info-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1.6rem}
+  .info-card{border:var(--line);padding:1.7rem 1.5rem;background:var(--cream);box-shadow:5px 5px 0 var(--ink);display:flex;flex-direction:column;gap:.5rem}
+  .info-card .ic{width:46px;height:46px;border-radius:50%;background:var(--ink);color:var(--gold-soft);display:grid;place-items:center;margin-bottom:.4rem}
+  .info-card .ic svg{width:22px;height:22px}
+  .info-card h3{font-size:1.4rem}
+  .info-card p{margin:0;color:var(--ink-soft);font-size:1rem}
+  .info-card a.link{font-weight:600;color:var(--ink);text-decoration-color:var(--gold);text-underline-offset:4px;text-decoration-thickness:2px}
+  .info-card a.link:hover{color:var(--gold)}
+
+  /* ---------- Final CTA ---------- */
+  .final{text-align:center;position:relative;overflow:hidden}
+  .final .big-moon{width:clamp(70px,9vw,100px);color:var(--gold);margin:0 auto 1.4rem}
+  .final h2{font-size:clamp(2.6rem,7vw,5.4rem);max-width:14ch;margin:0 auto 1.2rem}
+  .final p{max-width:36rem;margin:0 auto 2.2rem;color:var(--ink-soft)}
+  .final .cta-row{justify-content:center;margin:0}
+  .final small{display:block;margin-top:1.8rem;color:var(--ink-soft);font-size:.92rem}
+
+  /* ---------- Footer ---------- */
+  footer{background:var(--ink);color:var(--paper);padding:2.8rem 0}
+  footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:1.4rem 2rem}
+  footer .logo svg{color:var(--gold-soft)}
+  footer ul{list-style:none;display:flex;flex-wrap:wrap;gap:.6rem 1.8rem;margin:0;padding:0;font-size:.95rem}
+  footer a{text-decoration:none;color:rgba(251,248,242,.85)}
+  footer a:hover{color:var(--gold-soft)}
+
+  /* ---------- Mobile sticky ---------- */
+  .sticky-cta{display:none}
+
+  /* ---------- Motion ---------- */
+  .load{opacity:0;transform:translateY(18px);animation:up .8s cubic-bezier(.2,.7,.2,1) forwards}
+  .d1{animation-delay:.05s}.d2{animation-delay:.18s}.d3{animation-delay:.3s}.d4{animation-delay:.42s}.d5{animation-delay:.54s}.d6{animation-delay:.3s}
+  @keyframes up{to{opacity:1;transform:none}}
+  .stamp.load{animation-name:pop;animation-delay:.9s;transform:rotate(-30deg) scale(.6)}
+  @keyframes pop{to{opacity:1;transform:rotate(-10deg) scale(1)}}
+  .rv{opacity:0;transform:translateY(24px);transition:opacity .8s ease, transform .8s cubic-bezier(.2,.7,.2,1)}
+  .rv.in{opacity:1;transform:none}
+  .cards .rv:nth-child(2),.info-grid .rv:nth-child(2){transition-delay:.12s}
+  .cards .rv:nth-child(3),.info-grid .rv:nth-child(3){transition-delay:.24s}
+  .info-grid .rv:nth-child(4){transition-delay:.36s}
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important;transition:none !important}
+    .load,.rv{opacity:1;transform:none}
+    .stamp.load{transform:rotate(-10deg)}
+    html{scroll-behavior:auto}
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width:1020px){
+    .info-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .cards .card:last-child{grid-column:1/-1;flex-direction:row}
+    .cards .card:last-child .card-img{flex:0 0 42%;aspect-ratio:auto;margin:14px 0 14px 14px}
+  }
+  @media (max-width:860px){
+    .nav ul,.nav .btn{display:none}
+    .menu-btn{display:block}
+    .nav.open ul{
+      display:flex;flex-direction:column;gap:0;position:absolute;left:0;right:0;top:100%;
+      background:var(--cream);border-bottom:var(--line);padding:.5rem 1.25rem 1.2rem;
+    }
+    .nav.open ul a{display:block;padding:.9rem 0;font-size:1.1rem;border-bottom:1px dashed rgba(29,39,66,.25)}
+    .nav.open .menu-btn span:nth-child(1){transform:translateY(6.5px) rotate(45deg)}
+    .nav.open .menu-btn span:nth-child(2){opacity:0}
+    .nav.open .menu-btn span:nth-child(3){transform:translateY(-6.5px) rotate(-45deg)}
+    .hero .wrap,.prices .wrap,.about .wrap,.head{grid-template-columns:minmax(0,1fr)}
+    .arch-wrap{width:min(82%,400px);margin-top:1rem}
+    .head{margin-bottom:2.2rem}
+    .brides-box{grid-template-columns:minmax(0,1fr)}
+  }
+  @media (max-width:640px){
+    body{padding-bottom:84px}
+    .cards{grid-template-columns:minmax(0,1fr)}
+    .cards .card:last-child{grid-column:auto;flex-direction:column}
+    .cards .card:last-child .card-img{flex:none;aspect-ratio:4/3.4;margin:14px 14px 0}
+    .info-grid,.facts{grid-template-columns:minmax(0,1fr)}
+    .cta-row .btn{flex:1 1 100%}
+    .stamp{width:108px;height:108px;left:-22px;bottom:30px}
+    .stamp text{font-size:8.8px}
+    .stamp .moon{width:30px;height:30px}
+    .arch{box-shadow:9px 9px 0 var(--ink)}
+    .sticky-cta{
+      display:flex;position:fixed;left:12px;right:12px;bottom:12px;z-index:60;
+      box-shadow:4px 4px 0 var(--gold);
+    }
+  }
+</style>
+<style>html,body{overflow-x:clip}</style></head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="moon" viewBox="0 0 32 32"><path fill="currentColor" d="M19.5 3.2A13 13 0 1 0 28.8 22 11 11 0 0 1 19.5 3.2Z"/></symbol>
+  <symbol id="wa" viewBox="0 0 24 24"><path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5 5.1-1.34A9.9 9.9 0 1 0 12.04 2Zm0 18.1a8.2 8.2 0 0 1-4.2-1.15l-.3-.18-3.03.8.8-2.95-.2-.3a8.2 8.2 0 1 1 6.93 3.78Zm4.5-6.14c-.25-.12-1.46-.72-1.69-.8-.23-.08-.39-.12-.56.12-.16.25-.64.8-.78.97-.15.16-.29.18-.54.06a6.7 6.7 0 0 1-3.32-2.9c-.25-.43.25-.4.72-1.33.08-.16.04-.3-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.41-.56-.42h-.47a.9.9 0 0 0-.66.31 2.8 2.8 0 0 0-.86 2.07 4.8 4.8 0 0 0 1 2.55 11 11 0 0 0 4.2 3.7c1.56.68 2.17.73 2.95.62.48-.07 1.46-.6 1.67-1.18.2-.58.2-1.07.15-1.18-.07-.1-.23-.16-.48-.29Z"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M5 3h3.5l1.7 4.3-2.2 1.4a11 11 0 0 0 5.3 5.3l1.4-2.2L19 13.5V17a2 2 0 0 1-2 2A15 15 0 0 1 3 5a2 2 0 0 1 2-2Z"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M12 21s7-6.2 7-11.5a7 7 0 1 0-14 0C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="card" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="wrap">
+    <a href="#inicio" class="logo" aria-label="Salón Luna, inicio">
+      <svg aria-hidden="true"><use href="#moon"/></svg>Salón Luna
+    </a>
+    <nav class="nav" id="nav" aria-label="Principal">
+      <ul>
+        <li><a href="#servicios">Servicios</a></li>
+        <li><a href="#precios">Precios</a></li>
+        <li><a href="#salon">El salón</a></li>
+        <li><a href="#datos">Horarios</a></li>
+      </ul>
+      <a class="btn btn-main" href="https://wa.me/5491155550193?text=Hola%20Sal%C3%B3n%20Luna%2C%20quiero%20sacar%20un%20turno." target="_blank" rel="noopener">Sacá turno</a>
+      <button class="menu-btn" aria-label="Abrir menú" aria-expanded="false" aria-controls="nav"><span></span><span></span><span></span></button>
+    </nav>
+  </div>
+</header>
+
+<main id="inicio">
+  <!-- HERO -->
+  <section class="hero" aria-labelledby="titulo">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow load d1">Peluquería y estética · Palermo</p>
+        <h1 id="titulo" class="load d2">Tu pelo, en su <em>mejor fase.</em></h1>
+        <p class="lead load d3">Lucía Pérez y su equipo de cuatro estilistas te atienden en un espacio luminoso, con mate o café mientras esperás. Cortes, color, balayage, peinados y manos.</p>
+        <div class="cta-row load d4">
+          <a class="btn btn-main" href="https://wa.me/5491155550193?text=Hola%20Sal%C3%B3n%20Luna%2C%20quiero%20sacar%20un%20turno." target="_blank" rel="noopener">
+            <svg aria-hidden="true"><use href="#wa"/></svg>Sacá turno por WhatsApp
+          </a>
+          <a class="btn btn-ghost" href="tel:+5491155550193">
+            <svg aria-hidden="true"><use href="#phone"/></svg>Llamar
+          </a>
+        </div>
+        <div class="practical load d5">
+          <span><svg aria-hidden="true"><use href="#pin"/></svg>Gorriti 4870, Palermo</span>
+          <span><svg aria-hidden="true"><use href="#clock"/></svg>Martes a sábado, 10 a 20 h</span>
+        </div>
+      </div>
+
+      <div class="arch-wrap load d6">
+        <div class="arch">
+          <img src="assets/gen-385aa1e3.jpg" alt="Una estilista peina a una clienta sonriente en un salón luminoso con plantas y ventanales" width="1248" height="1824">
+        </div>
+        <div class="stamp load" aria-label="Color sin amoníaco">
+          <svg viewBox="0 0 132 132" aria-hidden="true">
+            <defs><path id="circ" d="M66,66 m-48,0 a48,48 0 1,1 96,0 a48,48 0 1,1 -96,0"/></defs>
+            <text><textPath href="#circ" startOffset="0">Color sin amon&#xed;aco &#xb7; Color sin amon&#xed;aco &#xb7;</textPath></text>
+          </svg>
+          <svg class="moon" aria-hidden="true"><use href="#moon"/></svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="phases wrap" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+  <!-- SERVICES -->
+  <section id="servicios" aria-labelledby="t-serv">
+    <div class="wrap">
+      <div class="head rv">
+        <div>
+          <p class="eyebrow">Qué hacemos</p>
+          <h2 id="t-serv">Del corte al color, y las manos también.</h2>
+        </div>
+        <p>Atendemos a mujeres y hombres, siempre con turno. Contanos qué querés por WhatsApp y te reservamos el horario.</p>
+      </div>
+
+      <div class="cards">
+        <article class="card rv">
+          <div class="card-img"><img src="assets/gen-58986c23.jpg" alt="Un hombre recibe un corte de pelo en el sillón del salón" loading="lazy" width="1536" height="1536"></div>
+          <div class="card-body">
+            <h3>Cortes y peinados</h3>
+            <p>Cortes de mujer y hombre, brushing y peinados para fiestas.</p>
+            <ul class="tags"><li>Mujer</li><li>Hombre</li><li>Brushing</li><li>Fiestas</li></ul>
+            <p class="from">Desde <strong>$12.000</strong></p>
+          </div>
+        </article>
+
+        <article class="card rv">
+          <div class="card-img"><img src="assets/gen-2cd900e8.jpg" alt="Pelo largo ondulado con balayage en tonos miel, visto de espaldas" loading="lazy" width="1536" height="1536"></div>
+          <div class="card-body">
+            <h3>Color</h3>
+            <p>Color, balayage, mechas y alisado. Para el color usamos productos sin amoníaco.</p>
+            <ul class="tags"><li>Raíz</li><li>Balayage</li><li>Mechas</li><li>Alisado</li></ul>
+            <p class="from">Desde <strong>$28.000</strong></p>
+          </div>
+        </article>
+
+        <article class="card rv">
+          <div class="card-img deco" aria-hidden="true">
+            <svg class="big-moon"><use href="#moon"/></svg>
+            <div class="dots"><b></b><b></b><b></b><b></b></div>
+          </div>
+          <div class="card-body">
+            <h3>Manos y pies</h3>
+            <p>Manicura y pedicura semipermanente, para que el esmalte te dure.</p>
+            <ul class="tags"><li>Manicura</li><li>Pedicura</li><li>Semipermanente</li></ul>
+            <p class="from">Manicura <strong>$14.000</strong></p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICES -->
+  <section id="precios" class="prices" aria-labelledby="t-precios">
+    <div class="wrap">
+      <div class="prices-intro rv">
+        <p class="eyebrow">Precios</p>
+        <h2 id="t-precios">Claros, antes de sentarte.</h2>
+        <p>Estos son los servicios más pedidos. Si buscás otro, escribinos y te pasamos el precio.</p>
+        <a class="btn btn-main" href="https://wa.me/5491155550193?text=Hola%20Sal%C3%B3n%20Luna%2C%20quiero%20consultar%20un%20precio." target="_blank" rel="noopener">
+          <svg aria-hidden="true"><use href="#wa"/></svg>Consultar por WhatsApp
+        </a>
+      </div>
+
+      <div class="menu rv">
+        <h3>Lista de precios</h3>
+        <ul>
+          <li><span class="name">Corte y brushing</span><span class="fill"></span><span class="price">$18.000</span></li>
+          <li><span class="name">Corte hombre</span><span class="fill"></span><span class="price">$12.000</span></li>
+          <li><span class="name">Color raíz <small>Sin amoníaco</small></span><span class="fill"></span><span class="price">$28.000</span></li>
+          <li><span class="name">Balayage</span><span class="fill"></span><span class="price">desde $65.000</span></li>
+          <li><span class="name">Manicura semipermanente</span><span class="fill"></span><span class="price">$14.000</span></li>
+        </ul>
+        <p class="note">Mechas, alisado, peinados para fiestas y pedicura: consultanos.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- BRIDES -->
+  <section class="brides" aria-labelledby="t-novias">
+    <div class="wrap">
+      <div class="brides-box rv">
+        <div class="ring" aria-hidden="true"><svg viewBox="0 0 32 32"><use href="#moon"/></svg></div>
+        <div>
+          <h2 id="t-novias">Novias y quinceañeras</h2>
+          <p>Antes del gran día hacemos una prueba de peinado, para que llegues tranquila y con el peinado que elegiste.</p>
+        </div>
+        <a class="btn btn-ghost" href="https://wa.me/5491155550193?text=Hola%20Sal%C3%B3n%20Luna%2C%20quiero%20consultar%20por%20una%20prueba%20de%20peinado." target="_blank" rel="noopener">Pedí tu prueba</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="salon" class="about" aria-labelledby="t-salon">
+    <div class="wrap">
+      <div class="about-text rv">
+        <p class="eyebrow">El salón</p>
+        <h2 id="t-salon">Luz, buen pelo y un mate.</h2>
+        <p class="quote">Lucía Pérez y su equipo te reciben en Palermo, en un espacio luminoso.</p>
+        <p>Mientras esperás te ofrecemos mate o café. Trabajamos solo con turno, así cada persona tiene su tiempo y nadie se apura.</p>
+      </div>
+      <div class="facts">
+        <div class="fact rv"><b>4</b><span>estilistas</span><p>Más Lucía, que encabeza el equipo.</p></div>
+        <div class="fact rv"><b>☕</b><span>Mate o café</span><p>Para que la espera sea más amable.</p></div>
+        <div class="fact wide rv"><b>Sin amoníaco</b><span>Color más suave</span><p>Usamos productos sin amoníaco para todos los trabajos de color.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRACTICAL -->
+  <section id="datos" class="info" aria-labelledby="t-datos">
+    <div class="wrap">
+      <div class="head rv">
+        <div>
+          <p class="eyebrow">Datos útiles</p>
+          <h2 id="t-datos">Antes de venir</h2>
+        </div>
+        <p>Todo lo que necesitás para sacar tu turno y llegar sin vueltas.</p>
+      </div>
+      <div class="info-grid">
+        <div class="info-card rv">
+          <div class="ic"><svg aria-hidden="true"><use href="#clock"/></svg></div>
+          <h3>Horario</h3>
+          <p>Martes a sábado<br>de 10 a 20 h.</p>
+          <p>Domingo y lunes, cerrado.</p>
+        </div>
+        <div class="info-card rv">
+          <div class="ic"><svg aria-hidden="true"><use href="#pin"/></svg></div>
+          <h3>Dirección</h3>
+          <p>Gorriti 4870,<br>Palermo, CABA.</p>
+          <a class="link" href="https://www.google.com/maps/search/?api=1&amp;query=Gorriti+4870,+Palermo,+CABA" target="_blank" rel="noopener">Ver en el mapa</a>
+        </div>
+        <div class="info-card rv">
+          <div class="ic"><svg aria-hidden="true"><use href="#cal"/></svg></div>
+          <h3>Turnos</h3>
+          <p>Se sacan por WhatsApp.</p>
+          <p>Si tenés que cancelar, avisanos con 24 h de anticipación.</p>
+        </div>
+        <div class="info-card rv">
+          <div class="ic"><svg aria-hidden="true"><use href="#card"/></svg></div>
+          <h3>Pagos</h3>
+          <p>Efectivo, transferencia y Mercado Pago.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final" aria-labelledby="t-final">
+    <div class="wrap rv">
+      <svg class="big-moon" viewBox="0 0 32 32" aria-hidden="true"><use href="#moon"/></svg>
+      <h2 id="t-final">¿Te reservamos un turno?</h2>
+      <p>Escribinos por WhatsApp con el servicio que querés y el día que te queda bien. Te respondemos con los horarios libres.</p>
+      <div class="cta-row">
+        <a class="btn btn-main" href="https://wa.me/5491155550193?text=Hola%20Sal%C3%B3n%20Luna%2C%20quiero%20sacar%20un%20turno." target="_blank" rel="noopener">
+          <svg aria-hidden="true"><use href="#wa"/></svg>Escribinos por WhatsApp
+        </a>
+        <a class="btn btn-ghost" href="tel:+5491155550193">
+          <svg aria-hidden="true"><use href="#phone"/></svg>+54 9 11 5555-0193
+        </a>
+      </div>
+      <small>Gorriti 4870, Palermo · Martes a sábado, 10 a 20 h</small>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a href="#inicio" class="logo"><svg aria-hidden="true"><use href="#moon"/></svg>Salón Luna</a>
+    <ul>
+      <li><a href="https://www.google.com/maps/search/?api=1&amp;query=Gorriti+4870,+Palermo,+CABA" target="_blank" rel="noopener">Gorriti 4870, Palermo, CABA</a></li>
+      <li><a href="tel:+5491155550193">+54 9 11 5555-0193</a></li>
+      <li><a href="https://www.instagram.com/salonluna.palermo" target="_blank" rel="noopener">Instagram @salonluna.palermo</a></li>
+    </ul>
+  </div>
+</footer>
+
+<a class="btn btn-main sticky-cta" href="https://wa.me/5491155550193?text=Hola%20Sal%C3%B3n%20Luna%2C%20quiero%20sacar%20un%20turno." target="_blank" rel="noopener">
+  <svg aria-hidden="true"><use href="#wa"/></svg>Sacá turno por WhatsApp
+</a>
+
+<script>
+  // Mobile menu
+  const nav = document.getElementById('nav');
+  const menuBtn = nav.querySelector('.menu-btn');
+  menuBtn.addEventListener('click', () => {
+    const open = nav.classList.toggle('open');
+    menuBtn.setAttribute('aria-expanded', open);
+    menuBtn.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+  });
+  nav.querySelectorAll('ul a').forEach(a => a.addEventListener('click', () => {
+    nav.classList.remove('open'); menuBtn.setAttribute('aria-expanded', false);
+  }));
+
+  // Scroll reveal
+  const items = document.querySelectorAll('.rv');
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { threshold: .15, rootMargin: '0px 0px -40px 0px' });
+    items.forEach(el => io.observe(el));
+  } else {
+    items.forEach(el => el.classList.add('in'));
+  }
+</script>
+<footer style="padding:1.25rem;font:13px/1.5 system-ui,sans-serif;text-align:center;opacity:.75;background:inherit"><a href="https://www.ventas314.com/" style="color:inherit">Página web creada con ventas314.com</a> · <a href="https://www.ventas314.com/reportar?sitio=salon-luna" style="color:inherit">Reportar</a> · <a href="https://www.ventas314.com/privacidad" style="color:inherit">Privacidad</a></footer></body>
+</html>

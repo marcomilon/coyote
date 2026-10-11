@@ -16,7 +16,7 @@ ventas314.com cria e hospeda sites simples para negócios. Guardamos o mínimo p
 - **Um registro de cada pedido** (respostas e resultado da revisão de segurança) por 90 dias, para investigar abusos.
 - **Seu endereço IP, apenas como um código irreversível (hash)**, para limitar quantos sites são criados por dia.
 
-Não usamos cookies nem ferramentas de análise, nem neste aplicativo nem nos sites que criamos. Não vendemos nem compartilhamos seus dados com terceiros para publicidade.
+Não usamos ferramentas de análise, nem neste aplicativo nem nos sites que criamos. Este aplicativo usa um único cookie, e só se você escolher um país na página inicial: ele guarda esse país para mostrar os preços e o jeito de falar de lá. Os sites que criamos não usam cookies. Não vendemos nem compartilhamos seus dados com terceiros para publicidade.
 
 ## Quem processa seus dados
 

@@ -1,4 +1,4 @@
-import { DetectModerationLabelsCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
+import { DetectModerationLabelsCommand, DetectTextCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { sesSendEmail } from '../aws/mail';
@@ -7,6 +7,7 @@ import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { callTool, outputAllowed, stabilityImage } from '../core/bedrock';
 import { runGenerateJob } from '../core/generate-job';
 import { emitMetrics } from '../core/metrics';
+import { legibleWords } from '../core/images';
 import { imageModelId, modelId, prescreenModelId } from '../core/models';
 import { anthropicWritePage, DEFAULT_PAGE_SKILL, NO_SKILL, pageEffort, pageModel, skillText, type PageSkill } from '../core/page-writer';
 import { createUrls, urlConfigFromEnv } from '../core/urls';
@@ -30,6 +31,12 @@ async function moderate(key: string): Promise<string[]> {
     new DetectModerationLabelsCommand({ Image: { S3Object: { Bucket: process.env.SITES_BUCKET, Name: key } }, MinConfidence: 70 }),
   );
   return [...new Set((ModerationLabels ?? []).map((label) => label.ParentName || label.Name || '').filter((name) => REFUSED.has(name)))];
+}
+
+/** Words Rekognition reads in a made photo. Single stray letters and low-confidence noise are not writing. */
+async function readText(key: string): Promise<string[]> {
+  const { TextDetections } = await rekognition.send(new DetectTextCommand({ Image: { S3Object: { Bucket: process.env.SITES_BUCKET, Name: key } } }));
+  return legibleWords(TextDetections ?? []);
 }
 
 /** A switch in SSM (`./coyote.sh page-model`, `page-skill`, `page-look`, `page-images`), read for every job so a change applies to the next one. */
@@ -76,6 +83,7 @@ export const handler = async (event: { jobId: string }): Promise<void> => {
     urls,
     outputAllowed,
     moderate,
+    readText,
     now: Date.now,
     writePage,
     pageEffort: pageEffort(),

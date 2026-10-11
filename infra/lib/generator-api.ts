@@ -207,7 +207,7 @@ export class GeneratorApi extends Construct {
     props.rateLimitTable.grantReadWriteData(uploads);
     props.sitesBucket.grantPut(uploads, '_uploads/*'); // the presigned POST is signed with this permission
     props.sitesBucket.grantRead(generate, '_uploads/*');
-    generate.addToRolePolicy(new iam.PolicyStatement({ actions: ['rekognition:DetectModerationLabels'], resources: ['*'] }));
+    generate.addToRolePolicy(new iam.PolicyStatement({ actions: ['rekognition:DetectModerationLabels', 'rekognition:DetectText'], resources: ['*'] }));
 
     // Mi sitio → Dominio (domains.ts): search and register the owner's own domain through the registrar's API.
     const domainRegister = new ssm.StringParameter(this, 'DomainRegister', {

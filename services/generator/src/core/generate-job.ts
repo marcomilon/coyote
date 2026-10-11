@@ -3,6 +3,7 @@ import { noteRedesignDone } from './chat-notes';
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
 import type { Media } from './content';
 import { loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
+import { voiceOf } from './i18n';
 import { imageMaker, type GenerateImage } from './images';
 import type { Job, Stores } from './jobs';
 import { checkPage } from './page-check';
@@ -28,6 +29,8 @@ export interface GenerateJobDeps {
   outputAllowed(text: string): Promise<boolean>;
   /** Image moderation. Resolves to the labels that make an image unacceptable. */
   moderate(key: string): Promise<string[]>;
+  /** The words legible in a made photo (images.ts). Unset: not checked. */
+  readText?(key: string): Promise<string[]>;
   now(): number;
   newDraftId?: () => string;
   /** The page writer: Opus (or Haiku, see `pageModel`) with a skill (see `pageSkill`). */
@@ -264,7 +267,7 @@ async function sendReady(job: Job, slug: string, deps: GenerateJobDeps): Promise
     if (!site?.ownerEmailId) return;
     const login = await issueLogin(deps.stores, site.ownerEmailId, deps.now());
     const { lang, businessName } = job.answers;
-    await deps.sendEmail(readyEmail(job.ownerEmail, lang, businessName, deps.urls.mySitesUrl(login, lang, slug), deps.urls.appUrl));
+    await deps.sendEmail(readyEmail(job.ownerEmail, voiceOf(job.answers), businessName, deps.urls.mySitesUrl(login, lang, slug), deps.urls.appUrl));
   } catch (error) {
     console.error('ready email failed', { slug, error });
   }

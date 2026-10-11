@@ -1,3 +1,4 @@
+import { voiceOf } from './i18n';
 import { z } from 'zod';
 import { checkSession } from './account';
 import { noteRedesign, noteUndo } from './chat-notes';
@@ -146,7 +147,7 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
     instruction,
     slug: site.slug,
     usage: [],
-    chatAt: await noteRedesign(stores, site.slug, jobId, current.answers.lang, now),
+    chatAt: await noteRedesign(stores, site.slug, jobId, voiceOf(current.answers), now),
   };
   await stores.putJob(job);
   await stores.saveSite({ slug: site.slug, jobIds: [...new Set([...(site.jobIds ?? []), job.jobId])] });
@@ -195,7 +196,7 @@ export async function undo(site: SiteRecord, { stores, now }: Pick<OwnerDeps, 's
   // The chat reply that made it says so, so the chat model is not told the change is still there.
   const made = (await stores.listChat(site.slug, 0, UNDO_LOOKBACK)).find((m) => m.draftId === dropped);
   if (made) await stores.updateChat(site.slug, made.at, { undone: true });
-  await noteUndo(stores, site.slug, (await loadDraft(site.slug, drafts.at(-2)!, stores)).answers.lang, now());
+  await noteUndo(stores, site.slug, voiceOf((await loadDraft(site.slug, drafts.at(-2)!, stores)).answers), now());
   return { status: 200 };
 }
 

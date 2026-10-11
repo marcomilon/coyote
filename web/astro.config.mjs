@@ -5,10 +5,7 @@ import { createUrls } from '../services/generator/src/core/urls.ts';
 // The app's public address (canonical links, link previews, the sitemap), from the CDK context through urls.ts, so
 // no domain is written here. A domainless build has none, and those tags are left out.
 const context = JSON.parse(readFileSync(new URL('../infra/cdk.json', import.meta.url), 'utf8')).context;
-const site =
-  context.domainName && context.sitesDomainName
-    ? createUrls({ mode: 'domain', domainName: context.domainName, sitesDomainName: context.sitesDomainName }).appUrl
-    : undefined;
+const site = context.domainName ? createUrls({ mode: 'domain', domainName: context.domainName }).appUrl : undefined;
 
 export default defineConfig({
   output: 'static',

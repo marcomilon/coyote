@@ -17,12 +17,12 @@ This reverses the rule "the model writes content JSON, never HTML". **The user d
 2. The **clarify** step in the `generate` Lambda makes one forced tool call, `plan_site`. It returns either `{ ready: true }` or `{ questions: Question[] }`. When there are questions, the job becomes `NEEDS_INPUT`.
 3. The web app renders the questions as a form built by our own code. The owner answers them, or skips with "Saltar preguntas y continuar". Either way the app calls `POST /jobs/{id}/answers`.
 4. The answers are checked (lengths, input guardrail, pre-screen). Then the **write** step makes one forced tool call, `write_site`, which returns `{ html, heroScene? }`. After that: sanitize → check the text → hero image → fill the placeholders → save the draft.
-5. The job becomes `DONE` and returns the **magic URL** `/mi-sitio#token=…`. This reuses the existing owner token (`core/token.ts`), now issued when the first draft is ready. The first `GET /jobs/{id}` after `DONE` takes it off the job, so it is shown once. The create page shows the result and the link, with "Guarda este enlace".
+5. The job becomes `DONE` and returns the **magic URL** `/mi-pagina-web#token=…`. This reuses the existing owner token (`core/token.ts`), now issued when the first draft is ready. The first `GET /jobs/{id}` after `DONE` takes it off the job, so it is shown once. The create page shows the result and the link, with "Guarda este enlace".
 6. Only one round of questions is allowed: after the answers, the model has to build.
 
 ### Drafts (private, visible only through the magic URL)
 - Each version of the site is written to `_draft/{draftId}/`, where `draftId` is a random 128-bit ID. The site record stores `currentDraftId` and keeps the last few versions.
-- `cf-rewrite.js` serves `_draft/` (domainless: `/_draft/{draftId}/`; domain mode: `draft.<sites-domain>/{draftId}/`) and never serves `{slug}/` for now. The sites distribution sends `X-Robots-Tag: noindex, nofollow` on everything, since every page is a draft.
+- `cf-rewrite.js` serves `_draft/` (domainless: `/_draft/{draftId}/`; domain mode: `draft.<domain>/{draftId}/`) and never serves `{slug}/` for now. The sites distribution sends `X-Robots-Tag: noindex, nofollow` on everything, since every page is a draft.
 - Storage: the filled page and a copy of its images in `_draft/{draftId}/`; the unfilled source and `site.json` in `_src/{slug}/` (never served); the moderated uploads and the hero photo in `_media/{slug}/` (never served).
 - `_draft/` has no expiry. `_preview/` stops being used.
 - Mi sitio calls `GET /me`, which returns the `draftUrl`, and shows it in an iframe at phone and desktop widths. `frame-ancestors` already allows the app.

@@ -27,7 +27,6 @@ interface Strings {
   failed: Message;
   lostLink: Message;
   noApi: string;
-  canClose: string;
 }
 
 const root = document.getElementById('create') as HTMLElement;
@@ -92,8 +91,6 @@ function showMessage(message: Message) {
 const STEP_STARTS_MS = [0, 8_000, 25_000, 50_000];
 
 function animateSteps() {
-  // Start the bar again: after the questions the view comes back from display:none, and Chrome can leave it frozen.
-  root.querySelectorAll<HTMLElement>('[data-view="working"] .paint').forEach((bar) => bar.getAnimations().forEach((a) => (a.cancel(), a.play())));
   const items = [...root.querySelectorAll('.worksteps li')];
   const elapsed = $<HTMLElement>('[data-elapsed]');
   const started = Date.now();
@@ -226,16 +223,13 @@ function progress(jobId: string, job: JobView) {
   } catch {
     // Storage blocked: the note still makes sense without the address.
   }
-  const note = $('[data-close-note]');
-  note.textContent = strings.canClose.replace('{email}', email || '✉');
-  note.classList.add('ready');
+  $('[data-ready-email]').textContent = email || '✉';
+  // The owner may leave now: the card replaces the dots and the "don't close" note; the steps and the clock go on.
+  $('[data-view="working"]').classList.add('ready');
 }
 
-const waitNote = $('[data-close-note]').textContent;
-
 async function follow(jobId: string) {
-  $('[data-close-note]').textContent = waitNote;
-  $('[data-close-note]').classList.remove('ready');
+  $('[data-view="working"]').classList.remove('ready');
   if (root.dataset.state !== 'working') show('working'); // the submit may have shown it already
   const job = await waitForJob(jobId, (current) => progress(jobId, current));
   if (job.status === 'NEEDS_INPUT') showQuestions(jobId, job);
@@ -275,7 +269,7 @@ form.addEventListener('submit', async (event) => {
   const button = form.querySelector('button[type="submit"]') as HTMLButtonElement;
   button.disabled = true;
   // Show the working view right away: /generate runs the pre-screen first and takes a few seconds.
-  $('[data-close-note]').textContent = waitNote;
+  $('[data-view="working"]').classList.remove('ready');
   show('working');
   // A field the API rejects (or a failed upload) sends the owner back to the form.
   const formErrors = (fields: string[]) => {

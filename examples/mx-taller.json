@@ -1,0 +1,11 @@
+{
+  "form": {
+    "businessName": "Taller Ruiz",
+    "about": "Taller mecánico familiar en la colonia Santa Tere, Guadalajara. Don Jorge Ruiz abrió el taller en 1998 y hoy lo atiende con sus dos hijos. Hacemos mecánica general, frenos, suspensión, afinación, cambio de aceite, clutch y diagnóstico por computadora. Te damos el presupuesto antes de tocar el carro y te enseñamos las piezas que cambiamos.\n\nPrecios de referencia:\n* Afinación mayor 4 cilindros desde $1,450\n* Cambio de aceite sintético y filtro desde $850\n* Balatas delanteras con mano de obra desde $1,200\n* Diagnóstico por computadora $350 (se descuenta si hacemos el trabajo)\n\nHorario: lunes a viernes de 8:30 a 19:00, sábados de 9:00 a 14:00. Pagos en efectivo, transferencia y tarjeta.",
+    "whatsapp": "+52 33 1234 5678",
+    "address": "Calle Juan Manuel 1420, Santa Teresita, Guadalajara, Jal.",
+    "lang": "es"
+  },
+  "details": "Garantía de 3 meses en mano de obra. Trabajamos autos nacionales y japoneses (Nissan, Chevrolet, VW, Toyota, Honda). Si dejas el carro en la mañana, casi siempre está listo en la tarde. Mándanos por WhatsApp el modelo y el año y te cotizamos.",
+  "goal": "whatsapp"
+}

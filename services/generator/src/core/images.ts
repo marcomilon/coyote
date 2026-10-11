@@ -8,21 +8,37 @@ export type GenerateImage = (prompt: string, negativePrompt: string, aspect: Ima
 /** Photos per page (each $0.04 and about 10 s). */
 export const MAX_IMAGES = 4;
 
-/** The image model cannot spell, and a made-up shop sign or logo would be the business's name written wrong. */
-export const IMAGE_NEGATIVE = 'text, letters, words, signage, logos, watermark';
+/**
+ * The image model cannot spell, and a made-up shop sign or logo would be the business's name written wrong.
+ * It also draws hands with extra or missing fingers.
+ */
+export const IMAGE_NEGATIVE = 'text, letters, words, signage, logos, watermark, deformed hands, extra fingers, missing fingers, fused fingers';
+
+/**
+ * The words in Rekognition's DetectText result that count as writing: whole words of at least 3 letters it is sure of.
+ * Stray digits and shapes that look like a letter or two in a pattern or a texture don't refuse a photo.
+ */
+export function legibleWords(detections: { Type?: string; DetectedText?: string; Confidence?: number }[]): string[] {
+  return detections
+    .filter((d) => d.Type === 'WORD' && (d.Confidence ?? 0) >= 80 && (d.DetectedText?.match(/\p{L}/gu)?.length ?? 0) >= 3)
+    .map((d) => d.DetectedText!);
+}
 
 export interface ImageDeps {
   stores: Pick<Stores, 'putAsset' | 'deletePrefix'>;
   generateImage: GenerateImage;
   /** Resolves to the moderation labels that make an image unacceptable. */
   moderate(key: string): Promise<string[]>;
+  /** Resolves to the words legible in an image. Unset: not checked. */
+  readText?(key: string): Promise<string[]>;
   /** Output guardrail on the scene text. */
   outputAllowed(text: string): Promise<boolean>;
 }
 
 /**
  * The make_image tool for one page: the scene passes the guardrail, the photo is made, saved as
- * `<prefix>assets/gen-<id>.jpg`, and passes image moderation. `made` collects the files (for Media.generated).
+ * `<prefix>assets/gen-<id>.jpg`, and passes image moderation and a text check: the model misspells whatever it writes
+ * (and in English), so a photo with legible words is refused. `made` collects the files (for Media.generated).
  * Every result says how many photos are left: a refused scene uses one up too, a failed image model call doesn't.
  */
 export function imageMaker(prefix: string, deps: ImageDeps, made: string[] = []): MakeImage {
@@ -42,6 +58,10 @@ export function imageMaker(prefix: string, deps: ImageDeps, made: string[] = [])
     if ((await deps.moderate(key)).length > 0) {
       await deps.stores.deletePrefix(key);
       return { error: 'the photo did not pass moderation', left };
+    }
+    if (deps.readText && (await deps.readText(key)).length > 0) {
+      await deps.stores.deletePrefix(key);
+      return { error: 'the photo had writing in it (the image model misspells everything): pick a scene with no signs, labels, menus, or storefronts', left };
     }
     made.push(file);
     return { file, bytes, left };

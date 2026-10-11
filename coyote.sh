@@ -19,6 +19,7 @@ Commands:
   abuse-report                   Requests, rejections, and new sites of the last 24 h
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
+  view <slug>                    Copy a site's current draft to out/view/<slug>/ and open it in the browser
   page-model [opus|haiku]        Show or set the model that writes the pages, for the whole stack, from the next job.
                                  haiku is cheap, for testing the workflow; opus makes the real designs. Survives deploys
   page-skill [<name>|none]       Show the page writer's skill and the ones available, or switch it (none: no skill),
@@ -28,6 +29,7 @@ Commands:
                                  for the whole stack from the next job. No deploy needed. Survives deploys
   page-images [on|off]           Show or switch the photos the page writer makes (for owners who leave "Fotos creadas con IA" on),
                                  for the whole stack from the next job. No deploy needed. Survives deploys
+  example-page <page-dir> <slug> Make a page from an opus:sites run a landing example site (examples/sites/<slug>/; then deploy)
   refill-all                     Finish every site's current draft again (after page-check or domain changes; no model call)
   domains                        List the domains owners registered (Mi sitio → Dominio)
   domain-register [on|off]       Show or switch whether owners may register a domain (Coyote pays from the Porkbun balance).
@@ -200,6 +202,32 @@ cmd_status() {
   echo "  pre-screen  $(env PRESCREEN_MODEL_ID)"
 }
 
+# Copies a site's current draft (_draft/<draftId>/ in the sites bucket) to out/view/<slug>/ and opens it.
+# Pages use relative asset URLs, so the local copy looks like the real one.
+cmd_view() {
+  local slug="${1:-}" aws=(aws --profile "$PROFILE" --region us-east-1 --output text) table bucket draft dir
+  [[ "$slug" =~ ^[a-z0-9-]+$ ]] || die "usage: ./coyote.sh view <slug>"
+  output() { "${aws[@]}" cloudformation describe-stacks --stack-name Coyote --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue"; }
+  table="$(output SitesTableName)"
+  bucket="$(output SitesBucketName)"
+  draft="$("${aws[@]}" dynamodb get-item --table-name "$table" --key "{\"slug\":{\"S\":\"$slug\"}}" --query Item.currentDraftId.S)"
+  [[ -n "$draft" && "$draft" != None ]] || die "no site '$slug' with a draft"
+  dir="$ROOT/out/view/$slug"
+  rm -rf "$dir"
+  "${aws[@]}" s3 sync "s3://$bucket/_draft/$draft/" "$dir/" --only-show-errors
+  [[ -f "$dir/index.html" ]] || die "draft $draft has no index.html"
+  echo "$dir/index.html"
+  open "$dir/index.html" 2>/dev/null || xdg-open "$dir/index.html" 2>/dev/null || true
+}
+
+# Copies an opus:sites page (with its photos) to examples/sites/<slug>/ with the real footer links. Deploy publishes it.
+cmd_example_page() {
+  [[ $# -eq 2 ]] || die "usage: ./coyote.sh example-page <run>/pages/<biz>/<page-dir> <slug>"
+  local dir
+  dir="$(cd "$1" && pwd)" || die "no such folder: $1"
+  npm run --silent example-page -w services/generator -- "$dir" "$2"
+}
+
 cmd_page_model() {
   local ssm=(aws ssm --profile "$PROFILE" --region us-east-1) name=/coyote/page-model
   case "${1:-}" in
@@ -292,6 +320,8 @@ case "$command" in
   destroy) cmd_destroy ;;
   abuse-report | unpublish | restore | refill-all | domains) cmd_admin "$command" "$@" ;;
   domain-register) cmd_domain_register "$@" ;;
+  view) cmd_view "$@" ;;
+  example-page) cmd_example_page "$@" ;;
   page-model) cmd_page_model "$@" ;;
   page-skill) cmd_page_skill "$@" ;;
   page-look) cmd_page_look "$@" ;;

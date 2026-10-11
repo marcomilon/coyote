@@ -1,14 +1,17 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import AccountBar from './AccountBar.astro';
 import ChatThread from './ChatThread.astro';
 import { t, type Lang } from '../i18n/strings';
 import { countries, countryLabel } from '../scripts/phone';
 
 interface Props {
   lang: Lang;
+  /** Spanish with vos (the pages under /vos/). */
+  vos?: boolean;
 }
-const { lang } = Astro.props;
-const s = t(lang);
+const { lang, vos = false } = Astro.props;
+const s = t(lang, vos);
 const m = s.mySite;
 const other = t(s.otherLang.code);
 const d = m.domain;
@@ -26,33 +29,50 @@ const fields = [
 ];
 ---
 
-<Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig noindex>
+<Layout lang={lang} vos={vos} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig noindex>
+  <AccountBar slot="account" lang={lang} vos={vos} />
   <div class="mysite wrap" id="mysite" data-state="loading" data-domain-tab={domainTab ? "on" : undefined} data-strings={JSON.stringify(clientStrings)}>
-    <section data-view="loading" class="panel"><div class="paint" aria-hidden="true"></div></section>
+    <section data-view="loading" class="loader" role="status" aria-label={s.loading}><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></section>
 
     <section data-view="message" class="panel" aria-live="assertive">
       <h2 data-message-title></h2>
       <p data-message-text></p>
+      {/* No session in this browser (or it expired): how to get back to the page. */}
+      <div class="card recover" data-recover hidden>
+        <h3>{m.recover.title}</h3>
+        <ol>
+          {m.recover.steps.map((step) => <li>{step}</li>)}
+        </ol>
+        <p class="hint">{m.recover.note}</p>
+        <div><a class="btn small" href={s.paths.mySites}>{m.recover.action}</a></div>
+      </div>
     </section>
 
     <section data-view="editor">
-      <nav class="breadcrumb" aria-label={m.breadcrumb}>
-        <ol>
-          <li><a href={s.paths.mySites} data-crumb-list>{s.nav.mySites}</a></li>
-          <li aria-current="page" data-crumb-name>{m.heading}</li>
-        </ol>
-      </nav>
       <header>
         <h1 data-business>{m.heading}</h1>
+        {/* The page full screen in a new tab (/ver); the tooltip says so, and that only the owner can see it. */}
+        <a class="open-tab" data-draft-link target="_blank" rel="noopener" aria-label={`${m.open}. ${m.private}`} data-tip={`${m.open}. ${m.private}`}>
+          <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </a>
       </header>
+      {/* For an owner who came from the form or the "lista" email (not from Mis páginas web): how to come back later. */}
+      <details class="later" data-later hidden>
+        <summary>{m.recover.later}</summary>
+        <div class="recover">
+          <ol>
+            {m.recover.steps.map((step) => <li>{step}</li>)}
+          </ol>
+          <p class="hint">{m.recover.note}</p>
+        </div>
+      </details>
       <div class="tabs" role="tablist" aria-label={m.tabs.label}>
         <button type="button" role="tab" id="tab-preview" aria-controls="panel-preview" aria-selected="true" data-tab="preview">{m.tabs.preview}</button>
         <button type="button" role="tab" id="tab-change" aria-controls="panel-change" aria-selected="false" tabindex="-1" data-tab="change">{m.tabs.change}</button>
         <button type="button" role="tab" id="tab-domain" aria-controls="panel-domain" aria-selected="false" tabindex="-1" data-tab="domain">{m.tabs.domain}</button>
       </div>
-      <!-- Under the tabs on every tab; the Celular/Computador switch only on Vista previa. -->
+      <!-- Under the tabs: the Celular/Computador switch, only on Vista previa. -->
       <div class="site-bar">
-        <p class="hint">{m.private} <a data-draft-link target="_blank" rel="noopener">{m.open}</a></p>
         <div class="viewport" role="group" aria-label={m.viewport.label} data-viewport>
           <button type="button" data-width="phone" aria-pressed="false">{m.viewport.phone}</button>
           <button type="button" data-width="desktop" aria-pressed="true">{m.viewport.desktop}</button>
@@ -70,7 +90,7 @@ const fields = [
       <div class="tabpanel" role="tabpanel" id="panel-change" aria-labelledby="tab-change" data-panel="change" hidden>
         <div class="change-layout">
         <div>
-        <ChatThread lang={lang} boxed />
+        <ChatThread lang={lang} vos={vos} boxed />
         </div>
         <div class="handoff" data-handoff>
           <div class="qr" data-qr></div>

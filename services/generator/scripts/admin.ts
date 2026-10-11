@@ -63,7 +63,7 @@ switch (command) {
     await stores.deletePrefix(`_quarantine/${s}/`);
     await stores.saveSite({ slug: s, status: 'published' });
     await stores.invalidateSite(s);
-    console.log(`${s}: back online at ${urls.siteUrl(s)}`);
+    console.log(`${s}: restored.`);
     break;
   }
   case 'abuse-report': {

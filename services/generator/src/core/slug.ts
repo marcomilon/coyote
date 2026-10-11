@@ -1,4 +1,5 @@
 import { findBrand, normalizeForMatch } from './brands';
+import { EXAMPLE_SITES } from './examples';
 
 const MAX_LENGTH = 40; // a DNS label allows 63; leave room for the collision suffix
 const FALLBACK = 'sitio';
@@ -18,6 +19,7 @@ const RESERVED = new Set([
   'dev',
   'notify',
   'coyote',
+  ...EXAMPLE_SITES,
 ]);
 
 export function slugify(businessName: string): string {

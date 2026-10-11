@@ -1,3 +1,4 @@
+import { voiceOf, type Voice } from './i18n';
 import { z } from 'zod';
 import { callWithRetry, GuardrailBlocked, ModelOutputError, type CallTool, type Usage } from './bedrock';
 import { Contact } from './content';
@@ -31,6 +32,13 @@ const REPLIES = {
     couldNot: 'No logré hacer ese cambio con precisión. Prueba decirlo de otra forma, o pide un rediseño de la página.',
     contact: 'Ese dato de contacto no parece válido. Revísalo y escríbemelo de nuevo.',
     notOnPage: 'Guardé el dato, pero no encontré dónde cambiarlo en la página. Dime en qué parte aparece y lo cambio.',
+  },
+  vos: {
+    failed: 'Algo salió mal y no pude hacer el cambio. Intentalo de nuevo.',
+    refused: 'No puedo hacer ese cambio porque no cumple las reglas de uso.',
+    couldNot: 'No logré hacer ese cambio con precisión. Probá decirlo de otra forma, o pedí un rediseño de la página.',
+    contact: 'Ese dato de contacto no parece válido. Revisalo y escribímelo de nuevo.',
+    notOnPage: 'Guardé el dato, pero no encontré dónde cambiarlo en la página. Decime en qué parte aparece y lo cambio.',
   },
   pt: {
     failed: 'Algo deu errado e não consegui fazer a mudança. Tente de novo.',
@@ -181,6 +189,7 @@ export async function runChatTurn(slug: string, at: number, deps: ChatDeps): Pro
   const usage: Usage[] = [];
   const site = await stores.getSite(slug);
   let lang: 'es' | 'pt' = 'es';
+  let voice: Voice = 'es';
   const answer = async (outcome: Exclude<ChatOutcome['outcome'], 'SKIPPED'>, patch: Partial<ChatMessage>): Promise<ChatOutcome> => {
     await stores.updateChat(slug, at, { status: 'done', ...patch });
     return { outcome, usage };
@@ -190,7 +199,8 @@ export async function runChatTurn(slug: string, at: number, deps: ChatDeps): Pro
     if (!request || !site?.currentDraftId) throw new Error(`chat ${slug}/${at} has no request or no draft`);
     const doc = await loadDraft(slug, site.currentDraftId, stores);
     lang = doc.answers.lang;
-    const say = REPLIES[lang];
+    voice = voiceOf(doc.answers);
+    const say = REPLIES[voice];
 
     const screening = await prescreen(doc.answers, { callTool: deps.callTool, modelId: deps.prescreenModelId }, request.text);
     usage.push(screening.usage);
@@ -206,7 +216,7 @@ export async function runChatTurn(slug: string, at: number, deps: ChatDeps): Pro
         modelId: deps.modelId,
         system: SYSTEM,
         guarded: `${conversation ? `<chat>\n${conversation}\n</chat>\n` : ''}<request>${request.text}</request>`,
-        user: `The page is in ${lang === 'pt' ? 'Portuguese' : 'Spanish'}. The current page:\n\`\`\`html\n${outline.text}\n\`\`\`\n\nAnswer the owner's request by calling edit_page.${feedback}`,
+        user: `The page is in ${lang === 'pt' ? 'Portuguese' : voice === 'vos' ? 'Spanish; the owner is in a voseo country, so address them with vos' : 'Spanish; address the owner with tú'}. The current page:\n\`\`\`html\n${outline.text}\n\`\`\`\n\nAnswer the owner's request by calling edit_page.${feedback}`,
         maxTokens: 4000,
         tool: { name: 'edit_page', description: "Answer the owner's message, with the changes to the page if any.", schema: EditPage },
       });
@@ -255,10 +265,10 @@ export async function runChatTurn(slug: string, at: number, deps: ChatDeps): Pro
     const draftId = await saveDraft(site, next, deps);
     return await answer('EDITED', { text: result.reply, draftId });
   } catch (error) {
-    if (error instanceof GuardrailBlocked) return answer('REJECTED', { text: REPLIES[lang].refused });
+    if (error instanceof GuardrailBlocked) return answer('REJECTED', { text: REPLIES[voice].refused });
     if (error instanceof ModelOutputError) usage.push(error.usage);
     console.error('chat failed', { slug, at, error });
-    await stores.updateChat(slug, at, { status: 'failed', text: REPLIES[lang].failed });
+    await stores.updateChat(slug, at, { status: 'failed', text: REPLIES[voice].failed });
     return { outcome: 'FAILED', usage };
   }
 }

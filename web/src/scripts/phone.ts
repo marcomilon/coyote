@@ -50,14 +50,63 @@ export function guessCountry(): string {
   return '';
 }
 
-/** Wires the picker: guesses the country when none is chosen and keeps the placeholder in step with it. */
+const GEO_KEY = 'ventas314.geo';
+let detected: Promise<string> | undefined;
+
+/**
+ * The visitor's country from CloudFront (/geo, by IP), if it's a listed one; otherwise the time-zone guess.
+ * Asked once per tab. Under `npm run dev` there's no /geo, so it's always the guess.
+ */
+export function detectCountry(): Promise<string> {
+  detected ??= (async () => {
+    try {
+      const cached = sessionStorage.getItem(GEO_KEY);
+      if (cached !== null) return cached || guessCountry();
+    } catch {
+      // Storage blocked: ask again.
+    }
+    let country = '';
+    try {
+      const response = await fetch('/geo', { signal: AbortSignal.timeout(1500) });
+      const body = response.ok ? ((await response.json()) as { country?: unknown }) : {};
+      if (typeof body.country === 'string' && LIST.some((c) => c.iso === body.country)) country = body.country;
+    } catch {
+      // No answer in time: fall back to the guess.
+    }
+    try {
+      sessionStorage.setItem(GEO_KEY, country);
+    } catch {
+      // Not cached.
+    }
+    return country || guessCountry();
+  })();
+  return detected;
+}
+
+/**
+ * Wires the picker: guesses the country when none is chosen, then switches to the detected country while the
+ * owner hasn't touched the field, and keeps the placeholder in step with it.
+ */
 export function setUpCountryPicker(select: HTMLSelectElement, input: HTMLInputElement) {
-  if (!select.value) select.value = guessCountry() || select.dataset.fallback || '';
+  const guessing = !select.value;
+  if (guessing) select.value = guessCountry() || select.dataset.fallback || '';
   const sync = () => {
     input.placeholder = LIST.find((c) => c.iso === select.value)?.example ?? '';
   };
-  select.addEventListener('change', sync);
+  let touched = false;
+  select.addEventListener('change', () => {
+    touched = true;
+    sync();
+  });
   sync();
+  if (guessing) {
+    void detectCountry().then((country) => {
+      if (country && !touched && !input.value) {
+        select.value = country;
+        sync();
+      }
+    });
+  }
   // Phone numbers only: digits, spaces, ( ) - and a leading "+".
   input.addEventListener('input', () => {
     const cleaned = input.value.replace(/[^\d\s()+-]/g, '').replace(/(?!^)\+/g, '');

@@ -135,6 +135,27 @@ describe('CoyoteStack, domainless', () => {
     expect(csp).not.toContain("'unsafe-eval'");
   });
 
+  it("answers the visitor's country at /geo from a function that sees CloudFront's country header", () => {
+    expect(cspOf(template, 'AppHeaders')).toContain("connect-src 'self' ");
+    template.hasResourceProperties('AWS::CloudFront::OriginRequestPolicy', {
+      OriginRequestPolicyConfig: Match.objectLike({ HeadersConfig: { HeaderBehavior: 'whitelist', Headers: ['CloudFront-Viewer-Country'] } }),
+    });
+    template.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        Comment: 'coyote app',
+        CacheBehaviors: [
+          Match.objectLike({
+            PathPattern: '/geo',
+            CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad', // CachingDisabled
+            OriginRequestPolicyId: Match.anyValue(),
+            FunctionAssociations: [Match.objectLike({ EventType: 'viewer-request' })],
+          }),
+        ],
+      }),
+    });
+    expect(JSON.stringify(template.findResources('AWS::CloudFront::Function'))).toContain('cloudfront-viewer-country');
+  });
+
   it('throttles the API and lets the local frontend call it', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
       DefaultRouteSettings: { ThrottlingRateLimit: 50, ThrottlingBurstLimit: 100 },
@@ -248,20 +269,14 @@ describe('CoyoteStack, domain mode', () => {
   const template = synth({
     env: { region: 'us-east-1', account: '123456789012' },
     domainName: 'brand.test',
-    sitesDomainName: 'sites.test',
   });
 
   it('creates certificates, aliases, and DNS records', () => {
     template.resourceCountIs('AWS::CertificateManager::Certificate', 3);
-    template.hasResourceProperties('AWS::CertificateManager::Certificate', {
-      DomainName: 'sites.test',
-      SubjectAlternativeNames: ['*.sites.test'],
-    });
-    template.hasResourceProperties('AWS::CloudFront::Distribution', {
-      DistributionConfig: { Aliases: ['sites.test', '*.sites.test'] },
-    });
+    template.hasResourceProperties('AWS::CertificateManager::Certificate', { DomainName: '*.brand.test' });
+    template.hasResourceProperties('AWS::CloudFront::Distribution', { DistributionConfig: { Aliases: ['*.brand.test'] } });
     template.hasResourceProperties('AWS::CloudFront::Distribution', { DistributionConfig: { Aliases: ['www.brand.test', 'brand.test'] } });
-    template.resourceCountIs('AWS::Route53::RecordSet', 13); // 10 aliases (A + AAAA for www, the bare domain, sites, *.sites, api) + 3 DKIM records
+    template.resourceCountIs('AWS::Route53::RecordSet', 11); // 8 aliases (A + AAAA for www, the bare domain, *, api) + 3 DKIM records
   });
 
   it('sends email from no-reply@<domain> with DKIM', () => {
@@ -275,11 +290,8 @@ describe('CoyoteStack, domain mode', () => {
   it('uses exact origins in the CSPs and the rewrite function', () => {
     expect(cspOf(template, 'SitesHeaders')).toContain('frame-ancestors https://www.brand.test http://localhost:5173');
     expect(cspOf(template, 'SitesHeaders')).toContain('form-action https://api.brand.test');
-    expect(cspOf(template, 'AppHeaders')).toContain('frame-src https://draft.sites.test');
-    expect(JSON.stringify(template.findResources('AWS::CloudFront::Function'))).toContain("var SITES_HOST = 'sites.test'");
-  });
-
-  it('rejects a half-configured domain setup', () => {
-    expect(() => synth({ domainName: 'brand.test' })).toThrow(/domainless/);
+    expect(cspOf(template, 'AppHeaders')).toContain('frame-src https://draft.brand.test');
+    expect(cspOf(template, 'AppHeaders')).toContain("connect-src 'self' https://api.brand.test");
+    expect(JSON.stringify(template.findResources('AWS::CloudFront::Function'))).toContain("var DOMAIN = 'brand.test'");
   });
 });

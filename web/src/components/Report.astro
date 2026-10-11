@@ -1,17 +1,21 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Breadcrumb from './Breadcrumb.astro';
 import { t, type Lang } from '../i18n/strings';
 
 interface Props {
   lang: Lang;
+  /** Spanish with vos (the pages under /vos/). */
+  vos?: boolean;
 }
-const { lang } = Astro.props;
-const s = t(lang);
+const { lang, vos = false } = Astro.props;
+const s = t(lang, vos);
 const r = s.report;
 ---
 
-<Layout lang={lang} title={r.title} description={r.description} alternate={lang === 'es' ? '/pt/denunciar' : '/reportar'} withConfig>
+<Layout lang={lang} vos={vos} title={r.title} description={r.description} alternate={lang === 'es' ? '/pt/denunciar' : '/reportar'} withConfig>
   <div class="mysite wrap" id="report" data-state="editor" data-strings={JSON.stringify({ sent: r.sent, missing: r.missing, error: r.error, limited: r.limited })}>
+    <Breadcrumb lang={lang} vos={vos} current={r.heading} />
     <section data-view="message" class="panel" aria-live="assertive">
       <h2 data-message-title></h2>
       <p data-message-text></p>

@@ -26,6 +26,8 @@ npm run diff           # cdk diff against the deployed stack (--profile coyote)
 ./coyote.sh page-images [on|off]   # show or switch made photos for everyone (owners choose per site on the form; no deploy)
 ./coyote.sh domain-register [on|off]   # show or switch domain registration in Mi sitio → Dominio (Coyote pays from the Porkbun balance; no deploy)
 ./coyote.sh domains    # the domains owners registered
+./coyote.sh view <slug>   # copy a site's current draft to out/view/<slug>/ and open it
+./coyote.sh example-page <page-dir> <slug>   # make an opus:sites page a landing example (examples/sites/<slug>/; then deploy)
 npm run dev            # astro dev for web/ on :5173 against the DEPLOYED API. Runs in the background; stop with `npx astro dev stop` in web/
 ```
 `coyote.sh` (repo root) is the home for project commands; add new operational commands there as `cmd_<name>` functions rather than as loose scripts.
@@ -42,9 +44,9 @@ Tests live in `infra/test/` and `services/*/test/` (see `vitest.config.ts`). The
 - **Flow**: `web/` form → API Gateway → `submit` Lambda (rate limit → pre-screen classifier → atomic slug claim) → async `generate` Lambda: `plan_site` (may ask the owner up to 4 questions → `NEEDS_INPUT` → `POST /jobs/{id}/answers`) → Opus writes the page → page checks + guardrail → private draft in S3 → browser polls `GET /jobs/{id}` and, once, gets the magic link, then goes straight to Mi sitio. Nothing is published yet.
 - **Opus 5.5 writes each page** (`page-writer.ts`: Anthropic's API with the user's key in Secrets Manager `coyote/anthropic-api-key`, the frontend-design skill as the system prompt, a chat-like request). Don't add rules to that prompt: they made the designs worse. Safety is checks on the finished page (`page-check.ts`: repair links, scripts, images; reject redirects, contact details the owner never gave, policy text). No fallback: if it fails, the job fails. Opus uses the owner's uploads, makes photos through the `make_image` tool when the owner left the form's "Fotos creadas con IA" on and `page-images` is on (`images.ts`: guardrail on the scene, Rekognition on the photo, at most 4) instead of drawing SVG illustrations (a refused photo is left out), and otherwise draws its images as SVG. The page writer and the chat get the owner's real contact details; contact details come from user input (numbers and emails the owner wrote elsewhere are allowed on the page too), the page checks reject any other number or email, and contact edits swap them into the page with no model call.
 - **Two CloudFront distributions**: the app (JS allowed) and user sites (inline scripts and a few CDNs listed in `page-check.ts`, no network access). They cannot be merged: CloudFront picks the response-headers policy before the Host-rewrite function runs.
-- **Domain modes**, selected by CDK context `domainName` + `sitesDomainName` (both or neither; the stack throws otherwise):
-  - *Domainless*: no ACM/Route 53; sites are path-based at `<sites-dist>.cloudfront.net/{slug}/`.
-  - *Domain mode* (current, `ventas314.com`): app at `www.<domain>` (the bare domain redirects there), API at `api.<domain>`, sites at `{slug}.<sites-domain>`. For now the sites domain is `sites.ventas314.com`; before launch it must be a separate registrable domain.
+- **Domain modes**, selected by CDK context `domainName`:
+  - *Domainless*: no ACM/Route 53; drafts and examples are path-based on `<sites-dist>.cloudfront.net`.
+  - *Domain mode* (current, `ventas314.com`): app at `www.<domain>` (the bare domain redirects there), API at `api.<domain>`, private drafts at `draft.<domain>`, our landing examples at `{slug}.<domain>`. Customer pages are never public on our domain: drafts load only inside the app, and owners publish only on their own domain.
   - Switching must stay a config change + redeploy + `refill-all`. So: **no domain literal anywhere in code, prompts, or tests**; `urls.ts` is the only module that knows the mode (CSP, CORS, Origin checks, footer links derive from it); pages use relative asset URLs.
 - **Local development has no mock backend.** `npm run dev` serves only the static frontend; the API, Lambdas, and generated sites are the deployed stack, which allows `http://localhost:5173` in CORS and in the sites' `frame-ancestors`.
 - **Safety is four independent layers** (Bedrock Guardrail incl. explicit `ApplyGuardrail` on output text, pre-screen classifier, `policy.ts` checks on content + rendered HTML, post-publication reports/quarantine). The rate limit runs before any Bedrock call.
@@ -59,4 +61,35 @@ Tests live in `infra/test/` and `services/*/test/` (see `vitest.config.ts`). The
 - Our frontend (`web/`) is Astro, built to static files; interactive parts are plain TypeScript in Astro scripts, and the API URL comes from a runtime `config.js`. Generated business sites are never Astro: Opus writes them and `page-check.ts` finishes them in Lambda.
 - ESM TypeScript everywhere, `moduleResolution: "Bundler"`, extensionless relative imports. The CDK app runs through `tsx` (`infra/cdk.json`).
 - `npm run synth` and unit tests must keep passing without AWS credentials: domain mode's zone lookups are cached in `infra/cdk.context.json` (commit it after a lookup changes) and `account` in `cdk.json` stands in for the credentials.
-- User-facing copy is Spanish (es-419) first, with Portuguese (pt-BR).
+- User-facing copy is Spanish (es-419, tú) first, with Portuguese (pt-BR). Argentina, Uruguay and Paraguay get vos: add the vos wording of any new Spanish string with tú forms to `esVos` in `strings.ts` (the strings test fails otherwise), and new Spanish pages need their twin under `web/src/pages/vos/`.
+
+<!-- BEGIN AWS Agent Toolkit rules -->
+# AWS Guidance
+
+- Where these AWS rules conflict with the project's own instructions, the
+  project's instructions take precedence.
+- Prefer the AWS MCP Server for AWS interactions — it provides sandboxed
+  execution, observability, and audit logging. If unavailable, use the
+  AWS CLI directly.
+- Before starting a task, check whether a relevant AWS skill is available.
+  Load the skill with `retrieve_skill` and prefer its guidance over
+  general knowledge.
+- When uncertain about specific AWS details (API parameters, permissions,
+  limits, error codes), verify against documentation rather than guessing.
+  State uncertainty explicitly if you cannot confirm.
+- When creating infrastructure, prefer infrastructure-as-code (AWS CDK or
+  CloudFormation) over direct CLI commands.
+- When working with infrastructure, follow AWS Well-Architected Framework
+  principles.
+- Do not use em dashes in AWS resource names or descriptions. Use
+  hyphens instead.
+
+## Secret Safety
+
+- MUST load the `aws-secrets-manager` skill first for any secret,
+  credential, API key, token, or password task. MUST NOT call
+  `secretsmanager get-secret-value` or `batch-get-secret-value`, and MUST
+  NOT hit the Secrets Manager Agent daemon directly. MUST use
+  `{{resolve:secretsmanager:secret-id:SecretString:json-key}}` with
+  `asm-exec` so the secret resolves at runtime without entering context.
+<!-- END AWS Agent Toolkit rules -->

@@ -1,34 +1,45 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { t, type Lang } from '../i18n/strings';
+import {
+  COUNTRIES,
+  DEFAULT_COUNTRY,
+  EXAMPLE_PHOTOS,
+  SHOW_HERO_TERMS,
+  STATS,
+  TESTIMONIALS,
+  WHATSAPP,
+  WHATSAPP_FIRST,
+  whatsappLink,
+} from '../config/landing';
 
 interface Props {
   lang: Lang;
+  /** Spanish with vos (the pages under /vos/). */
+  vos?: boolean;
 }
-const { lang } = Astro.props;
-const s = t(lang);
+const { lang, vos = false } = Astro.props;
+const s = t(lang, vos);
 const h = s.home;
 const other = t(s.otherLang.code);
-// Example shop signs on the home page; they swing in one after another (CSS only).
-const signs =
-  lang === 'es'
-    ? [
-        { top: 'Desde 1998', name: 'Panadería Luna', items: ['Pan de masa madre', 'Croissants', 'Café del Huila'], wa: 'Pide por WhatsApp', stamp: 'Abierto', color: 'azul' },
-        { top: 'Mecánica desde 1985', name: 'Taller Ruiz', items: ['Frenos y suspensión', 'Cambio de aceite', 'Diagnóstico'], wa: 'Agenda por WhatsApp', stamp: 'Abierto', color: 'rojo' },
-        { top: 'Peluquería', name: 'Salón Mía', items: ['Cortes', 'Color y mechas', 'Peinados para eventos'], wa: 'Reserva por WhatsApp', stamp: 'Nuevo', color: 'morado' },
-        { top: 'Frutas y verduras', name: 'La Cosecha', items: ['Fruta de temporada', 'Verduras frescas', 'Jugos naturales'], wa: 'Pide por WhatsApp', stamp: 'Envíos', color: 'verde' },
-        { top: 'Cocina casera', name: 'Doña Rosa', items: ['Menú del día', 'Empanadas', 'Postres'], wa: 'Pide por WhatsApp', stamp: 'Abierto', color: 'turquesa' },
-      ]
-    : [
-        { top: 'Desde 1998', name: 'Padaria Lua', items: ['Fermentação natural', 'Croissants', 'Café especial'], wa: 'Peça pelo WhatsApp', stamp: 'Aberto', color: 'azul' },
-        { top: 'Mecânica desde 1985', name: 'Oficina Ruiz', items: ['Freios e suspensão', 'Troca de óleo', 'Diagnóstico'], wa: 'Agende pelo WhatsApp', stamp: 'Aberto', color: 'rojo' },
-        { top: 'Salão de beleza', name: 'Studio Mia', items: ['Cortes', 'Coloração e mechas', 'Penteados para festas'], wa: 'Reserve pelo WhatsApp', stamp: 'Novo', color: 'morado' },
-        { top: 'Hortifrúti', name: 'A Colheita', items: ['Frutas da estação', 'Verduras frescas', 'Sucos naturais'], wa: 'Peça pelo WhatsApp', stamp: 'Entrega', color: 'verde' },
-        { top: 'Comida caseira', name: 'Dona Rosa', items: ['Prato do dia', 'Salgados', 'Sobremesas'], wa: 'Peça pelo WhatsApp', stamp: 'Aberto', color: 'turquesa' },
-      ];
+const fallback = DEFAULT_COUNTRY[lang];
+// Every country's value is on the page; the country picker (scripts/landing.ts) shows one set and hides the rest.
+const perCountry = (value: (c: (typeof COUNTRIES)[number]) => string) =>
+  COUNTRIES.map((c) => ({ code: c.code, value: value(c), hidden: c.code !== fallback }));
+// "…{tld}…" → the text around it, with the TLD switched by country.
+const splitTld = (text: string) => text.split('{tld}') as [string, string?];
+const contact = whatsappLink(lang);
+// Until owners can create a site on WhatsApp, the WhatsApp buttons open the web form.
+const onboarding = (WHATSAPP.onboarding && contact) || s.paths.create;
+const [primary, secondary] = WHATSAPP_FIRST
+  ? [{ label: h.ctaWhatsapp, href: onboarding }, { label: h.ctaWeb, href: s.paths.create }]
+  : [{ label: h.cta, href: s.paths.create }, { label: h.seeExamples, href: '#ejemplos' }];
+const [subBefore, subAfter] = h.pricing.sub.split('{currency}');
+const testimonials = TESTIMONIALS[lang];
+const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
 ---
 
-<Layout lang={lang} title={h.title} description={h.description} alternate={other.paths.home}>
+<Layout lang={lang} vos={vos} title={h.title} description={h.description} alternate={other.paths.home} withConfig home>
   {
     Astro.site && (
       <script
@@ -40,54 +51,275 @@ const signs =
           '@graph': [
             { '@type': 'Organization', name: 'ventas314.com', url: new URL('/', Astro.site).href, logo: new URL('/logo.png', Astro.site).href },
             { '@type': 'WebSite', name: 'ventas314.com', url: new URL(s.paths.home, Astro.site).href, inLanguage: s.htmlLang, description: h.description },
+            {
+              '@type': 'FAQPage',
+              url: new URL(s.paths.home, Astro.site).href,
+              inLanguage: s.htmlLang,
+              mainEntity: h.faq.map((item) => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })),
+            },
           ],
         })}
       />
     )
   }
   <section class="hero wrap">
-    <div>
+    <div class="hero-text">
       <p class="kicker">{h.kicker}</p>
       <h1>{h.headline.map((line) => <span>{line}</span>)}</h1>
       <p class="lead">{h.lead}</p>
-      <a class="btn" href={s.paths.create}>{h.cta}</a>
-      <span class="cta-note">{h.ctaNote}</span>
+      <div class="ctas">
+        <a class="btn" href={primary.href}>{primary.label}</a>
+        <a class="btn ghost" href={secondary.href}>{secondary.label}</a>
+      </div>
+      {SHOW_HERO_TERMS && <p class="terms">{h.terms}</p>}
     </div>
-    <div class="signs" aria-hidden="true">
-      {signs.map((sign, i) => (
-        <div class={`rotulo ${sign.color}`} style={`--i: ${i}`}>
-          <span class="stamp">{sign.stamp}</span>
-          <p class="top">{sign.top}</p>
-          <p class="name">{sign.name}</p>
-          <ul>{sign.items.map((item) => <li>{item}</li>)}</ul>
-          <span class="wa">{sign.wa}</span>
-        </div>
-      ))}
+
+    <div class="showcase" role="group" aria-label={h.examplesLabel}>
+      <div class="phone">
+        {
+          h.examples.map((ex, i) => (
+            <div class="screen" id={`ejemplo-${i}`} style={`--bg: ${ex.color}`} hidden={i !== 0}>
+              <span class="notch" />
+              <div class="photo">{EXAMPLE_PHOTOS[i] && <img src={EXAMPLE_PHOTOS[i]} alt="" loading={i === 0 ? 'eager' : 'lazy'} />}</div>
+              <div class="body">
+                <p class="tagline">{ex.tagline}</p>
+                <p class="name">{ex.name}</p>
+                <ul>
+                  {ex.items.map((item) => (
+                    <li>{item}</li>
+                  ))}
+                </ul>
+                <p class="place">📍 {ex.place}</p>
+                <span class="pill">{ex.cta}</span>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+      <div class="example-tabs" data-example-tabs hidden>
+        {
+          h.examples.map((ex, i) => (
+            <button type="button" aria-controls={`ejemplo-${i}`} aria-pressed={i === 0 ? 'true' : 'false'}>
+              {ex.tab}
+            </button>
+          ))
+        }
+      </div>
     </div>
   </section>
 
-  <section class="steps">
-    <div class="wrap">
-      <h2>{h.stepsTitle}</h2>
-      <ol>
-        {h.steps.map((step) => (
-          <li>
+  <div class="marquee">
+    <div class="track">
+      <ul aria-label={h.forTitle}>{h.forList.map((name) => <li>{name}</li>)}</ul>
+      <ul aria-hidden="true">{h.forList.map((name) => <li>{name}</li>)}</ul>
+    </div>
+  </div>
+
+  <section class="includes wrap">
+    <h2>{h.includes.title.map((line) => <span>{line}</span>)}</h2>
+    <p class="sub">{h.includes.sub}</p>
+    <ul class="cards">
+      {
+        h.includes.items.map((item, i) => {
+          const [before, after] = splitTld(item.text);
+          return (
+            <li class="card">
+              <span class={`icon ${circles[i]}`} aria-hidden="true">
+                {item.icon}
+              </span>
+              <h3>{item.title}</h3>
+              <p>
+                {before}
+                {after !== undefined && (
+                  <>
+                    {perCountry((c) => c.tld).map((v) => (
+                      <span data-country={v.code} hidden={v.hidden}>
+                        {v.value}
+                      </span>
+                    ))}
+                    {after}
+                  </>
+                )}
+              </p>
+            </li>
+          );
+        })
+      }
+    </ul>
+  </section>
+
+  <section class="steps wrap">
+    <h2>{h.stepsTitle}</h2>
+    <ol class="cards">
+      {
+        h.steps.map((step) => (
+          <li class="card">
             <span class="n">{step.n}</span>
             <h3>{step.title}</h3>
             <p>{step.text}</p>
           </li>
-        ))}
-      </ol>
+        ))
+      }
+    </ol>
+  </section>
+
+  <section class="proof wrap" id="ejemplos">
+    <div class="proof-head">
+      <h2>{h.proof.title.map((line) => <span>{line}</span>)}</h2>
+      {
+        STATS.length > 0 && (
+          <dl class="stats">
+            {STATS.map((stat) => (
+              <div>
+                <dt>{stat.label[lang]}</dt>
+                <dd>{stat.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )
+      }
     </div>
-    <div class="marquee" aria-label={h.forTitle}>
-      <div>{[...h.forList, ...h.forList].map((name) => <span>{name}</span>)}</div>
+    <ul class="cards">
+      {
+        testimonials.map((item) => (
+          <li class="card case">
+            {/* landing.ts sets the href from config.js (the example's URL depends on the stack's domains). */}
+            <a class="shot" data-example={item.site} target="_blank" rel="noopener">
+              {item.screenshot && (
+                <img src={item.screenshot} alt={h.proof.screenshot.replace('{business}', item.business.split(' · ')[0])} loading="lazy" width="1200" height="900" />
+              )}
+            </a>
+            <figure>
+              <blockquote>“{item.quote}”</blockquote>
+              <figcaption>
+                {/* The customer's photo, or else their country's flag (square SVGs from flag-icons, MIT, in web/public/flags). */}
+                <span class="avatar">
+                  {item.avatar ? (
+                    <img src={item.avatar} alt="" loading="lazy" width="44" height="44" />
+                  ) : (
+                    <img
+                      src={`/flags/${item.country.toLowerCase()}.svg`}
+                      alt={COUNTRIES.find((c) => c.code === item.country)?.name[lang]}
+                      loading="lazy"
+                      width="44"
+                      height="44"
+                    />
+                  )}
+                </span>
+                <span>
+                  <b>{item.name}</b>
+                  <span>{item.business}</span>
+                </span>
+              </figcaption>
+              {item.site && (
+                <a class="case-link" data-example={item.site} target="_blank" rel="noopener" hidden>
+                  {h.proof.visit} ↗
+                </a>
+              )}
+            </figure>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section class="pricing wrap" id="precio">
+    <h2>{h.pricing.title}</h2>
+    <p class="sub">
+      {subBefore}
+      {
+        perCountry((c) => c.currency[lang]).map((v) => (
+          <span data-country={v.code} hidden={v.hidden}>
+            {v.value}
+          </span>
+        ))
+      }
+      {subAfter}
+    </p>
+    <div class="plans">
+      <div class="card plan">
+        <h3>{h.pricing.free.name}</h3>
+        <p class="price">{h.pricing.free.price}</p>
+        {h.pricing.free.text.map((line) => <p class="plan-text">{line}</p>)}
+        <a class="btn ghost flat" href={s.paths.create}>{h.pricing.free.cta}</a>
+      </div>
+      <div class="card plan pro">
+        <div class="plan-head">
+          <h3>{h.pricing.pro.name}</h3>
+          <span class="tag">{h.pricing.pro.tag}</span>
+        </div>
+        <p class="price">
+          {
+            perCountry((c) => c.price).map((v) => (
+              <span data-country={v.code} hidden={v.hidden}>
+                {v.value}
+              </span>
+            ))
+          }
+          <small>{h.pricing.pro.per}</small>
+        </p>
+        <ul>
+          {
+            h.pricing.pro.features.map((f) => {
+              const [before, after] = splitTld(f);
+              return (
+                <li>
+                  {before}
+                  {after !== undefined && (
+                    <>
+                      {perCountry((c) => c.tld).map((v) => (
+                        <span data-country={v.code} hidden={v.hidden}>
+                          {v.value}
+                        </span>
+                      ))}
+                      {after}
+                    </>
+                  )}
+                </li>
+              );
+            })
+          }
+        </ul>
+        <a class="btn flat" href={s.paths.create}>{h.pricing.pro.cta}</a>
+      </div>
     </div>
   </section>
 
-  <section class="closing">
+  <section class="wa-band">
     <div class="wrap">
-      <p>{h.closing}</p>
+      <div>
+        <h2>{h.whatsapp.title}</h2>
+        <p>{h.whatsapp.text}</p>
+      </div>
+      <a class="btn wa" href={onboarding}>{h.whatsapp.cta}</a>
+    </div>
+  </section>
+
+  <section class="faq wrap">
+    <h2>{h.faqTitle}</h2>
+    <div class="faq-list">
+      {
+        h.faq.map((item, i) => (
+          <details name="faq" open={i === 0}>
+            <summary>{item.q}</summary>
+            <p>{item.a}</p>
+          </details>
+        ))
+      }
+    </div>
+    <div class="faq-cta">
       <a class="btn" href={s.paths.create}>{h.cta}</a>
+      {
+        contact && (
+          <span>
+            {h.questions} <a href={contact}>{h.writeUs}</a>
+          </span>
+        )
+      }
     </div>
   </section>
 </Layout>
+
+<script>
+  import '../scripts/landing';
+</script>

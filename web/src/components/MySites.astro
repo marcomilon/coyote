@@ -1,25 +1,31 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import AccountBar from './AccountBar.astro';
+import Breadcrumb from './Breadcrumb.astro';
 import { t, type Lang } from '../i18n/strings';
 
 interface Props {
   lang: Lang;
+  /** Spanish with vos (the pages under /vos/). */
+  vos?: boolean;
 }
-const { lang } = Astro.props;
-const s = t(lang);
+const { lang, vos = false } = Astro.props;
+const s = t(lang, vos);
 const m = s.mySites;
 const other = t(s.otherLang.code);
 const clientStrings = { ...m, lang, mySitePath: s.paths.mySite, previewPath: s.paths.preview };
 ---
 
-<Layout lang={lang} title={m.title} description={m.description} alternate={other.paths.mySites} withConfig noindex>
+<Layout lang={lang} vos={vos} title={m.title} description={m.description} alternate={other.paths.mySites} withConfig noindex>
+  <AccountBar slot="account" lang={lang} vos={vos} />
   <div class="mysites wrap" id="mysites" data-state="loading" data-strings={JSON.stringify(clientStrings)}>
-    <section data-view="loading" class="panel"><div class="paint" aria-hidden="true"></div></section>
+    <Breadcrumb lang={lang} vos={vos} current={s.nav.mySites} />
+    <section data-view="loading" class="loader" role="status" aria-label={s.loading}><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></section>
 
     <section data-view="form">
       <form class="ticket" data-signin novalidate>
         <header>
-          <h1>{m.heading}</h1>
+          <h1>{m.signIn.title}</h1>
         </header>
         <p class="lead">{m.signIn.intro}</p>
         <ol class="signin-steps">
@@ -35,32 +41,35 @@ const clientStrings = { ...m, lang, mySitePath: s.paths.mySite, previewPath: s.p
       </form>
     </section>
 
-    <section data-view="message" class="panel" aria-live="assertive">
-      <svg class="sent-art" data-sent-art hidden viewBox="0 0 240 150" width="240" height="150" aria-hidden="true">
-        <g class="trail" stroke="var(--ink)" stroke-width="5" stroke-linecap="round">
-          <path d="M8 62h34M20 82h26M4 102h40" />
-        </g>
-        <g class="letter">
-          <rect x="68" y="28" width="150" height="100" rx="8" fill="var(--ink)" transform="translate(7 7)" />
-          <rect x="68" y="28" width="150" height="100" rx="8" fill="#fffaf0" stroke="var(--ink)" stroke-width="5" />
-          <path d="M70 124l52-44M216 124l-52-44" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linejoin="round" />
-          <path d="M70 31l73 58 73-58z" fill="var(--rojo)" stroke="var(--ink)" stroke-width="5" stroke-linejoin="round" />
-          <circle cx="143" cy="80" r="13" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="5" />
-        </g>
-        <path class="spark" d="M222 8l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="3.5" stroke-linejoin="round" />
-      </svg>
-      <h2 data-message-title></h2>
-      <p data-message-text></p>
-      <div class="actions">
-        <button class="btn ghost" type="button" data-another>{m.another}</button>
-        <a class="btn ghost" href={s.paths.home} data-home hidden>{m.home}</a>
+    <section data-view="message" aria-live="assertive">
+      <div class="ticket">
+        <svg class="sent-art" data-sent-art hidden viewBox="0 0 240 150" width="240" height="150" aria-hidden="true">
+          <g class="trail" stroke="var(--ink)" stroke-width="5" stroke-linecap="round">
+            <path d="M8 62h34M20 82h26M4 102h40" />
+          </g>
+          <g class="letter">
+            <rect x="68" y="28" width="150" height="100" rx="8" fill="var(--ink)" transform="translate(7 7)" />
+            <rect x="68" y="28" width="150" height="100" rx="8" fill="#fffaf0" stroke="var(--ink)" stroke-width="5" />
+            <path d="M70 124l52-44M216 124l-52-44" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linejoin="round" />
+            <path d="M70 31l73 58 73-58z" fill="var(--rojo)" stroke="var(--ink)" stroke-width="5" stroke-linejoin="round" />
+            <circle cx="143" cy="80" r="13" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="5" />
+          </g>
+          <path class="spark" d="M222 8l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="3.5" stroke-linejoin="round" />
+        </svg>
+        <header>
+          <h2 data-message-title></h2>
+        </header>
+        <p class="lead" data-message-text></p>
+        <div class="submit-row">
+          <button class="btn" type="button" data-another>{m.another}</button>
+          <a class="btn ghost" href={s.paths.home} data-home hidden>{m.home}</a>
+        </div>
       </div>
     </section>
 
     <section data-view="editor">
       <header class="sites-head">
         <h1>{m.heading}</h1>
-        <p>{m.signedInAs} <b data-email></b> · <button class="linkbtn" type="button" data-signout>{m.signOut}</button></p>
       </header>
       <p class="notice" data-empty hidden>{m.empty}</p>
       <div class="sites-layout">

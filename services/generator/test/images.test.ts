@@ -1,6 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
-import { imageMaker, IMAGE_NEGATIVE, MAX_IMAGES, type ImageDeps } from '../src/core/images';
+import { imageMaker, IMAGE_NEGATIVE, legibleWords, MAX_IMAGES, type ImageDeps } from '../src/core/images';
 import { anthropicWritePage, MAKE_IMAGE_TOOL, pageParams, pagePrompt, type MakeImage } from '../src/core/page-writer';
 import { loadDraft } from '../src/core/drafts';
 import { runGenerateJob } from '../src/core/generate-job';
@@ -57,6 +57,27 @@ describe('make_image', () => {
     expect(await imageMaker('p/', flagged.d, made)({ description: 'x', aspect: '1:1' })).toEqual({ error: 'the photo did not pass moderation', left: MAX_IMAGES - 1 });
     expect(flagged.deleted).toHaveLength(1);
     expect(made).toEqual([]);
+  });
+
+  it('refuses a photo with writing in it, since the model misspells it', async () => {
+    const lettered = deps({ readText: async () => ['Buter', 'Bucher'] });
+    const made: string[] = [];
+    expect(await imageMaker('p/', lettered.d, made)({ description: 'A butcher shop', aspect: '3:2' })).toMatchObject({ error: expect.stringContaining('writing'), left: MAX_IMAGES - 1 });
+    expect(lettered.deleted).toHaveLength(1);
+    expect(made).toEqual([]);
+  });
+
+  it('counts only sure words of 3 or more letters as writing', () => {
+    expect(
+      legibleWords([
+        { Type: 'LINE', DetectedText: 'Buter Bucher', Confidence: 99 },
+        { Type: 'WORD', DetectedText: 'Buter', Confidence: 99 },
+        { Type: 'WORD', DetectedText: 'Carnicería', Confidence: 85 },
+        { Type: 'WORD', DetectedText: '635', Confidence: 99 },
+        { Type: 'WORD', DetectedText: 'ab', Confidence: 99 },
+        { Type: 'WORD', DetectedText: 'shop', Confidence: 60 },
+      ]),
+    ).toEqual(['Buter', 'Carnicería']);
   });
 
   it(`makes at most ${MAX_IMAGES} photos per page`, async () => {

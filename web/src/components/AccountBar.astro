@@ -1,0 +1,15 @@
+---
+// "Entraste como <email> · Salir", at the right of the header, on the pages of a signed-in owner (account.ts fills it).
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+  vos?: boolean;
+}
+const { lang, vos = false } = Astro.props;
+const s = t(lang, vos);
+---
+
+<p class="account" data-account data-sign-out-to={s.paths.mySites} hidden>
+  {s.mySites.signedInAs} <b data-account-email></b> · <button class="linkbtn" type="button" data-account-signout>{s.mySites.signOut}</button>
+</p>

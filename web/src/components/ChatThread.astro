@@ -4,11 +4,13 @@ import { t, type Lang } from '../i18n/strings';
 
 interface Props {
   lang: Lang;
+  /** Spanish with vos (the pages under /vos/). */
+  vos?: boolean;
   /** The thread scrolls inside its card instead of the page. */
   boxed?: boolean;
 }
-const { lang, boxed = false } = Astro.props;
-const s = t(lang);
+const { lang, vos = false, boxed = false } = Astro.props;
+const s = t(lang, vos);
 const c = s.chat;
 ---
 

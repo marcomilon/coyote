@@ -7,7 +7,7 @@ Competing with Wix/Squarespace/Hostinger on generation quality is a losing axis.
 
 - **Reused unchanged from the MVP**: the page writer with its follow-up questions, the chat for changes, safety layers, slug/hosting, drafts and the magic link.
 - **Added**: a conversational front end, the contact form (designed in `PLAN.md`, built here), and WhatsApp as the first lead-delivery channel. SES email follows as the fallback (`PLAN.md` phase 7).
-- **URLs**: as in `PLAN.md` (sites at `{slug}.<sites-domain>`, app at `www.<domain>`, API at `api.<domain>`). All URLs in messages come from `urls.ts`, so the flows also run in domainless mode during development. Sending site links to real users requires the final domains: a `cloudfront.net/{slug}/` link looks like spam and would change later.
+- **URLs**: as in `PLAN.md` (app at `www.<domain>`, API at `api.<domain>`, published sites on the owner's own domain). All URLs in messages come from `urls.ts`, so the flows also run in domainless mode during development. Sending site links to real users requires the final domains: a `cloudfront.net/{slug}/` link looks like spam and would change later.
 
 ## Platform: AWS End User Messaging Social
 WhatsApp Business Platform through AWS. No Meta Cloud API webhooks to host, no BSP middleman.
@@ -44,7 +44,7 @@ Entry: the user taps a `wa.me/<number>?text=Hola` link (site, Instagram bio, QR 
 | 3 `contact` | "¿Qué número de WhatsApp mostramos?" default = sender; "¿Quieres recibir aquí los mensajes de tus clientes? Sí/No" | text, contact card, button reply |
 | 4 `media` | "Mándame tu logo y hasta 3 fotos, o escribe *listo*" | images (→ `_uploads/`, Rekognition moderation) |
 | 5 `preview` | Generates (same `generate` core, invoked directly, not via HTTP); sends preview link + buttons **Publicar / Otra versión / Cambiar algo** | button reply |
-| 6 `done` | "Listo: https://{slug}.<sites-domain>. Guarda este chat: aquí puedes cambiar tu sitio cuando quieras." + magic link | — |
+| 6 `done` | "Listo: https://<owner-domain>. Guarda este chat: aquí puedes cambiar tu sitio cuando quieras." + magic link | — |
 
 - Rate limit, pre-screen classifier, and slug claim run before step 5 (same code as `submit`). Rejection → fixed polite message, session closed, counted in abuse metrics.
 - Every state transition is idempotent on the WhatsApp message id (SNS delivers at least once).

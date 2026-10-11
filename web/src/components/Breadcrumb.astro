@@ -1,0 +1,25 @@
+---
+// "Inicio › … › this page", under the logo-only header. `wrap`: in a row of its own, for pages whose content is a
+// narrow centered column, so it still lines up with the logo.
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+  vos?: boolean;
+  /** This page's name. */
+  current: string;
+  /** Pages between Inicio and this one. */
+  between?: { href: string; label: string }[];
+  wrap?: boolean;
+}
+const { lang, vos = false, current, between = [], wrap = false } = Astro.props;
+const s = t(lang, vos);
+---
+
+<nav class:list={['breadcrumb', { wrap }]} aria-label={s.nav.breadcrumb}>
+  <ol>
+    <li><a href={s.paths.home}>{s.nav.home}</a></li>
+    {between.map((page) => <li><a href={page.href}>{page.label}</a></li>)}
+    <li aria-current="page">{current}</li>
+  </ol>
+</nav>

@@ -3,6 +3,7 @@
 // Three tabs: the current draft; the chat that changes it (texts, contact details, undo, a redesign), with the
 // QR that opens the same chat on the owner's phone; and the owner's own domain (domain.ts). The preview follows
 // every change live. And delete.
+import { loadAccount } from './account';
 import { api as apiCall, apiUrl } from './jobs';
 import { startChat, type ChatStrings } from './chat-thread';
 import { startDomainTab, type DomainStrings } from './domain';
@@ -40,9 +41,11 @@ const token = ownerToken();
 
 const show = (state: string) => (root.dataset.state = state);
 
-function showMessage(message: Message) {
+/** `recover`: no session for this site in this browser, so the card says how to get back to it. */
+function showMessage(message: Message, recover = false) {
   $('[data-message-title]').textContent = message.title;
   $('[data-message-text]').textContent = message.text;
+  $<HTMLElement>('[data-recover]').hidden = !recover;
   show('message');
 }
 
@@ -61,17 +64,15 @@ let slug = '';
 let domainStarted = false;
 
 function fill(view: View) {
-  if (!view.draftUrl) return showMessage(strings.badToken);
+  if (!view.draftUrl) return showMessage(strings.badToken, true);
   slug = view.slug;
   $('[data-business]').textContent = view.businessName ?? strings.heading;
-  $('[data-crumb-name]').textContent = view.businessName ?? view.slug;
-  // Mis sitios opens with this site selected.
-  $<HTMLAnchorElement>('[data-crumb-list]').hash = `site=${encodeURIComponent(view.slug)}`;
   $('[data-chrome-name]').textContent = view.businessName ?? view.slug;
   const frame = $<HTMLIFrameElement>('.device iframe');
   if (frame.src !== view.draftUrl) frame.src = view.draftUrl;
   $<HTMLAnchorElement>('[data-draft-link]').href = `${strings.previewPath}${ownerHash()}`;
   showChatHandoff();
+  showLater(view.slug);
   $<HTMLButtonElement>('[data-delete]').onclick = async () => {
     if (window.prompt(`${strings.deleteConfirm} ${view.slug}`) !== view.slug) return;
     const { status } = await api('/me', 'DELETE');
@@ -80,6 +81,14 @@ function fill(view: View) {
     showMessage(strings.deleted);
   };
   show('editor');
+}
+
+/**
+ * The card on how to come back later, for an owner who opened the page with a magic link (the form, the "lista"
+ * email) rather than an account session from Mis páginas web (`<slug>.@…`).
+ */
+function showLater(site: string) {
+  $<HTMLElement>('[data-later]').hidden = token.slice(site.length + 1).startsWith('@');
 }
 
 /** The QR code opens the same chat on the owner's phone. */
@@ -113,13 +122,14 @@ function startSiteChat() {
 }
 
 async function load() {
-  if (!token || !apiUrl) return showMessage(strings.noToken);
+  if (!token || !apiUrl) return showMessage(strings.noToken, !!apiUrl);
   try {
     const { status, body } = await api<View>('/me');
     if (status === 429) return showMessage(strings.limited);
-    if (status !== 200) return showMessage(strings.badToken);
+    if (status !== 200) return showMessage(strings.badToken, true);
     fill(body);
     startSiteChat();
+    void loadAccount();
   } catch {
     showMessage({ title: strings.error, text: '' });
   }

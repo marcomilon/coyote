@@ -4,6 +4,7 @@
  * email. Sent through SES (`src/aws/mail.ts`).
  */
 import { escapeHtml as e } from './html';
+import type { Voice } from './i18n';
 
 export interface Email {
   to: string;
@@ -15,7 +16,7 @@ export type SendEmail = (email: Email) => Promise<void>;
 
 /** One email's content; the text and HTML versions are both built from it. */
 interface Content {
-  lang: 'es' | 'pt';
+  voice: Voice;
   greeting: string;
   lead: string;
   /** Business names, as a list under the lead. */
@@ -42,6 +43,20 @@ const MAIL = {
     footer: 'Ponemos tu negocio online.',
     fallback: '¿El botón no funciona? Copia este enlace en tu navegador:',
   },
+  vos: {
+    greeting: 'Hola:',
+    validity: 'El botón sirve una vez, durante una hora.',
+    loginSubject: 'Tus páginas web en ventas314.com',
+    loginLead: 'Pediste entrar a tus páginas web de ventas314.com:',
+    loginButton: 'Entrar a mis páginas web',
+    loginNote: 'Si no fuiste vos, ignorá este correo.',
+    readySubject: (name: string) => `Tu página web está lista: ${name}`,
+    readyLead: (name: string) => `La página web de ${name} está lista. Mirala y pedí cambios desde tu celular.`,
+    readyButton: 'Ver mi página web',
+    readyNote: 'Si el botón venció, pedí un enlace nuevo en «Mis páginas web» con este mismo correo.',
+    footer: 'Ponemos tu negocio online.',
+    fallback: '¿El botón no funciona? Copiá este enlace en tu navegador:',
+  },
   pt: {
     greeting: 'Olá:',
     validity: 'O botão vale uma vez, por uma hora.',
@@ -63,7 +78,7 @@ const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 80);
 
 function text(c: Content): string {
   const names = c.names?.length ? `\n${c.names.map((n) => `- ${n}`).join('\n')}\n` : '';
-  return `${c.greeting}\n\n${c.lead}\n${names}\n${c.button}: ${c.link}\n${c.validity}\n\n${c.note}\n\nventas314.com — ${MAIL[c.lang].footer}`;
+  return `${c.greeting}\n\n${c.lead}\n${names}\n${c.button}: ${c.link}\n${c.validity}\n\n${c.note}\n\nventas314.com — ${MAIL[c.voice].footer}`;
 }
 
 // The app's look in email-safe HTML: tables, inline styles, system fonts, and the logo hosted by the app.
@@ -73,13 +88,13 @@ const CARD = '#fffaf0';
 const ROJO = '#d7321f';
 
 function html(c: Content, appUrl: string): string {
-  const m = MAIL[c.lang];
+  const m = MAIL[c.voice];
   const font = "font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif";
   const names = c.names?.length
     ? `<ul style="margin:0 0 20px;padding-left:20px">${c.names.map((n) => `<li style="margin:4px 0;font-weight:700">${e(n)}</li>`).join('')}</ul>`
     : '';
   return `<!doctype html>
-<html lang="${c.lang === 'pt' ? 'pt-BR' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>ventas314.com</title></head>
+<html lang="${c.voice === 'pt' ? 'pt-BR' : 'es'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>ventas314.com</title></head>
 <body style="margin:0;padding:0;background:${PAPER}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${PAPER}"><tr><td align="center" style="padding:24px 12px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px">
@@ -107,11 +122,12 @@ const build = (to: string, subject: string, c: Content, appUrl: string): Email =
 /** `appUrl`: our app (urls.ts), which hosts the logo and the home page the logo links to. */
 export function loginEmail(to: string, lang: 'es' | 'pt', businessNames: string[], link: string, appUrl: string): Email {
   const m = MAIL[lang];
-  return build(to, m.loginSubject, { lang, greeting: m.greeting, lead: m.loginLead, names: businessNames.map(oneLine), button: m.loginButton, link, validity: m.validity, note: m.loginNote }, appUrl);
+  return build(to, m.loginSubject, { voice: lang, greeting: m.greeting, lead: m.loginLead, names: businessNames.map(oneLine), button: m.loginButton, link, validity: m.validity, note: m.loginNote }, appUrl);
 }
 
-export function readyEmail(to: string, lang: 'es' | 'pt', businessName: string, link: string, appUrl: string): Email {
-  const m = MAIL[lang];
+/** `voice`: the site's (i18n.ts voiceOf), so a site in a voseo country gets vos. */
+export function readyEmail(to: string, voice: Voice, businessName: string, link: string, appUrl: string): Email {
+  const m = MAIL[voice];
   const name = oneLine(businessName);
-  return build(to, m.readySubject(name), { lang, greeting: m.greeting, lead: m.readyLead(name), button: m.readyButton, link, validity: m.validity, note: m.readyNote }, appUrl);
+  return build(to, m.readySubject(name), { voice, greeting: m.greeting, lead: m.readyLead(name), button: m.readyButton, link, validity: m.validity, note: m.readyNote }, appUrl);
 }

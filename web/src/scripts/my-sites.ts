@@ -1,6 +1,7 @@
 // "Mis sitios": every site made with one email. The owner asks for a sign-in link by email; the link opens a
 // session kept in this browser. A site is reached with `<slug>.<session>`, the shape of a magic link, so Mi sitio
 // and the chat work with it as they do with the link shown at creation.
+import { showAccount } from './account';
 import { api as apiCall, apiUrl } from './jobs';
 import { followDraft } from './live-preview';
 import { readSession, saveSession, type Session } from './session';
@@ -67,7 +68,7 @@ function select(site: Site, session: Session, button: HTMLButtonElement) {
 }
 
 function renderSites(email: string, sites: Site[], session: Session, selected?: string) {
-  $('[data-email]').textContent = email;
+  showAccount(email);
   $<HTMLElement>('[data-empty]').hidden = sites.length > 0;
   const date = new Intl.DateTimeFormat(strings.lang === 'pt' ? 'pt-BR' : 'es-419', { dateStyle: 'medium' });
   const buttons = sites.map((site) => {
@@ -137,11 +138,6 @@ form.addEventListener('submit', async (event) => {
 });
 
 $<HTMLButtonElement>('[data-another]').onclick = () => show('form');
-$<HTMLButtonElement>('[data-signout]').onclick = () => {
-  stopFollowing?.();
-  saveSession(undefined);
-  show('form');
-};
 
 void load();
 

@@ -117,7 +117,7 @@ export type MakeImage = (input: { description: string; aspect: ImageAspect }) =>
 export const MAKE_IMAGE_TOOL = {
   name: 'make_image',
   description:
-    `Makes a photo for the page with an image model and saves it next to the page. Describe one scene in English: subject, setting, light, framing. The model cannot write: no text, signs, or logos in the scene. At most ${MAX_IMAGES} photos per page. Returns the file to use in the page, as a relative URL.`,
+    `Makes a photo for the page with an image model and saves it next to the page. Describe one scene in English: subject, setting, light, framing. The model cannot write, and a photo with any words in it is refused: pick scenes with no text, signs, logos, labels, menus, packaging, or storefronts. Prefer scenes of the business's products, work, tools and place over people; show people only when the scene really needs them. When it does, people are from the business's country in Latin America and look like ordinary people there: describe them naturally, without exaggerated or stereotyped features or costumes. At most ${MAX_IMAGES} photos per page. Returns the file to use in the page, as a relative URL.`,
   input_schema: {
     type: 'object' as const,
     properties: {

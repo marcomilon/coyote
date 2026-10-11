@@ -16,7 +16,7 @@
  * --out an earlier run adds to it: its other results stay in the gallery (same businesses).
  * Real API calls: about $0.50 a page on Opus. The key is ANTHROPIC_API_KEY or the secret (profile coyote).
  */
-import { DetectModerationLabelsCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
+import { DetectModerationLabelsCommand, DetectTextCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -25,7 +25,7 @@ import { parseArgs } from 'node:util';
 import { normalizeAnswers, PAGE_GOALS, type Answers, type PageGoal } from '../src/core/answers';
 import { outputAllowed, stabilityImage } from '../src/core/bedrock';
 import { ownerText } from '../src/core/drafts';
-import { imageMaker } from '../src/core/images';
+import { imageMaker, legibleWords } from '../src/core/images';
 import { IMAGE_PRICE, imageModelId, usageCost } from '../src/core/models';
 import { checkPage } from '../src/core/page-check';
 import { anthropicWritePage, DEFAULT_PAGE_SKILL, NO_SKILL, pageModel, pagePrompt, parsePage, pickLook, skillText, TONES, type Look, type PageEffort, type PageSkill } from '../src/core/page-writer';
@@ -142,6 +142,9 @@ async function moderate(file: string): Promise<string[]> {
   const { ModerationLabels } = await rekognition.send(new DetectModerationLabelsCommand({ Image: { Bytes: readFileSync(file) }, MinConfidence: 70 }));
   return [...new Set((ModerationLabels ?? []).map((label) => label.ParentName || label.Name || '').filter((name) => REFUSED.has(name)))];
 }
+async function readText(file: string): Promise<string[]> {
+  return legibleWords((await rekognition.send(new DetectTextCommand({ Image: { Bytes: readFileSync(file) } }))).TextDetections ?? []);
+}
 /** make_image for one page, saving into its folder. */
 const localMaker = (dir: string, made: string[]) =>
   imageMaker(
@@ -153,6 +156,7 @@ const localMaker = (dir: string, made: string[]) =>
       },
       generateImage,
       moderate,
+      readText,
       outputAllowed: (text) => outputAllowed(text),
     },
     made,

@@ -1,13 +1,16 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import Breadcrumb from './Breadcrumb.astro';
 import { t, type Lang } from '../i18n/strings';
 import { countries, countryLabel } from '../scripts/phone';
 
 interface Props {
   lang: Lang;
+  /** Spanish with vos (the pages under /vos/). */
+  vos?: boolean;
 }
-const { lang } = Astro.props;
-const s = t(lang);
+const { lang, vos = false } = Astro.props;
+const s = t(lang, vos);
 const c = s.create;
 const other = t(s.otherLang.code);
 // The script is language-agnostic: it reads the strings it needs from here.
@@ -27,11 +30,13 @@ const clientStrings = {
   failed: c.failed,
   lostLink: c.lostLink,
   noApi: c.noApi,
-  canClose: c.working.canClose,
-};---
+};
+// The ready card names the owner's email, which only the script knows.
+const [readyBefore, readyAfter] = c.working.ready.text.split('{email}');---
 
-<Layout lang={lang} title={c.title} description={c.description} alternate={other.paths.create} withConfig>
+<Layout lang={lang} vos={vos} title={c.title} description={c.description} alternate={other.paths.create} withConfig>
   <div class="create wrap" id="create" data-state="form" data-strings={JSON.stringify(clientStrings)}>
+    <Breadcrumb lang={lang} vos={vos} current={s.nav.create} />
     <section data-view="form">
       <form class="ticket" data-form novalidate>
         <header>
@@ -134,10 +139,16 @@ const clientStrings = {
 
     <section data-view="working" class="panel" aria-live="polite">
       <h2>{c.working.title}</h2>
-      <div class="paint" aria-hidden="true"></div>
       <ol class="worksteps">{c.working.steps.map((step) => <li>{step}</li>)}</ol>
-      <p class="hint"><span data-close-note>{c.working.note}</span> <span class="elapsed" data-elapsed aria-hidden="true"></span></p>
+      <p class="hint"><span class="wait">{c.working.note}</span> <span class="elapsed" data-elapsed aria-hidden="true"></span></p>
+      <div class="ticket ready-card">
+        <h3>{c.working.ready.title}</h3>
+        <p>{readyBefore}<strong data-ready-email></strong>{readyAfter}</p>
+        <p>{c.working.ready.close}</p>
+      </div>
     </section>
+    <!-- Outside the working view: its rise animation would stop position: fixed from centering on the screen. -->
+    <div class="work-dots" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span></div>
 
     <section data-view="questions">
       <form class="ticket" data-questions novalidate>

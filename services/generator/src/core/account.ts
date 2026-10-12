@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
+import { passesCaptcha, TOKEN_MAX, type VerifyHuman } from './captcha';
 import type { Stores } from './jobs';
 import { loginEmail, type SendEmail } from './mail';
 import { hashIp } from './ratelimit';
@@ -25,6 +26,8 @@ export interface AccountDeps {
   sendEmail?: SendEmail;
   now(): number;
   ipSalt: string;
+  /** The CAPTCHA on the sign-in link form (captcha.ts). Undefined: no check. */
+  verifyHuman?: VerifyHuman;
 }
 
 const day = (now: number) => new Date(now).toISOString().slice(0, 10);
@@ -45,16 +48,17 @@ export async function issueLogin(stores: Stores, id: string, now: number): Promi
   return secret;
 }
 
-const LoginBody = z.object({ email: z.email().max(120), lang: z.enum(['es', 'pt']).default('es') }).strict();
+const LoginBody = z.object({ email: z.email().max(120), lang: z.enum(['es', 'pt']).default('es'), turnstileToken: z.string().max(TOKEN_MAX).optional() }).strict();
 
 /**
  * POST /account/login. Always the same answer, so it never tells whether an email has sites. The email goes out
  * only to an account that exists, within the caps.
  */
-export async function requestLogin(body: unknown, ip: string, deps: AccountDeps): Promise<{ status: 202 | 400 | 503 }> {
+export async function requestLogin(body: unknown, ip: string, deps: AccountDeps): Promise<{ status: 202 | 400 | 403 | 503 }> {
   const parsed = LoginBody.safeParse(body ?? {});
   if (!parsed.success) return { status: 400 };
   if (!deps.sendEmail) return { status: 503 };
+  if (!(await passesCaptcha(deps.verifyHuman, parsed.data.turnstileToken, ip))) return { status: 403 };
   const { stores } = deps;
   const now = deps.now();
   const id = emailId(parsed.data.email);

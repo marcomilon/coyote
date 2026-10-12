@@ -52,6 +52,8 @@ export interface CoyoteStackProps extends StackProps {
    * no email ("Mis sitios" sign-in answers 503). Domain mode sends from no-reply@<domainName> instead.
    */
   senderEmail?: string;
+  /** Cloudflare Turnstile's site key (public; the CAPTCHA on the anonymous forms). Unset = the forms show no widget. */
+  turnstileSiteKey?: string;
 }
 
 const LOCAL_DEV_ORIGIN = 'http://localhost:5173';
@@ -126,6 +128,12 @@ export class CoyoteStack extends Stack {
       sources: [s3deploy.Source.data(`${DEFAULT_PAGE_SKILL.name}.md`, DEFAULT_PAGE_SKILL.text)],
       destinationBucket: pageSkillsBucket,
       prune: false, // keep the skills added with ./coyote.sh page-skill add
+    });
+    // The page templates for template mode (`./coyote.sh page-mode template`): the repo's copy is the library.
+    new s3deploy.BucketDeployment(this, 'PageTemplates', {
+      sources: [s3deploy.Source.asset(asset('../../services/generator/templates'))],
+      destinationBucket: pageSkillsBucket,
+      destinationKeyPrefix: 'templates/',
     });
 
     const table = (name: string, partitionKey: string, ttl: boolean) =>
@@ -363,7 +371,7 @@ export class CoyoteStack extends Stack {
     });
     // config.js on its own, with no-cache: browsers would otherwise keep an old one (no new example links, an old API URL).
     new s3deploy.BucketDeployment(this, 'AppConfigDeployment', {
-      sources: [s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl, examples: exampleUrls })};\n`)],
+      sources: [s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl, examples: exampleUrls, ...(props.turnstileSiteKey ? { turnstileSiteKey: props.turnstileSiteKey } : {}) })};\n`)],
       destinationBucket: this.appBucket,
       prune: false,
       cacheControl: [s3deploy.CacheControl.noCache()],
@@ -474,6 +482,7 @@ export class CoyoteStack extends Stack {
     new CfnOutput(this, 'ApiUrl', { value: apiUrl });
     new CfnOutput(this, 'SitesBaseUrl', { value: domain ? domain.urls.draftOrigin : sitesBaseUrl });
     // The landing examples' URLs, for the local config.js (scripts/write-config.mjs).
+    if (props.turnstileSiteKey) new CfnOutput(this, 'TurnstileSiteKey', { value: props.turnstileSiteKey });
     new CfnOutput(this, 'ExampleUrls', { value: this.toJsonString(exampleUrls) });
     new CfnOutput(this, 'SitesBucketName', { value: this.sitesBucket.bucketName });
     new CfnOutput(this, 'PageSkillsBucketName', { value: pageSkillsBucket.bucketName });

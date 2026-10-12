@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#FFF7EE;
+    --paper:#FFFCF8;
+    --rose:#F8CDD5;
+    --rose-soft:#FCE6EA;
+    --rose-deep:#E68FA3;
+    --butter:#FCE9B0;
+    --butter-soft:#FEF4D6;
+    --mint:#D2EDDF;
+    --mint-deep:#86C4A8;
+    --lilac:#E2D9F5;
+    --lilac-deep:#A996D8;
+    --peach:#FFDCC7;
+    --bread:#E5AC72;
+    --cocoa:#4A2F28;
+    --cocoa-soft:#7B5D54;
+    --line:rgba(74,47,40,.14);
+    --display:"Young Serif", "Georgia", serif;
+    --body:"Hanken Grotesk", "Trebuchet MS", sans-serif;
+    --wrap:1180px;
+    --pad:clamp(20px,5vw,48px);
+    --radius:28px;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    font-family:var(--body);
+    font-size:17px;
+    line-height:1.6;
+    color:var(--cocoa);
+    background:
+      radial-gradient(900px 600px at -10% -5%, var(--rose-soft) 0%, transparent 60%),
+      radial-gradient(700px 520px at 105% 12%, var(--mint) 0%, transparent 62%),
+      radial-gradient(800px 600px at 50% 110%, var(--lilac) 0%, transparent 60%),
+      var(--cream);
+    background-attachment:fixed;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:100;opacity:.28;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .45 0 0 0 0 .3 0 0 0 0 .25 0 0 0 .35 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+  img{max-width:100%}
+  [data-image]{position:relative;overflow:hidden}
+  [data-image] > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .fallback{position:absolute;inset:0;width:100%;height:100%;display:block}
+  a{color:inherit}
+  h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;letter-spacing:-.01em;line-height:1.05}
+  p{margin:0}
+  .wrap{max-width:var(--wrap);margin:0 auto;padding:0 var(--pad)}
+  .ico{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---------- header ---------- */
+  .top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:22px;padding-bottom:10px}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0}
+  .logo{width:52px;height:52px;border-radius:50%;flex:none;background:var(--rose);box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--rose)}
+  .brand-name{font-family:var(--display);font-size:1.2rem;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill-link{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:600;font-size:.95rem;padding:10px 18px;border-radius:999px;background:var(--paper);border:1.5px solid var(--line);transition:transform .25s, background .25s, border-color .25s}
+  .pill-link:hover{transform:translateY(-2px);background:var(--mint);border-color:var(--mint-deep)}
+
+  /* ---------- hero ---------- */
+  .hero{display:grid;grid-template-columns:1.08fr .92fr;gap:clamp(32px,6vw,80px);align-items:center;padding-top:clamp(30px,6vw,70px);padding-bottom:clamp(60px,9vw,110px)}
+  .tag{display:inline-flex;align-items:center;gap:10px;font-size:.82rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--cocoa-soft)}
+  .tag::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--rose-deep);box-shadow:14px 0 0 var(--mint-deep),28px 0 0 var(--lilac-deep);margin-right:28px}
+  .hero h1{font-size:clamp(2.6rem,6.2vw,5.3rem);margin:22px 0 22px;text-wrap:balance}
+  .lead{font-size:clamp(1.05rem,1.6vw,1.22rem);color:var(--cocoa-soft);max-width:34em}
+  .cta-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px}
+  .btn{
+    --sh:var(--rose);
+    display:inline-flex;align-items:center;gap:10px;text-decoration:none;font-weight:700;font-size:1rem;
+    padding:15px 24px;border-radius:999px;background:var(--cocoa);color:var(--paper);
+    box-shadow:0 6px 0 var(--sh);transition:transform .2s ease, box-shadow .2s ease;
+  }
+  .btn:hover{transform:translateY(3px);box-shadow:0 3px 0 var(--sh)}
+  .btn:active{transform:translateY(6px);box-shadow:0 0 0 var(--sh)}
+  .btn[data-goal="call"]{--sh:var(--butter)}
+  .btn[data-goal="visit"]{--sh:var(--mint-deep)}
+  .btn[data-goal="book"]{--sh:var(--lilac-deep)}
+  .hero-addr{display:flex;align-items:center;gap:8px;margin-top:30px;font-size:.95rem;color:var(--cocoa-soft)}
+
+  .hero-art{position:relative;justify-self:center;width:min(100%,420px)}
+  .arch{
+    width:100%;aspect-ratio:2/3;border-radius:999px 999px 34px 34px;background:var(--rose);
+    box-shadow:0 30px 60px -30px rgba(74,47,40,.35);
+    border:6px solid var(--paper);
+    animation:float 7s ease-in-out infinite;
+  }
+  .arch-shadow{position:absolute;inset:18px -18px -18px 18px;border-radius:999px 999px 34px 34px;background:var(--butter);z-index:-1}
+  .badge{
+    position:absolute;left:-34px;bottom:12%;width:136px;height:136px;border-radius:50%;
+    background:var(--butter);display:grid;place-items:center;text-align:center;padding:18px;
+    font-family:var(--display);font-size:1.05rem;line-height:1.1;transform:rotate(-10deg);
+    box-shadow:0 12px 24px -12px rgba(74,47,40,.35);
+  }
+  .badge::before{content:"";position:absolute;inset:-9px;border-radius:50%;border:2px dashed var(--rose-deep);animation:spin 22s linear infinite}
+  .sprinkle{position:absolute;width:26px;height:9px;border-radius:9px;animation:bob 5s ease-in-out infinite}
+  .s1{top:6%;right:-14px;background:var(--mint-deep);transform:rotate(35deg)}
+  .s2{top:28%;left:-30px;background:var(--lilac-deep);transform:rotate(-20deg);animation-delay:-1.5s}
+  .s3{bottom:-4px;right:18%;background:var(--rose-deep);transform:rotate(70deg);animation-delay:-3s}
+  .s4{top:-14px;left:30%;width:12px;height:12px;background:var(--butter);border:2px solid var(--cocoa);animation-delay:-2s}
+
+  /* ---------- scallops ---------- */
+  .scallop{height:22px;background:radial-gradient(circle at 16px 22px, var(--bg) 15px, transparent 15.6px) 0 0/32px 22px repeat-x}
+  .scallop.down{background:radial-gradient(circle at 16px 0, var(--bg) 15px, transparent 15.6px) 0 0/32px 22px repeat-x}
+
+  /* ---------- section heads ---------- */
+  section{position:relative}
+  .head{max-width:640px;margin-bottom:44px}
+  .head h2{font-size:clamp(2rem,4.4vw,3.3rem);margin-top:14px;text-wrap:balance}
+  .head p{margin-top:16px;color:var(--cocoa-soft);font-size:1.08rem}
+
+  /* ---------- about ---------- */
+  .about{display:grid;grid-template-columns:.95fr 1.05fr;gap:clamp(32px,6vw,84px);align-items:center;padding-bottom:clamp(70px,10vw,120px)}
+  .blob{width:100%;aspect-ratio:3/2;border-radius:58% 42% 46% 54% / 52% 44% 56% 48%;background:var(--mint)}
+  .about-media{position:relative}
+  .about-media::after{content:"";position:absolute;width:90px;height:90px;right:-10px;top:-24px;border-radius:50%;
+    background:radial-gradient(circle,var(--rose-deep) 2.5px,transparent 3px) 0 0/15px 15px;opacity:.55;z-index:-1}
+  .about h2{font-size:clamp(2rem,4vw,3.1rem);margin:14px 0 22px;text-wrap:balance}
+  .about-text{font-size:1.08rem;color:var(--cocoa-soft);white-space:pre-line}
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;list-style:none;padding:0;margin:34px 0 0}
+  .fact{background:var(--paper);border:1.5px solid var(--line);border-radius:20px;padding:18px 18px 16px}
+  .fact b{display:block;font-family:var(--display);font-weight:400;font-size:1.7rem;line-height:1.1;color:var(--cocoa)}
+  .fact span{display:block;font-size:.9rem;color:var(--cocoa-soft);margin-top:4px;line-height:1.35}
+  .fact:nth-child(3n+1) b{color:#C76A80}
+  .fact:nth-child(3n+2) b{color:#5E9E82}
+  .fact:nth-child(3n+3) b{color:#8B76C2}
+
+  /* ---------- products ---------- */
+  .products{--bg:var(--butter-soft)}
+  .products-body{background:var(--bg);padding:clamp(56px,8vw,96px) 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:20px;list-style:none;padding:0;margin:0;counter-reset:item}
+  .card{
+    --c:var(--rose-soft);--d:var(--rose-deep);
+    counter-increment:item;position:relative;overflow:hidden;
+    display:flex;flex-direction:column;gap:10px;min-height:230px;
+    background:var(--c);border-radius:var(--radius);padding:26px 26px 24px;
+    transition:transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s;
+  }
+  .card:nth-child(5n+2){--c:var(--mint);--d:var(--mint-deep)}
+  .card:nth-child(5n+3){--c:var(--lilac);--d:var(--lilac-deep)}
+  .card:nth-child(5n+4){--c:var(--peach);--d:#E79C76}
+  .card:nth-child(5n+5){--c:#FFF;--d:var(--rose-deep)}
+  .card:nth-child(even){border-radius:var(--radius) 70px var(--radius) var(--radius)}
+  .card::before{content:"N.º " counter(item, decimal-leading-zero);font-size:.78rem;font-weight:700;letter-spacing:.14em;color:var(--cocoa-soft)}
+  .card::after{
+    content:"";position:absolute;right:-30px;top:-30px;width:110px;height:110px;border-radius:50%;
+    background:repeating-conic-gradient(from 10deg, var(--d) 0 6deg, transparent 6deg 30deg);
+    opacity:.22;transition:transform .8s ease;
+  }
+  .card:hover{transform:translateY(-6px) rotate(-.6deg);box-shadow:0 22px 40px -24px rgba(74,47,40,.4)}
+  .card:hover::after{transform:rotate(90deg) scale(1.1)}
+  .card h3{font-size:1.5rem;line-height:1.15;margin-top:6px}
+  .card p{color:var(--cocoa-soft);font-size:.98rem;line-height:1.5}
+  .price{margin-top:auto;align-self:flex-start;font-weight:700;font-size:.95rem;background:var(--paper);border:1.5px solid var(--line);padding:6px 14px;border-radius:999px}
+
+  /* ---------- orders ---------- */
+  .orders{display:grid;grid-template-columns:.9fr 1.1fr;gap:clamp(36px,7vw,96px);align-items:center;padding-top:clamp(70px,10vw,120px);padding-bottom:clamp(70px,10vw,120px)}
+  .plate-wrap{position:relative;width:min(100%,440px);justify-self:center}
+  .doily{
+    position:absolute;inset:-26px;border-radius:50%;
+    background:
+      radial-gradient(circle, transparent 58%, var(--paper) 58.5%, var(--paper) 63%, transparent 63.5%),
+      repeating-conic-gradient(var(--rose-soft) 0 5deg, var(--paper) 5deg 10deg);
+    -webkit-mask:radial-gradient(circle at 50% 50%, #000 69%, transparent 70%);
+            mask:radial-gradient(circle at 50% 50%, #000 69%, transparent 70%);
+    animation:spin 90s linear infinite;
+  }
+  .plate{width:100%;aspect-ratio:1/1;border-radius:50%;background:var(--lilac);border:6px solid var(--paper);box-shadow:0 24px 50px -28px rgba(74,47,40,.45)}
+  .orders h2{font-size:clamp(2rem,4.4vw,3.3rem);margin:14px 0 20px;text-wrap:balance}
+  .orders .intro{color:var(--cocoa-soft);font-size:1.08rem}
+  .steps{list-style:none;padding:0;margin:34px 0 0;display:grid;gap:14px;counter-reset:step}
+  .step{counter-increment:step;display:grid;grid-template-columns:auto 1fr;gap:4px 18px;align-items:start;padding:18px 20px;border-radius:22px;background:var(--paper);border:1.5px solid var(--line)}
+  .step::before{
+    content:counter(step);grid-row:span 2;width:46px;height:46px;border-radius:50%;display:grid;place-items:center;
+    font-family:var(--display);font-size:1.3rem;background:var(--rose);color:var(--cocoa)
+  }
+  .step:nth-child(3n+2)::before{background:var(--mint)}
+  .step:nth-child(3n+3)::before{background:var(--butter)}
+  .step h3{font-family:var(--body);font-weight:700;font-size:1.08rem;line-height:1.3;margin-top:2px}
+  .step p{color:var(--cocoa-soft);font-size:.97rem;line-height:1.5}
+  .text-link{display:inline-flex;align-items:center;gap:8px;margin-top:28px;font-weight:700;text-decoration:none;border-bottom:2px solid var(--rose-deep);padding-bottom:2px;transition:gap .25s}
+  .text-link:hover{gap:14px}
+
+  /* ---------- visit ---------- */
+  .visit{display:grid;grid-template-columns:.85fr 1.15fr;gap:22px;padding-bottom:clamp(70px,10vw,120px)}
+  .ticket{
+    --bg:var(--paper);
+    position:relative;background:var(--bg);border-radius:var(--radius) var(--radius) 0 0;padding:34px 30px 30px;
+    border:1.5px solid var(--line);border-bottom:0;margin-bottom:22px;
+  }
+  .ticket::after{content:"";position:absolute;left:-1.5px;right:-1.5px;bottom:-22px;height:22px;
+    background:radial-gradient(circle at 16px 0, var(--paper) 15px, transparent 15.6px) 0 0/32px 22px repeat-x}
+  .ticket h3{display:flex;align-items:center;gap:10px;font-size:1.7rem;margin-bottom:22px}
+  .hours{list-style:none;padding:0;margin:0;display:grid;gap:14px}
+  .hour{display:flex;align-items:baseline;gap:10px;font-size:1rem}
+  .hour .d{font-weight:600}
+  .hour .dots{flex:1;border-bottom:2px dotted var(--line);transform:translateY(-4px)}
+  .hour .t{color:var(--cocoa-soft);text-align:right}
+  .place{background:var(--paper);border:1.5px solid var(--line);border-radius:var(--radius);overflow:hidden;display:grid;grid-template-rows:auto 1fr}
+  .map{position:relative;height:210px;background:#FFF1E4}
+  .map svg{width:100%;height:100%;display:block}
+  .pin{animation:pin 2.4s ease-in-out infinite;transform-origin:50% 100%;transform-box:fill-box}
+  .place-body{padding:28px 30px 30px}
+  .place h2{font-size:clamp(1.7rem,3vw,2.3rem)}
+  .addr{margin-top:10px;font-size:1.08rem;color:var(--cocoa-soft)}
+  .contacts{list-style:none;padding:0;margin:24px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+  .contacts li{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:16px;background:var(--cream)}
+  .contacts .ci{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none;background:var(--rose)}
+  .contacts li:nth-child(2) .ci{background:var(--mint)}
+  .contacts li:nth-child(3) .ci{background:var(--butter)}
+  .contacts li:nth-child(4) .ci{background:var(--lilac)}
+  .contacts li:nth-child(5) .ci{background:var(--peach)}
+  .contacts small{display:block;font-size:.74rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--cocoa-soft);line-height:1.2}
+  .contacts a{display:block;text-decoration:none;font-weight:600;font-size:.98rem;line-height:1.3;word-break:break-word}
+  .contacts a:hover{text-decoration:underline;text-decoration-color:var(--rose-deep);text-underline-offset:3px}
+  .map-btn{margin-top:24px}
+
+  /* ---------- final cta ---------- */
+  .final{padding-bottom:clamp(80px,10vw,120px)}
+  .final-card{
+    position:relative;overflow:hidden;text-align:center;border-radius:48px;
+    padding:clamp(48px,8vw,90px) clamp(24px,6vw,80px);
+    background:
+      radial-gradient(circle at 12% 20%, rgba(255,255,255,.55) 0 60px, transparent 61px),
+      radial-gradient(circle at 92% 88%, var(--butter) 0 90px, transparent 91px),
+      var(--rose);
+  }
+  .final-card h2{font-size:clamp(2.1rem,5vw,3.8rem);max-width:15ch;margin:0 auto;text-wrap:balance}
+  .final-card p{max-width:36em;margin:18px auto 0;font-size:1.1rem;color:var(--cocoa)}
+  .final-card .cta-row{justify-content:center}
+  .final-card .btn{--sh:var(--paper)}
+  .final-concha{position:absolute;width:120px;opacity:.9}
+  .fc1{left:-20px;bottom:-24px;transform:rotate(18deg)}
+  .fc2{right:5%;top:-30px;transform:rotate(-160deg);width:90px}
+
+  /* ---------- floating whatsapp ---------- */
+  .float-wa{
+    position:fixed;right:18px;bottom:18px;z-index:50;display:inline-flex;align-items:center;gap:10px;
+    padding:14px 20px 14px 16px;border-radius:999px;background:var(--mint-deep);color:var(--cocoa);
+    font-weight:700;text-decoration:none;box-shadow:0 14px 30px -12px rgba(74,47,40,.5);
+    transition:transform .25s;
+  }
+  .float-wa:hover{transform:translateY(-3px) scale(1.03)}
+  .float-wa .ico{width:22px;height:22px}
+
+  /* ---------- motion ---------- */
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes bob{0%,100%{translate:0 0}50%{translate:0 -10px}}
+  @keyframes pin{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  @keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+  .rise{animation:rise .9s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0s)}
+  .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease, transform .8s cubic-bezier(.2,.8,.2,1);transition-delay:var(--i,0s)}
+  .js .reveal.in{opacity:1;transform:none}
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    .js .reveal{opacity:1;transform:none}
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width:900px){
+    .hero,.about,.orders,.visit{grid-template-columns:1fr}
+    .hero-art{width:min(78%,360px);margin-top:10px}
+    .badge{left:-24px;width:118px;height:118px;font-size:.95rem}
+    .orders .plate-wrap{order:-1;width:min(82%,380px)}
+  }
+  @media (max-width:560px){
+    body{font-size:16px}
+    .top .pill-link span{display:none}
+    .top .pill-link{padding:11px}
+    .btn{width:100%;justify-content:center}
+    .float-wa span{display:none}
+    .float-wa{padding:15px}
+    .ticket,.place-body{padding-left:22px;padding-right:22px}
+  }
+</style>
+</head>
+<body>
+
+<!-- shared drawings -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="concha" viewBox="0 0 120 84">
+      <ellipse cx="60" cy="72" rx="52" ry="8" fill="rgba(74,47,40,.12)"/>
+      <path d="M8 52 Q8 76 60 76 Q112 76 112 52 Z" fill="#E5AC72"/>
+      <path d="M14 60 Q30 72 60 72 Q90 72 106 60" fill="none" stroke="#C98C52" stroke-width="2" opacity=".6"/>
+      <path d="M9 54 C9 20 34 6 60 6 C86 6 111 20 111 54 C94 61 26 61 9 54Z" fill="currentColor"/>
+      <g fill="none" stroke="rgba(74,47,40,.2)" stroke-width="2.2" stroke-linecap="round">
+        <path d="M60 57 Q40 50 16 42"/>
+        <path d="M60 57 Q42 40 26 22"/>
+        <path d="M60 57 Q50 32 44 11"/>
+        <path d="M60 57 Q60 30 60 7"/>
+        <path d="M60 57 Q70 32 76 11"/>
+        <path d="M60 57 Q78 40 94 22"/>
+        <path d="M60 57 Q80 50 104 42"/>
+      </g>
+      <path d="M30 20 Q44 10 60 10" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".55"/>
+    </symbol>
+    <symbol id="i-wa" viewBox="0 0 24 24"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 19.1L4 20z"/><path d="M9.2 8.6c-.3 2.9 2.6 6 5.6 5.9l.9-1.5-2-1.1-.9.8c-.9-.4-1.7-1.2-2.1-2.1l.8-.9-1-2-1.3.9z"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5.5 4h3.3l1.7 4.3-2.2 1.4a11 11 0 0 0 6 6l1.4-2.2 4.3 1.7v3.3a2 2 0 0 1-2.1 2A16 16 0 0 1 3.5 6.1a2 2 0 0 1 2-2.1z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M4 7.5l8 5.5 8-5.5"/></symbol>
+    <symbol id="i-ig" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r=".6"/></symbol>
+    <symbol id="i-fb" viewBox="0 0 24 24"><path d="M14 21v-8h3l.5-3.5H14V7.8c0-1 .3-1.8 1.8-1.8H18V3.1a24 24 0 0 0-2.6-.1C12.9 3 11 4.5 11 7.2v2.3H8V13h3v8"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-cake" viewBox="0 0 24 24"><path d="M4 20h16M5.5 20v-6a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6M5.5 15.5c1.1.9 2.2.9 3.3 0s2.2-.9 3.2 0 2.1.9 3.2 0 2.2-.9 3.3 0M12 12V8.5"/><path d="M12 4.3c.8 1 .8 2 0 2.6-.8-.6-.8-1.6 0-2.6z"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  </defs>
+</svg>
+
+<header class="wrap top rise" style="--d:.05s">
+  <div class="brand">
+    <div class="logo" data-image="logo" data-aspect="1:1">
+      <svg class="fallback" viewBox="0 0 60 60" aria-hidden="true">
+        <rect width="60" height="60" fill="#F8CDD5"/>
+        <use href="#concha" x="9" y="14" width="42" height="30" style="color:#FFF4E0"/>
+      </svg>
+    </div>
+    <span class="brand-name" data-text="business_name" data-max="40">Panadería La Concha Rosa</span>
+  </div>
+  <a class="pill-link" data-contact="whatsapp" aria-label="WhatsApp">
+    <svg class="ico"><use href="#i-wa"/></svg><span>Escríbenos</span>
+  </a>
+</header>
+
+<main>
+  <!-- HERO -->
+  <section class="wrap hero">
+    <div class="hero-copy">
+      <p class="tag rise" style="--d:.15s" data-text="hero_kicker" data-max="40" data-optional>Pan dulce de barrio desde 1987</p>
+      <h1 class="rise" style="--d:.25s" data-text="hero_title" data-max="60">Pan recién horneado, como en casa de la abuela</h1>
+      <p class="lead rise" style="--d:.38s" data-text="hero_subtitle" data-max="170" data-optional>Conchas, orejas, cuernitos y pasteles por encargo, hechos cada madrugada con mantequilla, piloncillo y mucho cariño en el corazón del Centro.</p>
+      <div class="cta-row rise" style="--d:.5s">
+        <a class="btn" data-goal="whatsapp" data-contact="whatsapp"><svg class="ico"><use href="#i-wa"/></svg>Pide por WhatsApp</a>
+        <a class="btn" data-goal="call" data-contact="phone"><svg class="ico"><use href="#i-phone"/></svg>Llámanos</a>
+        <a class="btn" data-goal="visit" data-contact="maps"><svg class="ico"><use href="#i-pin"/></svg>Cómo llegar</a>
+        <a class="btn" data-goal="book" data-contact="whatsapp"><svg class="ico"><use href="#i-cake"/></svg>Encarga tu pastel</a>
+      </div>
+      <p class="hero-addr rise" style="--d:.62s" data-if="address">
+        <svg class="ico"><use href="#i-pin"/></svg>
+        <span data-text="address" data-max="90">Calle Macedonio Alcalá 214, Centro, Oaxaca de Juárez</span>
+      </p>
+    </div>
+
+    <div class="hero-art rise" style="--d:.35s">
+      <div class="arch-shadow" aria-hidden="true"></div>
+      <div class="arch" data-image="hero" data-aspect="2:3">
+        <svg class="fallback" viewBox="0 0 200 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <linearGradient id="hg" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#FCE6EA"/>
+              <stop offset=".65" stop-color="#F8CDD5"/>
+              <stop offset="1" stop-color="#FFDCC7"/>
+            </linearGradient>
+          </defs>
+          <rect width="200" height="300" fill="url(#hg)"/>
+          <circle cx="100" cy="92" r="58" fill="#FFF7EE" opacity=".7"/>
+          <circle cx="100" cy="92" r="40" fill="#FCE9B0" opacity=".8"/>
+          <g fill="#fff" opacity=".8">
+            <circle cx="30" cy="50" r="2"/><circle cx="168" cy="40" r="2.5"/><circle cx="160" cy="130" r="1.8"/><circle cx="38" cy="140" r="2.2"/>
+          </g>
+          <!-- cake stand -->
+          <ellipse cx="100" cy="258" rx="80" ry="10" fill="rgba(74,47,40,.12)"/>
+          <rect x="88" y="236" width="24" height="20" rx="4" fill="#FFFCF8"/>
+          <ellipse cx="100" cy="236" rx="84" ry="11" fill="#FFFCF8"/>
+          <ellipse cx="100" cy="233" rx="84" ry="9" fill="#fff"/>
+          <!-- stacked conchas -->
+          <use href="#concha" x="20" y="176" width="84" height="59" style="color:#FFF4DE"/>
+          <use href="#concha" x="96" y="176" width="84" height="59" style="color:#B78A79"/>
+          <use href="#concha" x="56" y="132" width="88" height="62" style="color:#F7B9C7"/>
+          <use href="#concha" x="66" y="96" width="68" height="48" style="color:#FCE9B0"/>
+          <!-- sprinkles -->
+          <g stroke-linecap="round" stroke-width="4">
+            <line x1="26" y1="210" x2="32" y2="204" stroke="#86C4A8"/>
+            <line x1="176" y1="160" x2="182" y2="166" stroke="#A996D8"/>
+            <line x1="44" y1="104" x2="50" y2="110" stroke="#E68FA3"/>
+            <line x1="152" y1="98" x2="158" y2="92" stroke="#86C4A8"/>
+          </g>
+        </svg>
+      </div>
+      <div class="badge" data-if="badge"><span data-text="badge" data-max="24" data-optional>Horneado hoy en la mañana</span></div>
+      <span class="sprinkle s1" aria-hidden="true"></span>
+      <span class="sprinkle s2" aria-hidden="true"></span>
+      <span class="sprinkle s3" aria-hidden="true"></span>
+      <span class="sprinkle s4" aria-hidden="true"></span>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section class="wrap about">
+    <div class="about-media reveal">
+      <div class="blob" data-image="about" data-aspect="3:2">
+        <svg class="fallback" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <rect width="300" height="200" fill="#D2EDDF"/>
+          <circle cx="250" cy="34" r="46" fill="#E9F6EF"/>
+          <g transform="rotate(-8 150 100)">
+            <rect x="40" y="38" width="220" height="128" rx="14" fill="#C98C52"/>
+            <rect x="48" y="44" width="204" height="114" rx="10" fill="#F2D3A8"/>
+            <use href="#concha" x="56" y="50" width="62" height="44" style="color:#F7B9C7"/>
+            <use href="#concha" x="119" y="50" width="62" height="44" style="color:#FFF4DE"/>
+            <use href="#concha" x="182" y="50" width="62" height="44" style="color:#B78A79"/>
+            <use href="#concha" x="56" y="102" width="62" height="44" style="color:#FFF4DE"/>
+            <use href="#concha" x="119" y="102" width="62" height="44" style="color:#B78A79"/>
+            <use href="#concha" x="182" y="102" width="62" height="44" style="color:#F7B9C7"/>
+          </g>
+          <g fill="#FFFCF8" opacity=".85">
+            <circle cx="24" cy="170" r="3"/><circle cx="36" cy="182" r="2"/><circle cx="280" cy="176" r="2.5"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+    <div class="reveal" style="--i:.1s">
+      <p class="tag">Nuestra historia</p>
+      <h2 data-text="about_title" data-max="60" data-optional>Una familia, un horno y muchas mañanas</h2>
+      <p class="about-text" data-text="about" data-max="600">Todo empezó en 1987, cuando Doña Lupe prendió un pequeño horno de leña en la calle Alcalá. Hoy sus nietos seguimos amasando cada madrugada con las mismas recetas: masa madre, mantequilla de verdad, piloncillo y canela. Sin conservadores y sin prisas, para que cada pieza sepa a domingo en familia.</p>
+      <ul class="facts" data-if="facts">
+        <li class="fact" data-repeat="facts" data-min="1" data-max="4"><b data-text="value" data-max="10">1987</b><span data-text="label" data-max="44">Encendimos el horno por primera vez</span></li>
+        <li class="fact" data-repeat="facts" data-min="1" data-max="4"><b data-text="value" data-max="10">5:30</b><span data-text="label" data-max="44">Sale la primera charola del día</span></li>
+        <li class="fact" data-repeat="facts" data-min="1" data-max="4"><b data-text="value" data-max="10">+40</b><span data-text="label" data-max="44">Panes distintos cada semana</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PRODUCTS -->
+  <section class="products" data-if="products">
+    <div class="scallop" aria-hidden="true"></div>
+    <div class="products-body">
+      <div class="wrap">
+        <div class="head reveal">
+          <p class="tag">El mostrador</p>
+          <h2 data-text="products_title" data-max="50">Del horno a tu mesa</h2>
+          <p data-text="products_intro" data-max="180" data-optional>Lo más pedido del barrio. Llega temprano: las conchas de chocolate vuelan antes de las nueve.</p>
+        </div>
+        <ul class="grid">
+          <li class="card reveal" data-repeat="products" data-min="1" data-max="12">
+            <h3 data-text="title" data-max="40">Conchas de vainilla y chocolate</h3>
+            <p data-text="text" data-max="140" data-optional>Suaves por dentro, con su costra de azúcar crujiente. La reina de la merienda.</p>
+            <span class="price" data-text="price" data-max="20" data-optional>$14 c/u</span>
+          </li>
+          <li class="card reveal" data-repeat="products" data-min="1" data-max="12">
+            <h3 data-text="title" data-max="40">Orejas de hojaldre</h3>
+            <p data-text="text" data-max="140" data-optional>Cientos de capas caramelizadas con azúcar y un toque de canela de Ceilán.</p>
+            <span class="price" data-text="price" data-max="20" data-optional>$16 c/u</span>
+          </li>
+          <li class="card reveal" data-repeat="products" data-min="1" data-max="12">
+            <h3 data-text="title" data-max="40">Cuernitos de mantequilla</h3>
+            <p data-text="text" data-max="140" data-optional>Dorados y esponjosos, perfectos solos o rellenos de jamón y queso.</p>
+            <span class="price" data-text="price" data-max="20" data-optional>$18 c/u</span>
+          </li>
+          <li class="card reveal" data-repeat="products" data-min="1" data-max="12">
+            <h3 data-text="title" data-max="40">Pan de yema oaxaqueño</h3>
+            <p data-text="text" data-max="140" data-optional>El de siempre para el chocolate caliente, con ajonjolí y su carita de azúcar.</p>
+            <span class="price" data-text="price" data-max="20" data-optional>$45 la pieza</span>
+          </li>
+          <li class="card reveal" data-repeat="products" data-min="1" data-max="12">
+            <h3 data-text="title" data-max="40">Roles de canela</h3>
+            <p data-text="text" data-max="140" data-optional>Masa tierna enrollada con canela y piloncillo, cubiertos con glaseado de queso crema.</p>
+            <span class="price" data-text="price" data-max="20" data-optional>$25 c/u</span>
+          </li>
+          <li class="card reveal" data-repeat="products" data-min="1" data-max="12">
+            <h3 data-text="title" data-max="40">Pastel tres leches</h3>
+            <p data-text="text" data-max="140" data-optional>Húmedo, ligero y decorado a tu gusto. Por encargo, para 10 a 40 personas.</p>
+            <span class="price" data-text="price" data-max="20" data-optional>Desde $380</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div class="scallop down" aria-hidden="true"></div>
+  </section>
+
+  <!-- ORDERS -->
+  <section class="wrap orders">
+    <div class="plate-wrap reveal">
+      <div class="doily" aria-hidden="true"></div>
+      <div class="plate" data-image="cakes" data-aspect="1:1">
+        <svg class="fallback" viewBox="0 0 200 200" aria-hidden="true">
+          <rect width="200" height="200" fill="#E2D9F5"/>
+          <circle cx="100" cy="100" r="74" fill="#EEE8FA"/>
+          <ellipse cx="100" cy="160" rx="66" ry="9" fill="rgba(74,47,40,.12)"/>
+          <rect x="88" y="150" width="24" height="12" rx="3" fill="#FFFCF8"/>
+          <ellipse cx="100" cy="150" rx="68" ry="8" fill="#FFFCF8"/>
+          <!-- bottom tier -->
+          <rect x="44" y="104" width="112" height="46" rx="8" fill="#F8CDD5"/>
+          <rect x="44" y="104" width="112" height="11" rx="5.5" fill="#FFFCF8"/>
+          <g fill="#FFFCF8"><circle cx="54" cy="116" r="5"/><circle cx="72" cy="118" r="5.5"/><circle cx="92" cy="115" r="4.5"/><circle cx="110" cy="119" r="6"/><circle cx="130" cy="116" r="4.5"/><circle cx="146" cy="118" r="5"/></g>
+          <!-- top tier -->
+          <rect x="62" y="68" width="76" height="38" rx="8" fill="#FCE9B0"/>
+          <rect x="62" y="68" width="76" height="10" rx="5" fill="#FFFCF8"/>
+          <g fill="#FFFCF8"><circle cx="70" cy="79" r="4.5"/><circle cx="86" cy="81" r="5"/><circle cx="104" cy="78" r="4"/><circle cx="120" cy="81" r="5"/><circle cx="132" cy="79" r="4"/></g>
+          <!-- sprinkles -->
+          <g stroke-linecap="round" stroke-width="3">
+            <line x1="60" y1="134" x2="65" y2="130" stroke="#86C4A8"/>
+            <line x1="88" y1="138" x2="93" y2="142" stroke="#A996D8"/>
+            <line x1="118" y1="132" x2="123" y2="128" stroke="#E5AC72"/>
+            <line x1="140" y1="140" x2="145" y2="136" stroke="#86C4A8"/>
+            <line x1="80" y1="94" x2="84" y2="90" stroke="#E68FA3"/>
+            <line x1="114" y1="96" x2="118" y2="100" stroke="#A996D8"/>
+          </g>
+          <!-- cherry -->
+          <path d="M100 60 Q104 50 112 46" fill="none" stroke="#5E9E82" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="100" cy="62" r="8" fill="#E2687F"/>
+          <circle cx="97" cy="59" r="2.5" fill="#fff" opacity=".7"/>
+        </svg>
+      </div>
+    </div>
+    <div class="reveal" style="--i:.1s">
+      <p class="tag">Por encargo</p>
+      <h2 data-text="order_title" data-max="60">Pasteles para tus fiestas</h2>
+      <p class="intro" data-text="order_text" data-max="260" data-optional>Cumpleaños, bautizos, XV años o la merienda del domingo. Hacemos tu pastel con el sabor y la decoración que imagines; pídelo con al menos dos días de anticipación.</p>
+      <ol class="steps" data-if="steps">
+        <li class="step" data-repeat="steps" data-min="1" data-max="6">
+          <h3 data-text="title" data-max="40">Escríbenos</h3>
+          <p data-text="text" data-max="120" data-optional>Cuéntanos la fecha, el sabor y para cuántas personas es.</p>
+        </li>
+        <li class="step" data-repeat="steps" data-min="1" data-max="6">
+          <h3 data-text="title" data-max="40">Aparta tu pedido</h3>
+          <p data-text="text" data-max="120" data-optional>Con un anticipo del 50 % reservamos tu lugar en el horno.</p>
+        </li>
+        <li class="step" data-repeat="steps" data-min="1" data-max="6">
+          <h3 data-text="title" data-max="40">Recoge y celebra</h3>
+          <p data-text="text" data-max="120" data-optional>Pasa el día acordado: te lo entregamos listo, en caja y con velitas.</p>
+        </li>
+      </ol>
+      <a class="text-link" data-contact="whatsapp">Cotiza tu pastel por WhatsApp <svg class="ico"><use href="#i-arrow"/></svg></a>
+    </div>
+  </section>
+
+  <!-- VISIT -->
+  <section class="wrap visit">
+    <div class="reveal" data-if="hours">
+      <div class="ticket">
+        <h3><svg class="ico" style="width:26px;height:26px"><use href="#i-clock"/></svg>Horario</h3>
+        <ul class="hours">
+          <li class="hour" data-repeat="hours" data-min="1" data-max="7"><span class="d" data-text="days" data-max="24">Lunes a viernes</span><span class="dots" aria-hidden="true"></span><span class="t" data-text="time" data-max="28">6:30 a. m. – 9:00 p. m.</span></li>
+          <li class="hour" data-repeat="hours" data-min="1" data-max="7"><span class="d" data-text="days" data-max="24">Sábado</span><span class="dots" aria-hidden="true"></span><span class="t" data-text="time" data-max="28">7:00 a. m. – 9:00 p. m.</span></li>
+          <li class="hour" data-repeat="hours" data-min="1" data-max="7"><span class="d" data-text="days" data-max="24">Domingo</span><span class="dots" aria-hidden="true"></span><span class="t" data-text="time" data-max="28">7:00 a. m. – 2:00 p. m.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="place reveal" style="--i:.1s">
+      <div class="map" data-if="maps" aria-hidden="true">
+        <svg viewBox="0 0 400 210" preserveAspectRatio="xMidYMid slice">
+          <rect width="400" height="210" fill="#FFF1E4"/>
+          <g fill="#FCE6EA"><rect x="-10" y="-10" width="120" height="70" rx="10"/><rect x="140" y="-10" width="110" height="70" rx="10"/><rect x="-10" y="90" width="120" height="60" rx="10"/><rect x="280" y="90" width="130" height="60" rx="10"/></g>
+          <g fill="#FEF4D6"><rect x="280" y="-10" width="130" height="70" rx="10"/><rect x="140" y="180" width="110" height="40" rx="10"/><rect x="-10" y="180" width="120" height="40" rx="10"/></g>
+          <rect x="140" y="90" width="110" height="60" rx="30" fill="#D2EDDF"/>
+          <circle cx="170" cy="120" r="9" fill="#B8E0CB"/><circle cx="222" cy="114" r="12" fill="#B8E0CB"/>
+          <rect x="280" y="180" width="130" height="40" rx="10" fill="#E2D9F5"/>
+          <path d="M-10 165 C 80 160 120 175 200 168 S 330 160 410 172" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+          <path d="M-10 165 C 80 160 120 175 200 168 S 330 160 410 172" fill="none" stroke="#F8CDD5" stroke-width="2" stroke-dasharray="6 8"/>
+          <g class="pin">
+            <path d="M265 48c-14 0-24 10-24 23 0 17 24 37 24 37s24-20 24-37c0-13-10-23-24-23z" fill="#E68FA3"/>
+            <circle cx="265" cy="71" r="9" fill="#FFFCF8"/>
+          </g>
+          <ellipse cx="265" cy="112" rx="10" ry="3" fill="rgba(74,47,40,.18)"/>
+        </svg>
+      </div>
+      <div class="place-body">
+        <p class="tag">Visítanos</p>
+        <h2 style="margin-top:12px" data-text="visit_title" data-max="40">Ven por tu pan calientito</h2>
+        <p class="addr" data-if="address" data-text="address" data-max="90">Calle Macedonio Alcalá 214, Centro, Oaxaca de Juárez</p>
+        <ul class="contacts">
+          <li>
+            <span class="ci"><svg class="ico"><use href="#i-wa"/></svg></span>
+            <div><small>WhatsApp</small><a data-contact="whatsapp" data-contact-label>+52 951 514 2286</a></div>
+          </li>
+          <li data-if="phone">
+            <span class="ci"><svg class="ico"><use href="#i-phone"/></svg></span>
+            <div><small>Teléfono</small><a data-contact="phone" data-contact-label>951 516 0472</a></div>
+          </li>
+          <li data-if="instagram">
+            <span class="ci"><svg class="ico"><use href="#i-ig"/></svg></span>
+            <div><small>Instagram</small><a data-contact="instagram" data-contact-label>@laconcharosa.oax</a></div>
+          </li>
+          <li data-if="facebook">
+            <span class="ci"><svg class="ico"><use href="#i-fb"/></svg></span>
+            <div><small>Facebook</small><a data-contact="facebook" data-contact-label>La Concha Rosa Oaxaca</a></div>
+          </li>
+          <li data-if="email">
+            <span class="ci"><svg class="ico"><use href="#i-mail"/></svg></span>
+            <div><small>Correo</small><a data-contact="email" data-contact-label>hola@laconcharosa.mx</a></div>
+          </li>
+        </ul>
+        <div data-if="maps">
+          <a class="btn map-btn" data-contact="maps" style="--sh:var(--mint-deep)"><svg class="ico"><use href="#i-pin"/></svg>Abrir en Google Maps</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="wrap final">
+    <div class="final-card reveal">
+      <svg class="final-concha fc1" viewBox="0 0 120 84" aria-hidden="true"><use href="#concha" style="color:#FFF4DE"/></svg>
+      <svg class="final-concha fc2" viewBox="0 0 120 84" aria-hidden="true"><use href="#concha" style="color:#E2D9F5"/></svg>
+      <h2 data-text="cta_title" data-max="50">¿Se te antojó? Te lo apartamos</h2>
+      <p data-text="cta_text" data-max="160" data-optional>Escríbenos antes de las 11 a. m. y tu pan te espera calientito en el mostrador, listo para llevar.</p>
+      <div class="cta-row">
+        <a class="btn" data-goal="whatsapp" data-contact="whatsapp"><svg class="ico"><use href="#i-wa"/></svg>Pide por WhatsApp</a>
+        <a class="btn" data-goal="call" data-contact="phone"><svg class="ico"><use href="#i-phone"/></svg>Llámanos</a>
+        <a class="btn" data-goal="visit" data-contact="maps"><svg class="ico"><use href="#i-pin"/></svg>Cómo llegar</a>
+        <a class="btn" data-goal="book" data-contact="whatsapp"><svg class="ico"><use href="#i-cake"/></svg>Encarga tu pastel</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<a class="float-wa" data-contact="whatsapp" aria-label="Escríbenos por WhatsApp">
+  <svg class="ico"><use href="#i-wa"/></svg><span>WhatsApp</span>
+</a>
+
+<script>
+  (function(){
+    var root = document.documentElement;
+    if (!('IntersectionObserver' in window)) return;
+    root.classList.add('js');
+    var items = document.querySelectorAll('.reveal');
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, {threshold:.12, rootMargin:'0px 0px -40px 0px'});
+    document.querySelectorAll('.grid .card').forEach(function(card, i){
+      card.style.setProperty('--i', (i % 3) * 0.09 + 's');
+    });
+    items.forEach(function(el){ io.observe(el); });
+  })();
+</script>
+</body>
+</html>

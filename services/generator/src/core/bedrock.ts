@@ -105,6 +105,15 @@ interface Converse {
   usage: Usage;
 }
 
+/**
+ * The tool input. Haiku sometimes splits one answer into several calls of the same tool, one per top-level field
+ * (texts, then lists, then images): the calls' fields are merged.
+ */
+export function toolInputOf(inputs: unknown[]): unknown {
+  if (inputs.length <= 1 || !inputs.every((input) => typeof input === 'object' && input !== null && !Array.isArray(input))) return inputs[0];
+  return Object.assign({}, ...inputs);
+}
+
 /** One Converse (or ConverseStream) request with a tool the model may call. */
 async function converse(request: TextRequest, tool?: ToolRequest<z.ZodType>['tool']): Promise<Converse> {
   const { modelId, system, guarded, user, maxTokens, effort, stream, images } = request;
@@ -182,7 +191,7 @@ async function converse(request: TextRequest, tool?: ToolRequest<z.ZodType>['too
   return {
     stopReason: response.stopReason,
     text: blocks.map((block) => block.text ?? '').join(''),
-    toolInput: tool ? blocks.find((block) => block.toolUse?.name === tool.name)?.toolUse?.input : undefined,
+    toolInput: tool ? toolInputOf(blocks.flatMap((block) => (block.toolUse?.name === tool.name ? [block.toolUse.input] : []))) : undefined,
     usage: toUsage(step, modelId, response.usage),
   };
 }

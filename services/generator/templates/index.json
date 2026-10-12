@@ -1,0 +1,22 @@
+[
+  {
+    "id": "vintage-signage",
+    "description": "Vintage signage: hand-painted shop-sign lettering, warm and nostalgic, light background. Suits bakeries, food stalls, workshops, traditional family businesses."
+  },
+  {
+    "id": "luxury-refined",
+    "description": "Luxury and refined: elegant serif type, generous space, calm and premium, light background. Suits real estate, beauty salons, clinics, upscale services."
+  },
+  {
+    "id": "minimal-dark",
+    "description": "Brutally minimal on a dark background: stark type, strong contrast, few elements. Suits modern services, workshops, barbers, tech or design businesses."
+  },
+  {
+    "id": "soft-pastel",
+    "description": "Soft pastel: gentle colors, rounded shapes, friendly and light. Suits cafés, bakeries, kids, beauty, wellness, small shops."
+  },
+  {
+    "id": "art-deco",
+    "description": "Art deco and geometric: bold symmetric patterns, gold-like accents, classic glamour, light background. Suits restaurants, bars, events, real estate, salons."
+  }
+]

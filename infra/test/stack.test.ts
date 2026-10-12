@@ -97,6 +97,12 @@ describe('CoyoteStack, domainless', () => {
     template.hasOutput('PageSkillsBucketName', {});
   });
 
+  it('keeps the page-mode switch in SSM, starting on design, with the templates deployed under templates/ in the skills bucket', () => {
+    template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-mode', Value: 'design' });
+    template.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PAGE_MODE_PARAMETER: '/coyote/page-mode' }) } });
+    template.hasResourceProperties('Custom::CDKBucketDeployment', { DestinationBucketKeyPrefix: 'templates/' });
+  });
+
   it('keeps the page-look switch in SSM, starting on', () => {
     template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-look', Value: 'on' });
     template.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PAGE_LOOK_PARAMETER: '/coyote/page-look' }) } });
@@ -129,10 +135,35 @@ describe('CoyoteStack, domainless', () => {
     });
   });
 
-  it('lets the app run its own scripts only', () => {
+  it("lets the app run its own scripts only, plus Turnstile's script and frame", () => {
     const csp = cspOf(template, 'AppHeaders');
-    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("script-src 'self' https://challenges.cloudflare.com;");
+    expect(csp).toMatch(/frame-src [^;]*https:\/\/challenges\.cloudflare\.com/);
     expect(csp).not.toContain("'unsafe-eval'");
+  });
+
+  it('keeps the CAPTCHA switch in SSM, starting off, readable with the Turnstile secret by the three anonymous forms only', () => {
+    template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/captcha', Value: 'off' });
+    const users = Object.entries(template.findResources('AWS::Lambda::Function'))
+      .filter(([, f]) => f.Properties.Environment?.Variables?.CAPTCHA_PARAMETER === '/coyote/captcha' && f.Properties.Environment.Variables.TURNSTILE_SECRET_NAME === 'coyote/turnstile')
+      .map(([id]) => id.replace(/[0-9A-F]{8}$/, ''));
+    expect(users.sort()).toEqual(['GeneratorApiAccount', 'GeneratorApiReport', 'GeneratorApiSubmit']);
+    const secretReaders = Object.entries(template.findResources('AWS::IAM::Policy'))
+      .filter(([, p]) => JSON.stringify(p.Properties.PolicyDocument).includes(':secret:coyote/turnstile'))
+      .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
+    expect(secretReaders.sort()).toEqual(['GeneratorApiAccount', 'GeneratorApiReport', 'GeneratorApiSubmit']);
+    expect(template.findOutputs('TurnstileSiteKey')).toEqual({});
+  });
+
+  it('lets the crash handler of generate send the failure notice', () => {
+    const jobFailed = Object.entries(template.findResources('AWS::Lambda::Function')).find(([id]) => id.startsWith('GeneratorApiJobFailed'))![1];
+    expect(jobFailed.Properties.Environment.Variables.SITE_NOTICES_TOPIC_ARN).toBeDefined();
+    const policy = Object.entries(template.findResources('AWS::IAM::Policy')).find(([id]) => id.startsWith('GeneratorApiJobFailed'))![1];
+    expect(JSON.stringify(policy.Properties.PolicyDocument)).toContain('sns:Publish');
+  });
+
+  it('hands the Turnstile site key to the web when one is set', () => {
+    synth({ turnstileSiteKey: '1x00000000000000000000AA' }).hasOutput('TurnstileSiteKey', { Value: '1x00000000000000000000AA' });
   });
 
   it("answers the visitor's country at /geo from a function that sees CloudFront's country header", () => {

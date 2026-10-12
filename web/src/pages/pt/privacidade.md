@@ -22,6 +22,8 @@ Não usamos ferramentas de análise, nem neste aplicativo nem nos sites que cria
 
 Tudo fica hospedado na Amazon Web Services, que também envia os nossos e-mails. O design e os textos são gerados por modelos de inteligência artificial da Anthropic (Claude) e do Amazon Bedrock, que recebem suas respostas e suas fotos para criar o site e não as usam para treinar seus modelos. Para que seu site mostre os seus dados de contato, esses modelos também recebem o seu número de WhatsApp, o seu telefone, o seu endereço e as suas redes. O seu e-mail pessoal eles nunca recebem.
 
+Para barrar robôs, os formulários de criar um site, pedir o link de acesso e denunciar um site passam pelo Cloudflare Turnstile, que verifica o seu navegador e o seu endereço IP para confirmar que você é uma pessoa. Ele não usa cookies de publicidade nem segue você em outros sites.
+
 Se você registrar um domínio em Meu site, o seu nome, e-mail, telefone e endereço vão para a Porkbun, a registradora do domínio, e para o registro do domínio (por exemplo, o do .mx ou do .co). São os dados do titular exigidos pelas regras dos domínios. Com a proteção de privacidade, eles não aparecem nas consultas públicas quando a terminação permite. Não os usamos para mais nada e os apagamos assim que a registradora os recebe.
 
 ## Os sites que criamos

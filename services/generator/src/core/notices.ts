@@ -1,6 +1,7 @@
 /**
  * Notices for the admin (the `SiteNotices` SNS topic; `./coyote.sh subscribe-alerts` subscribes to it): every new
- * site, and every rejected request or change. Plain text. A failure is logged and never changes the outcome.
+ * site and every owner's change made by the page writer (Rediseñar, photos), with what it cost, every rejected
+ * request or change, and every job that failed on our side, with what it spent before failing. Plain text. A failure is logged and never changes the outcome.
  */
 import type { Usage } from './bedrock';
 import type { Job } from './jobs';
@@ -23,6 +24,8 @@ const owner = (job: Job) => `Dueño: ${job.ownerEmail ?? '—'}`;
 
 /** The page writer's settings for a job: the switches the generate Lambda read for it, and the owner's photo choice. */
 export interface PageWriterStatus {
+  /** Template mode: the template the page was filled from (`model` filled it). */
+  template?: string;
   model: string;
   effort: string;
   skill: string;
@@ -31,7 +34,7 @@ export interface PageWriterStatus {
   ownerImages: boolean;
 }
 
-const STEPS: Record<string, string> = { prescreen: 'pre-screen', plan_site: 'preguntas', write_page: 'página', edit_page: 'página', make_image: 'fotos' };
+const STEPS: Record<string, string> = { prescreen: 'pre-screen', plan_site: 'preguntas', write_page: 'página', edit_page: 'página', pick_template: 'plantilla', fill_page: 'página', make_image: 'fotos' };
 const usd = (n: number) => `$${n < 0.01 ? n.toFixed(3) : n.toFixed(2)}`;
 
 /** "Costo: $0.83" and one line per step (model prices only; Rekognition, the guardrail and Lambda are left out). */
@@ -56,27 +59,86 @@ function costLines(usage: Usage[]): string[] {
 }
 
 const statusLine = (s: PageWriterStatus) =>
-  `Redactor: ${s.model}, esfuerzo ${s.effort} · skill ${s.skill} · look ${s.look ? 'on' : 'off'} · fotos IA ${s.images ? 'on' : 'off'} (dueño: ${s.ownerImages ? 'on' : 'off'})`;
+  `${s.template ? `Plantilla: ${s.template}, llenada por ${s.model}` : `Redactor: ${s.model}, esfuerzo ${s.effort} · skill ${s.skill} · look ${s.look ? 'on' : 'off'}`} · fotos IA ${s.images ? 'on' : 'off'} (dueño: ${s.ownerImages ? 'on' : 'off'})`;
 
 /** A new site's first draft is ready. */
 export function announceNewSite(announce: Announce | undefined, job: Job, slug: string, draftUrl: string, usage: Usage[], status?: PageWriterStatus): Promise<void> {
   const { businessName, about, lang } = job.answers;
   const total = [...job.usage, ...usage];
-  const tokens = (k: 'inputTokens' | 'outputTokens') => total.reduce((n, u) => n + u[k], 0);
   return send(announce, `Nuevo sitio: ${businessName}`, [
     `${businessName} (${slug}, ${lang})`,
     owner(job),
     `Borrador: ${draftUrl}`,
     ...costLines(total),
     ...(status ? [statusLine(status)] : []),
-    `Modelos: ${[...new Set(total.map((u) => u.modelId))].join(', ')}; ${tokens('inputTokens')} tokens de entrada, ${tokens('outputTokens')} de salida`,
+    tokenLine(total),
     '',
     about,
   ], job);
 }
 
-/** A request or an owner's change was rejected (pre-screen, brand, guardrail, images, or the page checks). */
-export function announceRejection(announce: Announce | undefined, job: Job, rejectedBy: string, detail: string): Promise<void> {
+const tokenLine = (usage: Usage[]) => {
+  const tokens = (k: 'inputTokens' | 'outputTokens') => usage.reduce((n, u) => n + u[k], 0);
+  return `Modelos: ${[...new Set(usage.map((u) => u.modelId))].join(', ')}; ${tokens('inputTokens')} tokens de entrada, ${tokens('outputTokens')} de salida`;
+};
+
+/** What the owner changed in Mi sitio: "Fotos: 2 nuevas, 1 quitada, 1 descripción". */
+function photoLine(change: Job['photoChange']): string | undefined {
+  if (!change) return undefined;
+  const parts = [
+    change.added.length > 0 && `${change.added.length} ${change.added.length === 1 ? 'nueva' : 'nuevas'}`,
+    change.removed.length > 0 && `${change.removed.length} ${change.removed.length === 1 ? 'quitada' : 'quitadas'}`,
+    change.described?.length && `${change.described.length} ${change.described.length === 1 ? 'descripción' : 'descripciones'}`,
+  ].filter(Boolean);
+  return parts.length > 0 ? `Fotos: ${parts.join(', ')}` : undefined;
+}
+
+/** An owner's change the page writer made (Rediseñar from Mi sitio or the chat, or a photo change): the new draft and its cost. */
+export function announceEdit(announce: Announce | undefined, job: Job, slug: string, draftUrl: string, usage: Usage[], status?: PageWriterStatus): Promise<void> {
+  const { businessName, lang } = job.answers;
+  const total = [...job.usage, ...usage];
+  const photos = photoLine(job.photoChange);
+  const what = job.instruction ? 'Rediseño' : 'Cambio de fotos';
+  return send(announce, `${what}: ${businessName}`, [
+    `${businessName} (${slug}, ${lang})`,
+    owner(job),
+    `Borrador: ${draftUrl}`,
+    ...(job.instruction ? [`Pedido: ${job.instruction}`] : []),
+    ...(photos ? [photos] : []),
+    ...costLines(total),
+    ...(status ? [statusLine(status)] : []),
+    tokenLine(total),
+  ], job);
+}
+
+/**
+ * A job failed on our side (the page writer erred, a crash, a timeout): the error and what it had spent. A model call
+ * that fails partway reports no tokens, so the cost is a floor, and a timeout loses the run's calls altogether.
+ */
+export function announceFailure(announce: Announce | undefined, job: Job, error: string, usage: Usage[] = [], timedOut = false): Promise<void> {
+  const { businessName, lang } = job.answers;
+  const edit = job.kind === 'edit';
+  const total = [...job.usage, ...usage];
+  const photos = photoLine(job.photoChange);
+  return send(announce, `${edit ? 'Cambio falló' : 'Sitio falló'}: ${businessName}`, [
+    `${businessName} (${job.slug ?? 'sin slug'}, ${lang})`,
+    owner(job),
+    `Error: ${error.slice(0, 500)}`,
+    ...(edit && job.instruction ? [`Pedido: ${job.instruction}`] : []),
+    ...(edit && photos ? [photos] : []),
+    '',
+    ...(total.length > 0 ? costLines(total) : ['Costo: $0.000']),
+    timedOut
+      ? 'No incluye lo que gastó la ejecución que se cortó (sus llamadas no quedaron registradas): con Opus, hasta ~$0.60 más.'
+      : 'Una llamada que falló a mitad no deja registro de tokens: el costo real puede ser algo mayor.',
+  ], job);
+}
+
+/**
+ * A request or an owner's change was rejected (pre-screen, brand, guardrail, images, or the page checks). `usage`:
+ * the model calls the rejected job made, so a page written and then refused still shows what it cost.
+ */
+export function announceRejection(announce: Announce | undefined, job: Job, rejectedBy: string, detail: string, usage: Usage[] = []): Promise<void> {
   const { businessName, about, lang } = job.answers;
   const edit = job.kind === 'edit';
   return send(announce, `${edit ? 'Cambio rechazado' : 'Sitio rechazado'}: ${businessName}`, [
@@ -84,6 +146,7 @@ export function announceRejection(announce: Announce | undefined, job: Job, reje
     owner(job),
     `Motivo: ${rejectedBy} — ${detail}`,
     ...(edit && job.instruction ? ['', `Pedido: ${job.instruction}`] : []),
+    ...([...job.usage, ...usage].length > 0 ? ['', ...costLines([...job.usage, ...usage])] : []),
     '',
     about,
   ], job);

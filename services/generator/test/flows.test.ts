@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GuardrailBlocked, type CallTool } from '../src/core/bedrock';
 import { submitAnswers } from '../src/core/clarify';
-import { runGenerateJob } from '../src/core/generate-job';
+import { recordGenerateCrash, runGenerateJob } from '../src/core/generate-job';
 import { publicJob, PENDING_TIMEOUT_MS } from '../src/core/jobs';
 import { editSite } from '../src/core/owner';
 import { submit } from '../src/core/submit';
@@ -238,7 +238,7 @@ describe('status', () => {
 
 
 describe('the admin notice for new sites', () => {
-  it('goes out once per new site, with the owner, the draft link, and the description; never for an edit', async () => {
+  it('goes out once per new site, with the owner, the draft link, and the description; an edit gets its own', async () => {
     const t = harness();
     const notices: { subject: string; message: string }[] = [];
     const deps = { ...t.generateDeps, announce: async (subject: string, message: string) => void notices.push({ subject, message }) };
@@ -249,11 +249,29 @@ describe('the admin notice for new sites', () => {
     expect(notices[0]!.message).toContain('panaderia-luna');
     expect(notices[0]!.message).toContain(t.generateDeps.urls.draftUrl('draft1'));
     expect(notices[0]!.message).toContain(body.about);
-    // A second run of the same job (a retry) is skipped, and an owner's edit is not a new site: still one notice.
+    // A second run of the same job (a retry) is skipped, and an owner's edit is not a new site.
     await runGenerateJob('job-1', deps);
+    expect(notices).toHaveLength(1);
     expect(await editSite(t.sites.get('panaderia-luna')!, { instruction: 'agrega que abrimos los domingos' }, t.ownerDeps)).toMatchObject({ status: 202 });
     expect(await runGenerateJob('job-2', deps)).toMatchObject({ outcome: 'DONE' });
-    expect(notices).toHaveLength(1);
+    expect(notices).toHaveLength(2);
+    expect(notices[1]!.subject).toBe('Rediseño: Panadería Luna');
+    expect(notices[1]!.message).toContain('Pedido: agrega que abrimos los domingos');
+    expect(notices[1]!.message).toContain(t.generateDeps.urls.draftUrl('draft2'));
+    expect(notices[1]!.message).toMatch(/^Costo: \$/m);
+    expect(notices[1]!.message).toMatch(/^Redactor: /m);
+  });
+
+  it('a redesign says what it cost, step by step', async () => {
+    const t = harness();
+    const notices: { subject: string; message: string }[] = [];
+    const opus = async (...args: Parameters<typeof t.writer.writePage>) => ({ ...(await t.writer.writePage(...args)), usage: { step: 'edit_page', modelId: 'claude-opus-5-5', inputTokens: 20_000, outputTokens: 20_000 } });
+    const deps = { ...t.generateDeps, writePage: opus, announce: async (subject: string, message: string) => void notices.push({ subject, message }) };
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', deps);
+    await editSite(t.sites.get('panaderia-luna')!, { instruction: 'todo en verde' }, t.ownerDeps);
+    await runGenerateJob('job-2', deps);
+    expect(notices[1]!.message).toContain('  página (claude-opus-5-5): $0.48'); // 20k × $4 + 20k × $20 per million
   });
 
   it('says what the site cost, step by step, and how the page writer was set', async () => {
@@ -288,6 +306,53 @@ describe('the admin notice for new sites', () => {
   });
 });
 
+describe('the admin notice for failures', () => {
+  const collect = () => {
+    const notices: { subject: string; message: string }[] = [];
+    return { notices, announce: async (subject: string, message: string) => void notices.push({ subject, message }) };
+  };
+
+  it('a page writer that errs: the error and what the job spent before it', async () => {
+    const t = harness();
+    const { notices, announce } = collect();
+    t.writer.options.fail = new Error('overloaded_error');
+    await submit(body, '1.2.3.4', t.submitDeps);
+    expect(await runGenerateJob('job-1', { ...t.generateDeps, announce })).toMatchObject({ outcome: 'FAILED' });
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.subject).toBe('Sitio falló: Panadería Luna');
+    expect(notices[0]!.message).toContain('Error: Error: page writer failed: Error: overloaded_error');
+    expect(notices[0]!.message).toMatch(/^Costo: /m);
+    expect(notices[0]!.message).toMatch(/^  preguntas \(/m); // the questions step ran before the writer
+    expect(notices[0]!.message).toContain('el costo real puede ser algo mayor');
+  });
+
+  it('a timeout the Lambda could not record: the job fails, its slug is free, and the notice says the run is not counted', async () => {
+    const t = harness();
+    const { notices, announce } = collect();
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await recordGenerateCrash('job-1', 'Task timed out after 600.00 seconds', { stores: t.stores, announce });
+    expect(t.jobs.get('job-1')).toMatchObject({ status: 'FAILED', error: 'Task timed out after 600.00 seconds' });
+    expect(t.sites.size).toBe(0);
+    expect(notices[0]!.subject).toBe('Sitio falló: Panadería Luna');
+    expect(notices[0]!.message).toContain('No incluye lo que gastó la ejecución que se cortó');
+    // A job that already ended is left alone.
+    await recordGenerateCrash('job-1', 'again', { stores: t.stores, announce });
+    expect(notices).toHaveLength(1);
+  });
+
+  it('a failed redesign says so, with the request', async () => {
+    const t = harness();
+    const { notices, announce } = collect();
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    await editSite(t.sites.get('panaderia-luna')!, { instruction: 'todo en verde' }, t.ownerDeps);
+    t.writer.options.fail = new Error('boom');
+    await runGenerateJob('job-2', { ...t.generateDeps, announce });
+    expect(notices[0]!.subject).toBe('Cambio falló: Panadería Luna');
+    expect(notices[0]!.message).toContain('Pedido: todo en verde');
+  });
+});
+
 describe('the admin notice for rejections', () => {
   const collect = () => {
     const notices: { subject: string; message: string }[] = [];
@@ -315,5 +380,8 @@ describe('the admin notice for rejections', () => {
     expect(notices).toHaveLength(1);
     expect(notices[0]!.subject).toBe('Sitio rechazado: Panadería Luna');
     expect(notices[0]!.message).toContain('Motivo: policy');
+    // The page was written before the checks refused it: the notice says what it cost.
+    expect(notices[0]!.message).toMatch(/^Costo: /m);
+    expect(notices[0]!.message).toMatch(/^  página \(/m);
   });
 });

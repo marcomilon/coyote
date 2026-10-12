@@ -4,6 +4,7 @@ import { Answers } from './answers';
 import { Media } from './content';
 import type { SiteRecord, Stores } from './jobs';
 import { checkPage } from './page-check';
+import { StoredFill } from './template';
 import type { Urls } from './urls';
 
 /**
@@ -27,6 +28,8 @@ export const SiteDoc = z.object({
   page: z.string().max(500_000),
   /** The owner's edit requests on the written page, so the numbers and emails they gave stay allowed. */
   requests: z.array(z.string().max(1000)).optional(),
+  /** Template mode: the template and the words written for it, for the next template redesign. */
+  template: z.object({ id: z.string().max(60), fill: StoredFill }).optional(),
 });
 export type SiteDoc = z.infer<typeof SiteDoc>;
 

@@ -1,3 +1,4 @@
+import { passesCaptcha, type VerifyHuman } from './captcha';
 import type { Stores } from './jobs';
 import { hashIp } from './ratelimit';
 
@@ -11,15 +12,18 @@ export interface ReportDeps {
   ipSalt: string;
   notify(subject: string, message: string): Promise<void>;
   now(): number;
+  /** The CAPTCHA on the report form (captcha.ts). Undefined: no check. */
+  verifyHuman?: VerifyHuman;
 }
 
-export type ReportResult = { status: 202; counted: boolean; quarantined: boolean } | { status: 404 } | { status: 429 };
+export type ReportResult = { status: 202; counted: boolean; quarantined: boolean } | { status: 403 } | { status: 404 } | { status: 429 };
 
 /**
  * One visitor counts once per site, so a single person cannot take a competitor offline.
  * Quarantine moves the pages aside; `./coyote.sh restore <slug>` brings them back.
  */
-export async function reportSite(slug: string, reason: string, ip: string, deps: ReportDeps): Promise<ReportResult> {
+export async function reportSite(slug: string, reason: string, ip: string, deps: ReportDeps, token?: string): Promise<ReportResult> {
+  if (!(await passesCaptcha(deps.verifyHuman, token, ip))) return { status: 403 };
   const { stores } = deps;
   const site = await stores.getSite(slug);
   if (!site || site.status !== 'published') return { status: 404 };

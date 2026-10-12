@@ -107,6 +107,7 @@ const es = {
     lostLink: { title: 'Tu página web está lista', text: 'Ábrela desde «Mis páginas web» con tu correo.' },
     rejected: { title: 'No podemos crear esta página web', text: 'Tu solicitud no cumple nuestras reglas de uso. Si crees que es un error, revisa la descripción de tu negocio y vuelve a intentarlo: tus respuestas siguen ahí.', action: 'Revisar mi pedido' },
     rateLimited: { title: 'Llegaste al límite de hoy', text: 'Puedes crear más páginas web mañana.' },
+    captcha: { title: 'No pudimos comprobar que eres una persona', text: 'Tus respuestas siguen ahí: vuelve a enviarlas. Si aparece una casilla, márcala.', action: 'Intentar de nuevo' },
     failed: { title: 'Algo salió mal de nuestro lado', text: 'No fue tu culpa. Tus respuestas siguen ahí: inténtalo de nuevo en un momento.', action: 'Intentar de nuevo' },
     noApi: 'La aplicación no está configurada (falta la URL del API).',
   },
@@ -197,6 +198,7 @@ const es = {
     unavailable: 'El envío de correos no está configurado todavía.',
     error: 'Algo salió mal. Inténtalo de nuevo.',
     invalid: 'Revisa tu correo.',
+    captcha: 'No pudimos comprobar que eres una persona. Inténtalo de nuevo; si aparece una casilla, márcala.',
     empty: 'No hay páginas web con este correo todavía.',
     signedInAs: 'Hola',
     signOut: 'Salir',
@@ -266,6 +268,7 @@ const es = {
     missing: { title: 'Falta la página web', text: 'Abre esta página desde el enlace «Reportar» de la página web.' },
     error: 'No pudimos enviar el reporte. Inténtalo de nuevo más tarde.',
     limited: 'Enviaste muchos reportes hoy. Inténtalo mañana.',
+    captcha: 'No pudimos comprobar que eres una persona. Inténtalo de nuevo; si aparece una casilla, márcala.',
   },
   footer: { made: 'ventas314.com', terms: 'Términos', privacy: 'Privacidad', support: 'Soporte por WhatsApp:' },
 };
@@ -352,6 +355,7 @@ const esVos: DeepPartial<typeof es> = {
     lostLink: { text: 'Abrila desde «Mis páginas web» con tu correo.' },
     rejected: { text: 'Tu solicitud no cumple nuestras reglas de uso. Si creés que es un error, revisá la descripción de tu negocio y volvé a intentarlo: tus respuestas siguen ahí.' },
     rateLimited: { text: 'Podés crear más páginas web mañana.' },
+    captcha: { title: 'No pudimos comprobar que sos una persona', text: 'Tus respuestas siguen ahí: volvé a enviarlas. Si aparece una casilla, marcala.' },
     failed: { text: 'No fue tu culpa. Tus respuestas siguen ahí: intentalo de nuevo en un momento.' },
   },
   mySite: {
@@ -404,6 +408,7 @@ const esVos: DeepPartial<typeof es> = {
     badLink: { text: 'Los enlaces sirven una vez, durante una hora. Pedí uno nuevo acá abajo.' },
     error: 'Algo salió mal. Intentalo de nuevo.',
     invalid: 'Revisá tu correo.',
+    captcha: 'No pudimos comprobar que sos una persona. Intentalo de nuevo; si aparece una casilla, marcala.',
     open: 'Abrí tu página web',
     mySite: 'Actualizá tu página web',
   },
@@ -428,6 +433,7 @@ const esVos: DeepPartial<typeof es> = {
     missing: { text: 'Abrí esta página desde el enlace «Reportar» de la página web.' },
     error: 'No pudimos enviar el reporte. Intentalo de nuevo más tarde.',
     limited: 'Enviaste muchos reportes hoy. Intentalo mañana.',
+    captcha: 'No pudimos comprobar que sos una persona. Intentalo de nuevo; si aparece una casilla, marcala.',
   },
 };
 
@@ -537,6 +543,7 @@ const pt: typeof es = {
     lostLink: { title: 'Seu site está pronto', text: 'Abra pelo «Meus sites» com o seu e-mail.' },
     rejected: { title: 'Não podemos criar este site', text: 'O pedido não segue as nossas regras de uso. Se acha que é um engano, revise a descrição do negócio e tente de novo: as suas respostas continuam lá.', action: 'Revisar meu pedido' },
     rateLimited: { title: 'Você chegou ao limite de hoje', text: 'Amanhã você pode criar mais sites.' },
+    captcha: { title: 'Não conseguimos confirmar que você é uma pessoa', text: 'As suas respostas continuam lá: envie de novo. Se aparecer uma caixa, marque-a.', action: 'Tentar de novo' },
     failed: { title: 'Algo deu errado do nosso lado', text: 'Não foi culpa sua. As suas respostas continuam lá: tente de novo em instantes.', action: 'Tentar de novo' },
     noApi: 'O aplicativo não está configurado (falta a URL da API).',
   },
@@ -627,6 +634,7 @@ const pt: typeof es = {
     unavailable: 'O envio de e-mails ainda não está configurado.',
     error: 'Algo deu errado. Tente de novo.',
     invalid: 'Confira o seu e-mail.',
+    captcha: 'Não conseguimos confirmar que você é uma pessoa. Tente de novo; se aparecer uma caixa, marque-a.',
     empty: 'Ainda não há sites com este e-mail.',
     signedInAs: 'Olá',
     signOut: 'Sair',
@@ -696,6 +704,7 @@ const pt: typeof es = {
     missing: { title: 'Falta o site', text: 'Abra esta página pelo link «Denunciar» do site.' },
     error: 'Não foi possível enviar a denúncia. Tente de novo mais tarde.',
     limited: 'Você enviou muitas denúncias hoje. Tente amanhã.',
+    captcha: 'Não conseguimos confirmar que você é uma pessoa. Tente de novo; se aparecer uma caixa, marque-a.',
   },
   footer: { made: 'ventas314.com', terms: 'Termos', privacy: 'Privacidade', support: 'Suporte pelo WhatsApp:' },
 };

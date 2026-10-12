@@ -22,16 +22,19 @@ export function sitesCsp(options: { formAction: string; frameAncestors: string[]
   ].join('; ');
 }
 
-/** Our app: own scripts only (Astro emits external files), the API, the draft iframe and its photos (Mi sitio), direct S3 uploads. */
+/** Cloudflare Turnstile, the CAPTCHA on the anonymous forms: its script, and the iframe it draws the check in. */
+export const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
+
+/** Our app: own scripts only (Astro emits external files) and Turnstile's, the API, the draft iframe and its photos (Mi sitio), direct S3 uploads. */
 export function appCsp(options: { connectSrc: string[]; frameSrc: string[] }): string {
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    `script-src 'self' ${TURNSTILE_ORIGIN}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     'font-src https://fonts.gstatic.com',
     `img-src 'self' data: blob: ${options.frameSrc.join(' ')}`,
     `connect-src ${options.connectSrc.join(' ')}`,
-    `frame-src ${options.frameSrc.join(' ')}`,
+    `frame-src ${[...options.frameSrc, TURNSTILE_ORIGIN].join(' ')}`,
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",

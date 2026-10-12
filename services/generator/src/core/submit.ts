@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { normalizeAnswers, type Answers } from './answers';
 import { GuardrailBlocked, type CallTool } from './bedrock';
 import { findBrand } from './brands';
+import { passesCaptcha, TOKEN_MAX, type VerifyHuman } from './captcha';
 import { JOB_TTL_SECONDS, type Job, type Stores } from './jobs';
 import { announceRejection, type Announce } from './notices';
 import { isRejected, prescreen } from './prescreen';
@@ -24,6 +25,8 @@ const Body = z.object({
   uploadId: z.string().uuid().optional(),
   /** The owner's email (account.ts): links the site to "Mis sitios". Not an answer: never sent to a model. */
   ownerEmail: z.email().max(120),
+  /** The CAPTCHA token (captcha.ts). */
+  turnstileToken: z.string().max(TOKEN_MAX).optional(),
 });
 
 export interface SubmitDeps {
@@ -34,6 +37,8 @@ export interface SubmitDeps {
   ipSalt: string;
   /** Notices for the admin (notices.ts). */
   announce?: Announce;
+  /** The CAPTCHA (captcha.ts). Undefined: no check. */
+  verifyHuman?: VerifyHuman;
   /** Starts the generate Lambda asynchronously. */
   startGenerate(jobId: string): Promise<void>;
   now(): number;
@@ -43,13 +48,14 @@ export interface SubmitDeps {
 export type SubmitResult =
   | { status: 202; jobId: string }
   | { status: 400; fields: string[] }
+  | { status: 403 }
   | { status: 422 }
   | { status: 429 };
 
 const SLUG_ATTEMPTS = 5;
 
 /**
- * Order matters: validation and the rate limit cost nothing, so they run before the model call.
+ * Order matters: validation, the CAPTCHA, and the rate limit cost nothing, so they run before the model call.
  * A rejected request is still recorded (answers, IP hash, reason) for abuse investigation.
  */
 export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promise<SubmitResult> {
@@ -58,15 +64,19 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
   let answers: Answers;
   let uploadId: string | undefined;
   let ownerEmail: string;
+  let token: string | undefined;
   try {
     const parsed = Body.parse(body);
     uploadId = parsed.uploadId;
+    token = parsed.turnstileToken;
     ownerEmail = parsed.ownerEmail.trim().toLowerCase();
     answers = normalizeAnswers(parsed);
   } catch (error) {
     if (error instanceof z.ZodError) return { status: 400, fields: [...new Set(error.issues.map((i) => i.path.join('.')))] };
     throw error;
   }
+
+  if (!(await passesCaptcha(deps.verifyHuman, token, ip))) return { status: 403 };
 
   const now = deps.now();
   const ipHash = hashIp(ip, deps.ipSalt);

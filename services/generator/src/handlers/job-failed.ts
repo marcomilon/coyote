@@ -1,8 +1,9 @@
+import { snsAnnounce } from '../aws/notices';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
-import { noteRedesignDone } from '../core/chat-notes';
-import { releaseNewSite } from '../core/generate-job';
+import { recordGenerateCrash } from '../core/generate-job';
 
 const stores = createStores(storeConfigFromEnv());
+const announce = snsAnnounce(process.env.SITE_NOTICES_TOPIC_ARN);
 
 interface FailureEvent {
   requestPayload?: { jobId?: string };
@@ -13,9 +14,5 @@ interface FailureEvent {
 export const handler = async (event: FailureEvent): Promise<void> => {
   const jobId = event.requestPayload?.jobId;
   if (!jobId) return;
-  const job = await stores.getJob(jobId);
-  if (!job || job.status !== 'PENDING') return;
-  await releaseNewSite(job, { stores });
-  await stores.updateJob(jobId, { status: 'FAILED', error: (event.responsePayload?.errorMessage ?? 'generate crashed').slice(0, 500) });
-  await noteRedesignDone(stores, job, 'FAILED');
+  await recordGenerateCrash(jobId, event.responsePayload?.errorMessage, { stores, announce });
 };

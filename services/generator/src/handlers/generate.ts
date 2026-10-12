@@ -4,8 +4,9 @@ import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { sesSendEmail } from '../aws/mail';
 import { snsAnnounce } from '../aws/notices';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
+import { s3Templates } from '../aws/templates';
 import { callTool, outputAllowed, stabilityImage } from '../core/bedrock';
-import { runGenerateJob } from '../core/generate-job';
+import { runGenerateJob, type PageMode } from '../core/generate-job';
 import { emitMetrics } from '../core/metrics';
 import { legibleWords } from '../core/images';
 import { imageModelId, modelId, prescreenModelId } from '../core/models';
@@ -22,6 +23,7 @@ const imageModel = imageModelId();
 const generateImage = stabilityImage(imageModel);
 const sendEmail = sesSendEmail(urls.mailFrom);
 const announce = snsAnnounce(process.env.SITE_NOTICES_TOPIC_ARN);
+const templates = s3Templates(s3, process.env.PAGE_SKILLS_BUCKET);
 
 /** Top-level moderation categories we refuse. Alcohol and swimwear are fine: restaurants and beachwear shops exist. */
 const REFUSED = new Set(['Explicit', 'Non-Explicit Nudity of Intimate parts and Kissing', 'Violence', 'Visually Disturbing', 'Hate Symbols', 'Drugs & Tobacco', 'Gambling']);
@@ -39,7 +41,7 @@ async function readText(key: string): Promise<string[]> {
   return legibleWords(TextDetections ?? []);
 }
 
-/** A switch in SSM (`./coyote.sh page-model`, `page-skill`, `page-look`, `page-images`), read for every job so a change applies to the next one. */
+/** A switch in SSM (`./coyote.sh page-mode`, `page-model`, `page-skill`, `page-look`, `page-images`), read for every job so a change applies to the next one. */
 async function setting(parameter: string | undefined): Promise<string | undefined> {
   if (!parameter) return undefined;
   try {
@@ -68,13 +70,14 @@ async function pageSkill(): Promise<PageSkill | null> {
 
 // Invoked asynchronously with { jobId } by submit, by the answers route, and by an owner's edit.
 export const handler = async (event: { jobId: string }): Promise<void> => {
-  const [model, skill, look, images] = await Promise.all([
+  const [mode, model, skill, look, images] = await Promise.all([
+    setting(process.env.PAGE_MODE_PARAMETER).then((value): PageMode => (value === 'template' ? 'template' : 'design')),
     setting(process.env.PAGE_MODEL_PARAMETER).then((value) => pageModel(process.env, value)),
     pageSkill(),
     setting(process.env.PAGE_LOOK_PARAMETER).then((value) => value !== 'off'),
     setting(process.env.PAGE_IMAGES_PARAMETER).then((value) => value !== 'off'),
   ]);
-  console.log(JSON.stringify({ pageModel: model, pageSkill: skill?.name ?? NO_SKILL, pageLook: look ? 'on' : 'off', pageImages: images ? 'on' : 'off' }));
+  console.log(JSON.stringify({ pageMode: mode, pageModel: model, pageSkill: skill?.name ?? NO_SKILL, pageLook: look ? 'on' : 'off', pageImages: images ? 'on' : 'off' }));
   const result = await runGenerateJob(event.jobId, {
     stores,
     callTool,
@@ -86,6 +89,8 @@ export const handler = async (event: { jobId: string }): Promise<void> => {
     readText,
     now: Date.now,
     writePage,
+    pageMode: mode,
+    templates,
     pageEffort: pageEffort(),
     pageModel: model,
     pageSkill: skill,

@@ -28,6 +28,8 @@ export const ANTHROPIC_SECRET_NAME = 'coyote/anthropic-api-key';
  * CloudFormation writes the value only on create (or when this default changes), so the switch survives deploys.
  */
 export const PAGE_MODEL_PARAMETER = '/coyote/page-model';
+/** How pages are made: design (Opus writes each page) or template (Haiku fills a template Opus designed). Set by `./coyote.sh page-mode`; survives deploys. */
+export const PAGE_MODE_PARAMETER = '/coyote/page-mode';
 /** Which skill the page writer gets: a `<name>.md` in the skills bucket, or none. Set by `./coyote.sh page-skill`; survives deploys. */
 export const PAGE_SKILL_PARAMETER = '/coyote/page-skill';
 /** Whether a new site's request carries the look nudge (page-writer.ts `pickLook`): on or off. Set by `./coyote.sh page-look`; survives deploys. */
@@ -38,6 +40,10 @@ export const PAGE_IMAGES_PARAMETER = '/coyote/page-images';
 export const PORKBUN_SECRET_NAME = 'coyote/porkbun-api';
 /** Whether owners may register a domain (Coyote pays for now): on or off. Set by `./coyote.sh domain-register`; survives deploys. */
 export const DOMAIN_REGISTER_PARAMETER = '/coyote/domain-register';
+/** The Cloudflare Turnstile secret key (aws/turnstile.ts), created by hand (👤). */
+export const TURNSTILE_SECRET_NAME = 'coyote/turnstile';
+/** Whether the anonymous forms need the CAPTCHA (Turnstile): on or off. Set by `./coyote.sh captcha`; survives deploys. */
+export const CAPTCHA_PARAMETER = '/coyote/captcha';
 import { DEFAULT_PAGE_SKILL } from '../../services/generator/src/core/frontend-design';
 import { DEFAULT_IMAGE_MODEL_ID, IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
 import type { CoyoteGuardrail } from './guardrail';
@@ -122,11 +128,16 @@ export class GeneratorApi extends Construct {
         ...options,
       });
 
-    const jobFailed = fn('JobFailed', 'job-failed');
+    const jobFailed = fn('JobFailed', 'job-failed', { environment: { ...environment, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn } });
     const pageModel = new ssm.StringParameter(this, 'PageModel', {
       parameterName: PAGE_MODEL_PARAMETER,
       stringValue: 'opus',
       description: 'Page writer model: opus or haiku. Set with ./coyote.sh page-model',
+    });
+    const pageMode = new ssm.StringParameter(this, 'PageMode', {
+      parameterName: PAGE_MODE_PARAMETER,
+      stringValue: 'design',
+      description: 'How pages are made: design (Opus writes each page) or template (Haiku fills a template). Set with ./coyote.sh page-mode',
     });
     const pageSkill = new ssm.StringParameter(this, 'PageSkill', {
       parameterName: PAGE_SKILL_PARAMETER,
@@ -144,13 +155,14 @@ export class GeneratorApi extends Construct {
       description: 'Photos made by the page writer (when the owner asks): on or off. Set with ./coyote.sh page-images',
     });
     const generate = fn('Generate', 'generate', {
-      environment: { ...environment, ANTHROPIC_SECRET_NAME, PAGE_MODEL_PARAMETER, PAGE_SKILL_PARAMETER, PAGE_LOOK_PARAMETER, PAGE_IMAGES_PARAMETER, IMAGE_MODEL_ID: DEFAULT_IMAGE_MODEL_ID, PAGE_SKILLS_BUCKET: props.pageSkillsBucket.bucketName, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
+      environment: { ...environment, ANTHROPIC_SECRET_NAME, PAGE_MODE_PARAMETER, PAGE_MODEL_PARAMETER, PAGE_SKILL_PARAMETER, PAGE_LOOK_PARAMETER, PAGE_IMAGES_PARAMETER, IMAGE_MODEL_ID: DEFAULT_IMAGE_MODEL_ID, PAGE_SKILLS_BUCKET: props.pageSkillsBucket.bucketName, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
       memorySize: 1024,
       timeout: Duration.minutes(10), // the page writer takes 3–4 minutes
       retryAttempts: 0, // a retry would pay for the model calls twice
       onFailure: new destinations.LambdaDestination(jobFailed),
     });
     this.generate = generate;
+    pageMode.grantRead(generate);
     pageModel.grantRead(generate);
     pageSkill.grantRead(generate);
     pageLook.grantRead(generate);
@@ -228,6 +240,20 @@ export class GeneratorApi extends Construct {
     props.rateLimitTable.grantReadWriteData(domains);
 
     const report = fn('Report', 'report', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, ABUSE_TOPIC_ARN: props.abuseReports.topicArn } });
+
+    // The CAPTCHA on the anonymous forms (create, sign-in link, report). Off until the secret exists and a live test passes.
+    const captcha = new ssm.StringParameter(this, 'CaptchaSwitch', {
+      parameterName: CAPTCHA_PARAMETER,
+      stringValue: 'off',
+      description: 'CAPTCHA (Cloudflare Turnstile) on the anonymous forms: on or off. Set with ./coyote.sh captcha',
+    });
+    const turnstileSecret = secretsmanager.Secret.fromSecretNameV2(this, 'TurnstileSecret', TURNSTILE_SECRET_NAME);
+    for (const f of [submit, account, report]) {
+      f.addEnvironment('CAPTCHA_PARAMETER', CAPTCHA_PARAMETER);
+      f.addEnvironment('TURNSTILE_SECRET_NAME', TURNSTILE_SECRET_NAME);
+      captcha.grantRead(f);
+      turnstileSecret.grantRead(f);
+    }
     props.rateLimitTable.grantReadWriteData(report);
     props.sitesTable.grantReadWriteData(report);
     props.sitesBucket.grantReadWrite(report);
@@ -235,6 +261,7 @@ export class GeneratorApi extends Construct {
     props.abuseReports.grantPublish(report);
     props.siteNotices.grantPublish(generate);
     props.siteNotices.grantPublish(submit);
+    props.siteNotices.grantPublish(jobFailed); // the failure notice of a crashed or timed-out generate
     for (const f of [owner, report]) props.sitesDistribution.grantCreateInvalidation(f);
     // Every API Lambda counts requests per IP per minute (perIpLimit in handlers/http.ts).
     for (const f of [owner, status]) props.rateLimitTable.grantReadWriteData(f);

@@ -287,6 +287,8 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .two[hidden], .btn[hidden] { display: none; }
 .submit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem; border-top: 3px dashed var(--ink); padding-top: 1.5rem; }
 .submit-row p { font-size: .82rem; opacity: .75; flex: 1 1 14rem; }
+/* Cloudflare Turnstile: invisible unless it wants a click; then its box sits under the button. */
+.human-check:not(:empty) { margin-top: 1rem; }
 
 /* One view at a time, chosen by data-state on the root */
 [data-view] { display: none; }

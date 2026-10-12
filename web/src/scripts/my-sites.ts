@@ -5,6 +5,7 @@ import { showAccount } from './account';
 import { api as apiCall, apiUrl } from './jobs';
 import { followDraft } from './live-preview';
 import { readSession, saveSession, type Session } from './session';
+import { humanCheck } from './turnstile';
 
 interface Site {
   slug: string;
@@ -23,6 +24,7 @@ interface Strings {
   unavailable: string;
   error: string;
   invalid: string;
+  captcha: string;
   created: string;
   updated: string;
 }
@@ -30,6 +32,7 @@ const root = document.getElementById('mysites') as HTMLElement;
 const strings = JSON.parse(root.dataset.strings ?? '{}') as Strings;
 const $ = <T extends Element>(selector: string) => root.querySelector(selector) as T;
 const form = $<HTMLFormElement>('form[data-signin]');
+const human = humanCheck(form.querySelector<HTMLElement>('[data-human-check]'), strings.lang);
 
 const show = (state: string) => (root.dataset.state = state);
 
@@ -129,10 +132,12 @@ form.addEventListener('submit', async (event) => {
   const button = form.querySelector('button') as HTMLButtonElement;
   button.disabled = true;
   try {
-    const { status } = await apiCall('/account/login', json({ email, lang: strings.lang }));
+    const { status } = await apiCall('/account/login', json({ email, lang: strings.lang, turnstileToken: await human.token() }));
+    human.reset();
     if (status === 202) return showNote(strings.sent, true);
-    error.textContent = status === 400 ? strings.invalid : status === 503 ? strings.unavailable : strings.error;
+    error.textContent = status === 400 ? strings.invalid : status === 403 ? strings.captcha : status === 503 ? strings.unavailable : strings.error;
   } catch {
+    human.reset();
     error.textContent = strings.error;
   } finally {
     button.disabled = false;

@@ -15,6 +15,9 @@ export interface FakeModelOptions {
   questions?: Question[];
   /** The chat's edit_page answer, or a function of the call number (1, 2, …). */
   chat?: Record<string, unknown> | ((call: number) => Record<string, unknown>);
+  /** Template mode: the template pick_template picks (default: the first), and fill_page's words. */
+  pick?: string;
+  fill?: Record<string, unknown>;
 }
 
 /** A scripted model. Every option can be changed between calls. */
@@ -66,6 +69,10 @@ export function fakeModel(options: FakeModelOptions = {}) {
           const chat = options.chat;
           return typeof chat === 'function' ? chat(chatCalls) : (chat ?? { action: 'none', reply: '¡Hola! ¿Qué quieres cambiar?' });
         }
+        case 'pick_template':
+          return { id: options.pick };
+        case 'fill_page':
+          return options.fill;
         default:
           throw new Error(`unexpected tool ${request.tool.name}`);
       }

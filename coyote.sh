@@ -20,6 +20,13 @@ Commands:
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
   view <slug>                    Copy a site's current draft to out/view/<slug>/ and open it in the browser
+  page-mode [design|template]    Show or switch how pages are made, for the whole stack from the next job: design, Opus
+                                 writes each page (about $0.50); template, Haiku fills a template Opus designed (a few cents).
+                                 Rediseñar follows the mode too. No deploy needed. Survives deploys
+  page-templates                 List the templates for template mode (the repo's services/generator/templates/ and the live ones)
+  page-templates add <id> <file> "<description>"
+                                 Check a template (npm run templates:make makes them), add it to the repo's library, upload it
+  page-templates rm <id>         Take a template out of the repo's library and the live one
   page-model [opus|haiku]        Show or set the model that writes the pages, for the whole stack, from the next job.
                                  haiku is cheap, for testing the workflow; opus makes the real designs. Survives deploys
   page-skill [<name>|none]       Show the page writer's skill and the ones available, or switch it (none: no skill),
@@ -34,6 +41,8 @@ Commands:
   domains                        List the domains owners registered (Mi sitio → Dominio)
   domain-register [on|off]       Show or switch whether owners may register a domain (Coyote pays from the Porkbun balance).
                                  Search works either way. No deploy needed. Survives deploys
+  captcha [on|off]               Show or switch the CAPTCHA (Cloudflare Turnstile) on the create, sign-in link and report forms.
+                                 Needs the secret coyote/turnstile and the turnstileSiteKey context. No deploy needed. Survives deploys
   subscribe-alerts <email>       Email alarms, visitor reports, site notices (new and rejected), and cost alerts to this address (then confirm-alerts)
   protect-alerts                 Re-create the alert email subscriptions that anyone could unsubscribe by link.
                                  AWS sends new confirmation emails; confirm each with confirm-alerts, never by clicking
@@ -177,7 +186,7 @@ cmd_status() {
   output() { "${aws[@]}" cloudformation describe-stacks --stack-name Coyote --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue"; }
   fn="$("${aws[@]}" lambda list-functions --query "Functions[?starts_with(FunctionName, 'Coyote-GeneratorApiGenerate')].FunctionName | [0]")"
   # name<TAB>value lines; missing parameters print nothing.
-  params="$("${aws[@]}" ssm get-parameters --names /coyote/page-model /coyote/page-skill /coyote/page-look /coyote/page-images /coyote/domain-register --query "Parameters[].[Name, Value]")"
+  params="$("${aws[@]}" ssm get-parameters --names /coyote/page-mode /coyote/page-model /coyote/page-skill /coyote/page-look /coyote/page-images /coyote/domain-register /coyote/captcha --query "Parameters[].[Name, Value]")"
   param() { awk -v n="/coyote/$1" '$1 == n { print $2 }' <<<"$params"; }
   env() { "${aws[@]}" lambda get-function-configuration --function-name "$fn" --query "Environment.Variables.$1"; }
   bucket="$(output PageSkillsBucketName)"
@@ -188,6 +197,7 @@ cmd_status() {
   echo "Sites       $(output SitesBaseUrl)"
   echo
   echo "Page writer (switches apply from the next job)"
+  echo "  mode      $(param page-mode)   templates: $("${aws[@]}" s3 cp "s3://$bucket/templates/index.json" - 2>/dev/null | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s||"[]").map(t=>t.id).join(" ")||"none"))')"
   local override
   override="$(env PAGE_MODEL)"
   echo "  model     $(param page-model)$([[ "$override" != None ]] && echo " (overridden by PAGE_MODEL=$override)")   effort $(env PAGE_EFFORT | sed 's/^None$/default/')"
@@ -196,6 +206,7 @@ cmd_status() {
   echo "  images    $(param page-images)   model $(env IMAGE_MODEL_ID) (us-west-2), when the owner leaves \"Fotos creadas con IA\" on"
   echo
   echo "Domains     registering $(param domain-register) (Porkbun; ./coyote.sh domains lists them)"
+  echo "CAPTCHA     $(param captcha) (Cloudflare Turnstile; site key: $(k="$(output TurnstileSiteKey)"; [[ -n "$k" && "$k" != None ]] && echo "$k" || echo none))"
   echo
   echo "Bedrock"
   echo "  questions   $(env BEDROCK_MODEL_ID)"
@@ -237,6 +248,56 @@ cmd_page_model() {
       echo "Pages are now written by $1 (from the next job)."
       ;;
     *) die "page-model takes opus or haiku" ;;
+  esac
+}
+
+cmd_page_mode() {
+  local ssm=(aws ssm --profile "$PROFILE" --region us-east-1) name=/coyote/page-mode
+  case "${1:-}" in
+    '') "${ssm[@]}" get-parameter --name "$name" --query Parameter.Value --output text ;;
+    design)
+      "${ssm[@]}" put-parameter --name "$name" --value design --overwrite >/dev/null
+      echo "Opus now writes each page (from the next job). page-model, page-skill and page-look apply."
+      ;;
+    template)
+      "${ssm[@]}" put-parameter --name "$name" --value template --overwrite >/dev/null
+      echo "Pages are now filled from templates (from the next job). Templates: ./coyote.sh page-templates"
+      ;;
+    *) die "page-mode takes design or template" ;;
+  esac
+}
+
+# The repo's services/generator/templates/ is the library; the stack's copy (templates/ in the skills bucket) follows it.
+cmd_page_templates() {
+  local dir="$ROOT/services/generator/templates" bucket
+  bucket="$(aws cloudformation describe-stacks --profile "$PROFILE" --region us-east-1 --stack-name Coyote \
+    --query "Stacks[0].Outputs[?OutputKey=='PageSkillsBucketName'].OutputValue" --output text 2>/dev/null)" || bucket=""
+  push_templates() {
+    [[ -n "$bucket" && "$bucket" != None ]] || die "no skills bucket in the stack. Run ./coyote.sh deploy (it uploads the templates too)"
+    aws s3 sync "$dir/" "s3://$bucket/templates/" --delete --profile "$PROFILE" --region us-east-1 --only-show-errors
+    echo "The live templates now match the repo's."
+  }
+  case "${1:-}" in
+    '')
+      echo "Repo:"
+      npm run --silent templates -w services/generator -- list
+      if [[ -n "$bucket" && "$bucket" != None ]]; then
+        echo "Live: $(aws s3 ls "s3://$bucket/templates/" --profile "$PROFILE" --region us-east-1 | awk '{print $4}' | sed -n 's/\.html$//p' | tr '\n' ' ')"
+      fi
+      ;;
+    add)
+      [[ $# -eq 4 ]] || die "usage: page-templates add <id> <file> \"<description>\""
+      local file
+      file="$(cd "$(dirname "$3")" && pwd)/$(basename "$3")"
+      npm run --silent templates -w services/generator -- add "$2" "$file" "$4"
+      push_templates
+      ;;
+    rm)
+      [[ $# -eq 2 ]] || die "usage: page-templates rm <id>"
+      npm run --silent templates -w services/generator -- rm "$2"
+      push_templates
+      ;;
+    *) die "usage: page-templates [add <id> <file> \"<description>\" | rm <id>]" ;;
   esac
 }
 
@@ -307,6 +368,24 @@ cmd_domain_register() {
   esac
 }
 
+cmd_captcha() {
+  local ssm=(aws ssm --profile "$PROFILE" --region us-east-1) name=/coyote/captcha
+  case "${1:-}" in
+    '') "${ssm[@]}" get-parameter --name "$name" --query Parameter.Value --output text ;;
+    on)
+      aws secretsmanager describe-secret --profile "$PROFILE" --region us-east-1 --secret-id coyote/turnstile >/dev/null 2>&1 ||
+        die "no secret coyote/turnstile yet. Create it first: aws secretsmanager create-secret --name coyote/turnstile --secret-string '<secret key>' --profile $PROFILE"
+      "${ssm[@]}" put-parameter --name "$name" --value on --overwrite >/dev/null
+      echo "CAPTCHA on: create, sign-in link and report need Turnstile's token (within a minute)."
+      ;;
+    off)
+      "${ssm[@]}" put-parameter --name "$name" --value off --overwrite >/dev/null
+      echo "CAPTCHA off: the forms work without a token (within a minute); the rate limits still apply."
+      ;;
+    *) die "captcha takes on or off" ;;
+  esac
+}
+
 cmd_admin() {
   cd "$ROOT/services/generator"
   AWS_PROFILE="$PROFILE" npx tsx scripts/admin.ts "$@"
@@ -320,8 +399,11 @@ case "$command" in
   destroy) cmd_destroy ;;
   abuse-report | unpublish | restore | refill-all | domains) cmd_admin "$command" "$@" ;;
   domain-register) cmd_domain_register "$@" ;;
+  captcha) cmd_captcha "$@" ;;
   view) cmd_view "$@" ;;
   example-page) cmd_example_page "$@" ;;
+  page-mode) cmd_page_mode "$@" ;;
+  page-templates) cmd_page_templates "$@" ;;
   page-model) cmd_page_model "$@" ;;
   page-skill) cmd_page_skill "$@" ;;
   page-look) cmd_page_look "$@" ;;

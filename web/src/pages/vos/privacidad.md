@@ -23,6 +23,8 @@ No usamos herramientas de analítica, ni en esta aplicación ni en las páginas 
 
 Todo se aloja en Amazon Web Services, que también envía nuestros correos. El diseño y los textos se generan con modelos de inteligencia artificial de Anthropic (Claude) y de Amazon Bedrock, que reciben tus respuestas y tus fotos para crear la página web y no las usan para entrenar sus modelos. Para que tu página web muestre tus datos de contacto, esos modelos también reciben tu número de WhatsApp, tu teléfono, tu dirección y tus redes. Tu correo personal nunca lo reciben.
 
+Para frenar a los robots, los formularios de crear una página web, pedir el enlace de entrada y reportar una página web pasan por Cloudflare Turnstile, que revisa tu navegador y tu dirección IP para comprobar que sos una persona. No usa cookies de publicidad ni te sigue a otros sitios.
+
 Si registrás un dominio desde Mi página web, tu nombre, correo, teléfono y dirección van a Porkbun, el registrador del dominio, y al registro del dominio (por ejemplo, el de .mx o .co). Son los datos del titular que exigen las reglas de los dominios. Con la protección de privacidad no aparecen en las consultas públicas cuando la terminación lo permite. No los usamos para nada más y los borramos en cuanto el registrador los recibe.
 
 ## Las páginas web que creamos

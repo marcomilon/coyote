@@ -1,6 +1,7 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { sesSendEmail } from '../aws/mail';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
+import { turnstile } from '../aws/turnstile';
 import { accountView, checkSession, requestLogin, startSession, type AccountDeps } from '../core/account';
 import { createUrls, urlConfigFromEnv } from '../core/urls';
 import { json, parseBody, perIpLimit } from './http';
@@ -12,6 +13,7 @@ const deps: AccountDeps = {
   sendEmail: sesSendEmail(urls.mailFrom),
   now: Date.now,
   ipSalt: process.env.IP_HASH_SALT ?? '',
+  verifyHuman: turnstile(),
 };
 
 // POST /account/login · POST /account/session · GET /account ("Mis sitios").
@@ -20,7 +22,7 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(deps.stores, async (
   switch (event.routeKey) {
     case 'POST /account/login': {
       const { status } = await requestLogin(body(), event.requestContext.http.sourceIp, deps);
-      return json(status, status === 202 ? { status: 'sent' } : { error: status === 400 ? 'invalid' : 'unavailable' });
+      return json(status, status === 202 ? { status: 'sent' } : { error: status === 400 ? 'invalid' : status === 403 ? 'captcha' : 'unavailable' });
     }
     case 'POST /account/session': {
       const result = await startSession(body(), deps);

@@ -15,6 +15,7 @@
     "senderEmail": "marco.milon+coyote@gmail.com",
     "domainName": "ventas314.com",
     "account": "887799775985",
+    "turnstileSiteKey": "0x4AAAAAAFU3UMZOLrYHhjX3",
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
     "@aws-cdk/core:newStyleStackSynthesis": true,
     "@aws-cdk/core:stackRelativeExports": true,

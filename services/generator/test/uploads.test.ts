@@ -125,7 +125,12 @@ describe('uploads in a generation', () => {
     expect(await editSite(t.sites.get('panaderia-luna')!, { removePhotos: ['assets/other.jpg'] }, t.ownerDeps)).toEqual({ status: 400, fields: ['removePhotos'] });
     expect(await editSite(t.sites.get('panaderia-luna')!, { uploadId: added, removePhotos: ['assets/photo-f1.jpg'] }, t.ownerDeps)).toEqual({ status: 202, jobId: 'job-2' });
     const plans = t.requests.filter((r) => r.tool.name === 'plan_site').length;
-    await runGenerateJob('job-2', t.generateDeps);
+    const notices: { subject: string; message: string }[] = [];
+    await runGenerateJob('job-2', { ...t.generateDeps, announce: async (subject, message) => void notices.push({ subject, message }) });
+    // The admin hears about it, with what it cost.
+    expect(notices[0]!.subject).toBe('Cambio de fotos: Panadería Luna');
+    expect(notices[0]!.message).toContain('Fotos: 2 nuevas, 1 quitada');
+    expect(notices[0]!.message).toMatch(/^Costo: /m);
 
     expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE' });
     // A photo change alone asks no questions.

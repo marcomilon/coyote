@@ -11,11 +11,12 @@ import { DEFAULT_PAGE_MODEL, DEFAULT_PAGE_SKILL, NO_SKILL, parsePage, pickLook, 
 import { PolicyRejection, type Violation } from './policy';
 import { isRejected, prescreen } from './prescreen';
 import { planSite } from './site-writer';
+import { writeTemplatePage, type TemplateLibrary } from './template-writer';
 import { readyEmail, type SendEmail } from './mail';
 import { issueToken, TOKEN_TTL_SECONDS } from './token';
 import { mergeMedia, processUploads } from './uploads';
 import type { Urls } from './urls';
-import { announceNewSite, announceRejection, type Announce, type PageWriterStatus } from './notices';
+import { announceEdit, announceFailure, announceNewSite, announceRejection, type Announce, type PageWriterStatus } from './notices';
 
 export interface GenerateJobDeps {
   stores: Stores;
@@ -45,6 +46,12 @@ export interface GenerateJobDeps {
   pageModel?: string;
   /** The page writer's skill (`./coyote.sh page-skill`); null: none. Unset: the writer's default. */
   pageSkill?: PageSkill | null;
+  /**
+   * How pages are made (`./coyote.sh page-mode`): `design`, Opus writes each page; `template`, the cheap model
+   * (`modelId`) fills a template from `templates`. Unset: design.
+   */
+  pageMode?: PageMode;
+  templates?: TemplateLibrary;
   /** The look nudge on new sites (`./coyote.sh page-look`). Unset: on. */
   pageLook?: boolean;
   /**
@@ -59,6 +66,9 @@ export interface GenerateJobDeps {
   /** Notices for the admin (notices.ts). Undefined: nobody is told. */
   announce?: Announce;
 }
+
+export const PAGE_MODES = ['design', 'template'] as const;
+export type PageMode = (typeof PAGE_MODES)[number];
 
 export type GenerateOutcome =
   | { outcome: 'SKIPPED' }
@@ -105,7 +115,7 @@ export function photoInstruction({ added, removed, described = [] }: { added: st
 
 const LOWER: Record<PageEffort, PageEffort> = { max: 'xhigh', xhigh: 'high', high: 'medium', medium: 'low', low: 'low' };
 
-type PageResult = { page: string; made: string[] } | { problem: 'failed' | 'policy' | 'guardrail'; detail: string; violations?: Violation[] };
+type PageResult = { page: string; made: string[]; template?: SiteDoc['template'] } | { problem: 'failed' | 'policy' | 'guardrail'; detail: string; violations?: Violation[] };
 
 /** Asks the page writer for a page and runs the page checks and the output guardrail on it. */
 async function writeCheckedPage(request: PageRequest, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
@@ -131,11 +141,41 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
   usage.push(reply.usage);
   const page = parsePage(reply.text);
   if (!page) return { problem: 'failed', detail: `no HTML page in the reply (stop: ${reply.stopReason})` };
+  return checkWrittenPage(page, made, request, requests, slug, deps);
+}
+
+/** The page checks and the output guardrail, for a page from either mode. */
+async function checkWrittenPage(page: string, made: string[], request: Pick<PageRequest, 'answers' | 'notes' | 'photos'>, requests: string[], slug: string, deps: GenerateJobDeps): Promise<PageResult> {
+  const { answers } = request;
   const checked = checkPage(page, { contact: answers.contact, ownerText: ownerText({ answers, notes: request.notes, requests, media: { captions: Object.fromEntries(request.photos.flatMap((p) => (p.caption ? [[p.file, p.caption]] : []))) } }), businessName: answers.businessName, lang: answers.lang, ...deps.urls.pageLinks(slug, answers.lang) });
   if (checked.violations.length > 0) return { problem: 'policy', detail: JSON.stringify(checked.violations).slice(0, 300), violations: checked.violations };
   if (!(await deps.outputAllowed(checked.texts.join('\n')))) return { problem: 'guardrail', detail: 'page text' };
   if (checked.repairs.length > 0) console.info('page repaired', { slug, repairs: checked.repairs });
   return { page, made };
+}
+
+/** Template mode: the cheap model picks a template and writes its words; then the same checks as a written page. */
+async function fillCheckedPage(request: PageRequest, media: Media, current: SiteDoc | undefined, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
+  if (!deps.templates) return { problem: 'failed', detail: 'template mode without a template library' };
+  const { answers } = request;
+  const made: string[] = [];
+  const images = answers.aiImages === true && deps.pageImages !== false && deps.generateImage;
+  const makeImage = images ? imageMaker(mediaPrefix(slug), { ...deps, generateImage: images }, made) : undefined;
+  let written;
+  try {
+    written = await writeTemplatePage(
+      { answers, notes: request.notes, media, photos: request.photos, ...(current?.template && { current: current.template }), ...(request.instruction && { instruction: request.instruction }), ...(makeImage && { makeImage }) },
+      { callTool: deps.callTool, modelId: deps.modelId, templates: deps.templates },
+    );
+  } catch (error) {
+    if (error instanceof GuardrailBlocked) return { problem: 'guardrail', detail: 'template words' };
+    return { problem: 'failed', detail: String(error).slice(0, 300) };
+  } finally {
+    usage.push(...made.map(() => ({ step: 'make_image', modelId: deps.imageModelId ?? 'image', inputTokens: 0, outputTokens: 0 })));
+  }
+  usage.push(...written.usage);
+  const checked = await checkWrittenPage(written.page, written.made, request, requests, slug, deps);
+  return 'problem' in checked ? checked : { ...checked, template: written.template };
 }
 
 /**
@@ -178,7 +218,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
         usage.push(screening.usage);
         if (isRejected(screening)) {
           await finish({ status: 'REJECTED', rejectedBy: 'prescreen', rejectDetail: screening.category });
-          await announceRejection(deps.announce, job, 'prescreen', screening.category);
+          await announceRejection(deps.announce, job, 'prescreen', screening.category, usage);
           return { outcome: 'REJECTED', ...tokens() };
         }
       }
@@ -188,7 +228,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
         const processed = job.uploadId ? await processUploads(job.uploadId, mediaPrefix(slug), deps, job.newCaptions) : { ok: true as const, media: none };
         if (!processed.ok) {
           await finish({ status: 'REJECTED', rejectedBy: 'image', rejectDetail: processed.reason.slice(0, 300) });
-          await announceRejection(deps.announce, job, 'image', processed.reason.slice(0, 300));
+          await announceRejection(deps.announce, job, 'image', processed.reason.slice(0, 300), usage);
           return { outcome: 'REJECTED', ...tokens() };
         }
         const removed = (job.removePhotos ?? []).filter((file) => file === current!.media.logo || current!.media.photos.includes(file));
@@ -203,7 +243,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       if (!processed.ok) {
         await releaseNewSite(job, deps);
         await finish({ status: 'REJECTED', rejectedBy: 'image', rejectDetail: processed.reason.slice(0, 300) });
-        await announceRejection(deps.announce, job, 'image', processed.reason.slice(0, 300));
+        await announceRejection(deps.announce, job, 'image', processed.reason.slice(0, 300), usage);
         return { outcome: 'REJECTED', ...tokens() };
       }
       media = processed.media;
@@ -231,7 +271,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       ? { answers: job.answers, notes, photos, ...goal, current: current.page, instruction }
       : { answers: job.answers, notes, photos, ...goal, ...(deps.pageLook !== false && { look: pickLook(deps.random) }) };
     const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
-    const written = await writeCheckedPage(request, requests, slug, deps, usage);
+    const written = deps.pageMode === 'template' ? await fillCheckedPage(request, media, current, requests, slug, deps, usage) : await writeCheckedPage(request, requests, slug, deps, usage);
     if ('problem' in written) {
       if (written.problem === 'policy') throw new PolicyRejection(written.violations!);
       if (written.problem === 'guardrail') throw new GuardrailBlocked();
@@ -243,7 +283,9 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     media = generated.length > 0 ? { ...files, generated } : files;
     // The form's photo descriptions live on as media.captions, which Tus fotos keeps up to date.
     const { photoNotes: _notes, ...answers } = job.answers;
-    const doc: SiteDoc = current ? { ...current, notes, media, page: written.page, requests } : { answers, notes, media, page: written.page };
+    // The template and its words, for the next template redesign (an Opus edit keeps the earlier ones).
+    const template = written.template ?? current?.template;
+    const doc: SiteDoc = { ...(current ? { ...current, requests } : { answers }), notes, media, page: written.page, ...(template && { template }) };
 
     const draftId = await saveDraft(site, doc, deps);
     site = (await stores.getSite(slug)) ?? site;
@@ -269,19 +311,21 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     const previewUrl = site.previewId ? urls.draftUrl(site.previewId) : undefined;
     await finish({ status: 'DONE', draftUrl: urls.draftUrl(draftId), previewUrl, media, ownerToken }, draftId);
     if (ownerToken && job.ownerEmail) await sendReady(job, slug, deps);
-    if (ownerToken) await announceNewSite(deps.announce, job, slug, deps.urls.draftUrl(draftId), usage, pageWriterStatus(job, deps));
+    if (ownerToken) await announceNewSite(deps.announce, job, slug, deps.urls.draftUrl(draftId), usage, pageWriterStatus(job, deps, doc.template?.id));
+    else if (kind === 'edit') await announceEdit(deps.announce, { ...job, photoChange }, slug, deps.urls.draftUrl(draftId), usage, pageWriterStatus(job, deps, written.template?.id));
     return { outcome: 'DONE', ...tokens() };
   } catch (error) {
     await releaseNewSite(job, deps);
     if (error instanceof PolicyRejection) {
       await finish({ status: 'REJECTED', rejectedBy: 'policy', rejectDetail: error.message.slice(0, 500) });
-      await announceRejection(deps.announce, job, 'policy', error.message.slice(0, 500));
+      await announceRejection(deps.announce, job, 'policy', error.message.slice(0, 500), usage);
     } else if (error instanceof GuardrailBlocked) {
       await finish({ status: 'REJECTED', rejectedBy: 'guardrail', rejectDetail: 'generation' });
-      await announceRejection(deps.announce, job, 'guardrail', 'generation');
+      await announceRejection(deps.announce, job, 'guardrail', 'generation', usage);
     } else {
       console.error('generate failed', { jobId, error });
       await finish({ status: 'FAILED', error: String(error).slice(0, 500) });
+      await announceFailure(deps.announce, job, String(error), usage);
       return { outcome: 'FAILED', ...tokens() };
     }
     return { outcome: 'REJECTED', ...tokens() };
@@ -289,9 +333,10 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
 }
 
 /** The page writer's settings this job ran with (for the admin notice). */
-function pageWriterStatus(job: Job, deps: GenerateJobDeps): PageWriterStatus {
+function pageWriterStatus(job: Job, deps: GenerateJobDeps, template?: string): PageWriterStatus {
   return {
-    model: deps.pageModel ?? DEFAULT_PAGE_MODEL,
+    ...(deps.pageMode === 'template' && template && { template }),
+    model: deps.pageMode === 'template' ? deps.modelId : (deps.pageModel ?? DEFAULT_PAGE_MODEL),
     effort: deps.pageEffort ?? 'high',
     skill: deps.pageSkill === undefined ? DEFAULT_PAGE_SKILL.name : (deps.pageSkill?.name ?? NO_SKILL),
     look: deps.pageLook !== false,
@@ -312,6 +357,21 @@ async function sendReady(job: Job, slug: string, deps: GenerateJobDeps): Promise
   } catch (error) {
     console.error('ready email failed', { slug, error });
   }
+}
+
+/**
+ * The generate Lambda's on-failure destination: a timeout or crash that runGenerateJob could not record itself.
+ * The job becomes FAILED (a new site gives its slug back) and the admin hears of it, with the cost recorded so far.
+ */
+export async function recordGenerateCrash(jobId: string, errorMessage: string | undefined, deps: { stores: Stores; announce?: Announce }): Promise<void> {
+  const { stores } = deps;
+  const job = await stores.getJob(jobId);
+  if (!job || job.status !== 'PENDING') return;
+  const error = (errorMessage ?? 'generate crashed').slice(0, 500);
+  await releaseNewSite(job, deps);
+  await stores.updateJob(jobId, { status: 'FAILED', error });
+  await noteRedesignDone(stores, job, 'FAILED');
+  await announceFailure(deps.announce, job, error, [], /timed out/i.test(error));
 }
 
 /** A new site that ends without a draft gives its slug and its images back. Edits never do. */

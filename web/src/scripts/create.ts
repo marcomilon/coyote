@@ -6,6 +6,7 @@ import { api, apiUrl, sendAnswers, waitForJob, type JobView } from './jobs';
 import { fullNumber, setUpCountryPicker } from './phone';
 import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
 import { readSession } from './session';
+import { humanCheck } from './turnstile';
 import { captionsOf, showThumbs, UploadLimitError, uploadImages } from './upload';
 
 type State = 'form' | 'working' | 'questions' | 'message';
@@ -26,6 +27,7 @@ interface Strings {
   question: QuestionStrings & { invalid: string };
   rejected: Message;
   rateLimited: Message;
+  captcha: Message;
   failed: Message;
   lostLink: Message;
   noApi: string;
@@ -34,6 +36,7 @@ interface Strings {
 const root = document.getElementById('create') as HTMLElement;
 const strings = JSON.parse(root.dataset.strings ?? '{}') as Strings;
 const form = root.querySelector('form[data-form]') as HTMLFormElement;
+const human = humanCheck(form.querySelector<HTMLElement>('[data-human-check]'), strings.lang);
 setUpCountryPicker(form.elements.namedItem('country') as HTMLSelectElement, form.elements.namedItem('whatsapp') as HTMLInputElement);
 const MAX_PHOTOS = 6; // as in services/generator/src/core/uploads.ts
 const questionsForm = root.querySelector('form[data-questions]') as HTMLFormElement;
@@ -271,6 +274,8 @@ form.addEventListener('submit', async (event) => {
 
   const button = form.querySelector('button[type="submit"]') as HTMLButtonElement;
   button.disabled = true;
+  // Before leaving the form: if Cloudflare wants a click, its box shows under the button.
+  const turnstileToken = await human.token();
   // Show the working view right away: /generate runs the pre-screen first and takes a few seconds.
   $('[data-view="working"]').classList.remove('ready');
   show('working');
@@ -297,7 +302,7 @@ form.addEventListener('submit', async (event) => {
     const { status, body } = await api<{ jobId?: string; fields?: string[] }>('/generate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...raw, ownerEmail }),
+      body: JSON.stringify({ ...raw, ownerEmail, turnstileToken }),
     });
     if (status === 202 && body.jobId) {
       try {
@@ -309,11 +314,14 @@ form.addEventListener('submit', async (event) => {
       history.replaceState(null, '', `#job=${body.jobId}`);
       return void follow(body.jobId);
     }
+    human.reset();
     if (status === 400) return formErrors(body.fields?.length ? body.fields : ['generic']);
+    if (status === 403) return showMessage(strings.captcha);
     if (status === 422) return showMessage(strings.rejected);
     if (status === 429) return showMessage(strings.rateLimited);
     showMessage(strings.failed);
   } catch {
+    human.reset();
     showMessage(strings.failed);
   } finally {
     button.disabled = false;

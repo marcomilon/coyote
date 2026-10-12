@@ -1,11 +1,14 @@
 // Generated sites have no JavaScript and no forms, so their "Reportar" link points here: /reportar?sitio=<slug>.
+import { humanCheck } from './turnstile';
+
 type Message = { title: string; text: string };
 
 const root = document.getElementById('report') as HTMLElement;
-const strings = JSON.parse(root.dataset.strings ?? '{}') as { sent: Message; missing: Message; error: string; limited: string };
+const strings = JSON.parse(root.dataset.strings ?? '{}') as { lang: string; sent: Message; missing: Message; error: string; limited: string; captcha: string };
 const $ = <T extends Element>(selector: string) => root.querySelector(selector) as T;
 const apiUrl = (window.COYOTE_CONFIG?.apiUrl ?? '').replace(/\/+$/, '');
 const slug = new URLSearchParams(location.search).get('sitio') ?? '';
+const human = humanCheck($<HTMLElement>('[data-human-check]'), strings.lang);
 
 function showMessage(message: Message) {
   $('[data-message-title]').textContent = message.title;
@@ -24,12 +27,14 @@ $<HTMLFormElement>('form').addEventListener('submit', async (event) => {
     const response = await fetch(`${apiUrl}/report/${slug}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: $<HTMLTextAreaElement>('#reason').value }),
+      body: JSON.stringify({ reason: $<HTMLTextAreaElement>('#reason').value, turnstileToken: await human.token() }),
     });
+    human.reset();
     // A site that is already gone is still a finished report from the visitor's point of view.
     if (response.status === 202 || response.status === 404) return showMessage(strings.sent);
-    $('[data-notice]').textContent = response.status === 429 ? strings.limited : strings.error;
+    $('[data-notice]').textContent = response.status === 429 ? strings.limited : response.status === 403 ? strings.captcha : strings.error;
   } catch {
+    human.reset();
     $('[data-notice]').textContent = strings.error;
   } finally {
     button.disabled = false;

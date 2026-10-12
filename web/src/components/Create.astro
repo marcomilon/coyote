@@ -29,6 +29,7 @@ const clientStrings = {
   question: s.questions,
   rejected: c.rejected,
   rateLimited: c.rateLimited,
+  captcha: c.captcha,
   failed: c.failed,
   lostLink: c.lostLink,
   noApi: c.noApi,
@@ -134,6 +135,7 @@ const [readyBefore, readyAfter] = c.working.ready.text.split('{email}');---
           <button class="btn" type="submit">{c.submit}</button>
           <p>{c.terms}</p>
         </div>
+        <div class="human-check" data-human-check></div>
         <p class="error" data-error="form" role="alert"></p>
       </form>
     </section>

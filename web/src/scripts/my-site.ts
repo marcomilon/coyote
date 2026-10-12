@@ -91,7 +91,7 @@ function fill(view: View) {
   $('[data-chrome-name]').textContent = view.businessName ?? view.slug;
   const frame = $<HTMLIFrameElement>('.device iframe');
   if (frame.src !== view.draftUrl) frame.src = view.draftUrl;
-  $<HTMLAnchorElement>('[data-draft-link]').href = `${strings.previewPath}${ownerHash()}`;
+  root.querySelectorAll<HTMLAnchorElement>('[data-draft-link]').forEach((link) => (link.href = `${strings.previewPath}${ownerHash()}`));
   showChatHandoff();
   showLater(view.slug);
   showPhotos(view.images);

@@ -15,7 +15,7 @@ startChat($('[data-chat]'), {
   onView(view) {
     if (view.businessName) $('[data-business]').textContent = view.businessName;
     // Drafts open only inside the app (cf-rewrite.js), so "Ver sitio" goes to the full-screen page.
-    if (view.previewUrl ?? view.draftUrl) $<HTMLAnchorElement>('[data-draft-link]').href = `${strings.previewPath}${ownerHash()}`;
+    if (view.previewUrl ?? view.draftUrl) document.querySelectorAll<HTMLAnchorElement>('[data-draft-link]').forEach((link) => (link.href = `${strings.previewPath}${ownerHash()}`));
     root.dataset.state = 'chat';
   },
   onNote(note) {

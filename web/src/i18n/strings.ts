@@ -150,6 +150,7 @@ const es = {
     viewport: { label: 'Ver como', phone: 'Celular', desktop: 'Computador' },
     private: 'Por ahora solo tú puedes ver tu página web.',
     open: 'Abrir en otra pestaña',
+    openTab: 'Abre tu página en otra pestaña',
     error: 'Algo salió mal. Inténtalo de nuevo.',
     delete: 'Borrar mi página web y mis datos', deleteConfirm: 'Escribe el nombre de tu página web para confirmar:', deleted: { title: 'Tu página web fue borrada', text: 'Eliminamos tus páginas y tus datos.' },
     domain: {
@@ -379,6 +380,7 @@ const esVos: DeepPartial<typeof es> = {
     },
     viewport: { desktop: 'Computadora' },
     private: 'Por ahora solo vos podés ver tu página web.',
+    openTab: 'Abrí tu página en otra pestaña',
     error: 'Algo salió mal. Intentalo de nuevo.',
     deleteConfirm: 'Escribí el nombre de tu página web para confirmar:',
     domain: {
@@ -586,6 +588,7 @@ const pt: typeof es = {
     viewport: { label: 'Ver como', phone: 'Celular', desktop: 'Computador' },
     private: 'Por enquanto só você pode ver seu site.',
     open: 'Abrir em outra aba',
+    openTab: 'Abra seu site em outra aba',
     error: 'Algo deu errado. Tente de novo.',
     delete: 'Apagar meu site e meus dados', deleteConfirm: 'Digite o nome do seu site para confirmar:', deleted: { title: 'Seu site foi apagado', text: 'Removemos as suas páginas e os seus dados.' },
     domain: {

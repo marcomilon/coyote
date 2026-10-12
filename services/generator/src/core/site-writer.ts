@@ -22,8 +22,12 @@ export interface PlanInput {
   instruction?: string;
 }
 
-/** Resolves to the questions to show the owner; empty when the model is ready to build. */
-export async function planSite(input: PlanInput, deps: WriterDeps): Promise<{ questions: Question[]; usage: Usage[] }> {
+/**
+ * Resolves to the questions to show the owner; empty when the model is ready to build. `required`: the id of the question
+ * about what the business sells, when the answers are too thin to build a page without making that up. The owner must
+ * answer it (new sites only).
+ */
+export async function planSite(input: PlanInput, deps: WriterDeps): Promise<{ questions: Question[]; required?: string; usage: Usage[] }> {
   const usage: Usage[] = [];
   const plan = await callWithRetry(deps.callTool, usage, {
     modelId: deps.modelId,
@@ -39,5 +43,10 @@ export async function planSite(input: PlanInput, deps: WriterDeps): Promise<{ qu
   const contact = input.answers.contact as Record<string, string | undefined>;
   const asked = (plan.ready ? [] : (plan.questions ?? [])).filter((q) => !(q.type in CONTACT_TYPES && contact[CONTACT_TYPES[q.type as keyof typeof CONTACT_TYPES]]));
   if (asked.length === 0) return { questions: [], usage };
-  return { questions: await checkQuestions(asked, deps.outputAllowed), usage };
+  const questions = await checkQuestions(asked, deps.outputAllowed);
+  if (plan.enough !== false || input.instruction !== undefined) return { questions, usage };
+  // The question about what the business sells; the first free-text one if the model did not name it.
+  const free = questions.filter((q) => q.type === 'textarea' || q.type === 'text');
+  const required = (free.find((q) => q.id === plan.offersQuestion) ?? free[0])?.id;
+  return { questions, required, usage };
 }

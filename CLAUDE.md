@@ -19,7 +19,7 @@ npm run diff           # cdk diff against the deployed stack (--profile coyote)
 ./coyote.sh status     # the deployed stack at a glance: URLs, page model/skill/look switches, Bedrock models
 ./coyote.sh deploy     # builds web, checks Lambda bundles, cdk deploy (--profile coyote); writes infra/cdk-outputs.json
 ./coyote.sh destroy    # deletes the stack and ALL data (asks for typed confirmation). Never run it without the user asking
-./coyote.sh abuse-report | unpublish <slug> | restore <slug> | refill-all   # admin commands (see README runbook)
+./coyote.sh abuse-report | unpublish <slug> | restore <slug> | refill-all | free-draft <email>   # admin commands (see README runbook)
 ./coyote.sh page-mode [design|template]   # show or switch how pages are made: Opus writes each page, or Haiku fills a template Opus designed (no deploy)
 ./coyote.sh page-templates [add <id> <file> "<description>" | rm <id>]   # the template library (services/generator/templates/), checked and uploaded
 npm run templates:make -w services/generator -- --count 5   # Opus designs templates, Haiku fills example businesses; gallery in out/templates/<run>/ (real calls)

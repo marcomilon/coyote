@@ -21,12 +21,17 @@ export const CATEGORIES = [
   'other_illegal',
 ] as const;
 
+/** unusable: no real business to build a page for. thin: a real business, little detail. clear: enough to build. */
+export const CLARITY = ['clear', 'thin', 'unusable'] as const;
+
 export const Classification = z.object({
   // Log-only, so a long answer must not fail the request. Truncate when logging.
   reason: z.string().max(2000).describe('One short sentence (max 25 words), written before deciding.'),
   decision: z.enum(['allow', 'reject']),
   category: z.enum(CATEGORIES).describe('"ok" when allowed'),
   confidence: z.number().min(0).max(1),
+  clarity: z.enum(CLARITY).describe('Whether the answers describe a real business well enough to build its page'),
+  offers: z.boolean().describe('true when the answers say what the business sells or what service it gives its customers'),
 });
 export type Classification = z.infer<typeof Classification>;
 
@@ -58,7 +63,15 @@ Reject only these:
 
 Always allowed, even if they sound harsh: butchers, martial-arts and boxing gyms, tattoo and piercing studios, pharmacies, locksmiths, funeral homes, security companies, lingerie shops, therapeutic massage, food banks.
 
-When in doubt about an ordinary-looking local business, allow. confidence is how sure you are of the decision, from 0 to 1.`;
+When in doubt about an ordinary-looking local business, allow. confidence is how sure you are of the decision, from 0 to 1.
+
+Separately, judge clarity: whether the answers describe a real business or activity we could build a page for.
+- unusable: no real business or activity in it: random or repeated letters ("asdf qwerty", "aaaa bbbb"), keyboard mashing, greetings, tests ("prueba", "hola"), jokes, a single generic word, questions to us, or text about something other than the requester's business.
+- thin: a real business but little detail, for example "salón de belleza en Medellín".
+- clear: says what the business offers, well enough to write its page.
+When in doubt, choose thin, not unusable. Clarity does not change the decision: a clear request can be rejected and an unusable one allowed. Text that describes no business is not by itself a reason to reject: allow it and set clarity to unusable.
+
+Also judge offers: whether the answers say what the business sells or what service it gives its customers, so a customer would know what they can buy. A kind of business that names its offer counts ("panadería", "salón de belleza", "plomero a domicilio", "clases de inglés"). These do not: slogans and adjectives ("la mejor empresa de Lima, calidad y compromiso"), only a name ("Emprendimiento de Laura"), a shop or company that never says what it sells ("tienda online con envíos", "empresa de soluciones integrales", "emprendimiento", "negocio familiar"), and anything unusable.`;
 
 /** Below this confidence a "reject" is not trusted and the request goes ahead to the other layers. */
 export const REJECT_MIN_CONFIDENCE = 0.5;
@@ -86,4 +99,12 @@ export async function prescreen(
 
 export function isRejected(result: Classification): boolean {
   return result.decision === 'reject' && result.confidence >= REJECT_MIN_CONFIDENCE;
+}
+
+/**
+ * No real business to build a page for, or nothing said about what it sells: the owner is asked to describe it again,
+ * before any page model runs. A real owner knows what they sell.
+ */
+export function isUnclear(result: Classification): boolean {
+  return result.clarity === 'unusable' || !result.offers;
 }

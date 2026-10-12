@@ -1,4 +1,5 @@
 import { issueLogin, linkSite } from './account';
+import { claimFreeDraft, returnFreeDraft } from './free-draft';
 import { noteRedesignDone } from './chat-notes';
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
 import type { Media } from './content';
@@ -257,11 +258,22 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       const plan = await planSite({ answers: job.answers, notes, images: await loadImages(slug, media, stores), photos: media.photos.length, instruction }, deps);
       usage.push(...plan.usage);
       if (plan.questions.length > 0) {
-        await finish({ status: 'NEEDS_INPUT', questions: plan.questions, media });
+        await finish({ status: 'NEEDS_INPUT', questions: plan.questions, requiredQuestion: plan.required, media });
         return { outcome: 'NEEDS_INPUT', ...tokens() };
       }
       // No questions left: the create page tells the owner they may close it (the ready email follows).
       await stores.updateJob(jobId, { stage: 'write' });
+    }
+
+    // A new site uses the email's free draft, claimed atomically right before the page model runs.
+    if (kind === 'create' && job.ownerEmail && !job.freeDraft) {
+      if (!(await claimFreeDraft(stores, job.ownerEmail, deps.now()))) {
+        await releaseNewSite(job, deps);
+        await finish({ status: 'REJECTED', rejectedBy: 'limit' });
+        return { outcome: 'REJECTED', ...tokens() };
+      }
+      job.freeDraft = true;
+      await stores.updateJob(jobId, { freeDraft: true });
     }
 
     // Opus writes the page (a new site), or changes the current one (an edit).
@@ -324,6 +336,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       await announceRejection(deps.announce, job, 'guardrail', 'generation', usage);
     } else {
       console.error('generate failed', { jobId, error });
+      if (job.freeDraft && job.ownerEmail) await returnFreeDraft(stores, job.ownerEmail);
       await finish({ status: 'FAILED', error: String(error).slice(0, 500) });
       await announceFailure(deps.announce, job, String(error), usage);
       return { outcome: 'FAILED', ...tokens() };
@@ -369,6 +382,7 @@ export async function recordGenerateCrash(jobId: string, errorMessage: string | 
   if (!job || job.status !== 'PENDING') return;
   const error = (errorMessage ?? 'generate crashed').slice(0, 500);
   await releaseNewSite(job, deps);
+  if (job.freeDraft && job.ownerEmail) await returnFreeDraft(stores, job.ownerEmail);
   await stores.updateJob(jobId, { status: 'FAILED', error });
   await noteRedesignDone(stores, job, 'FAILED');
   await announceFailure(deps.announce, job, error, [], /timed out/i.test(error));

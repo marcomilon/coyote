@@ -95,6 +95,7 @@ const es = {
     errors: {
       businessName: 'Escribe el nombre de tu negocio (al menos 2 letras).',
       about: 'Cuéntanos un poco más: al menos una frase sobre lo que haces.',
+      'about:unclear': 'No entendimos qué ofrece tu negocio. Cuéntanos qué vendes o haces, y dónde. Por ejemplo: «Panadería en Cusco: pan de masa madre y tortas por encargo».',
       'contact.whatsapp': 'Revisa el país y el número de teléfono.',
       'contact.email': 'Ese correo no parece válido. Revísalo, por ejemplo contacto@tunegocio.com.',
       'contact.instagram': 'Ese usuario de Instagram no parece válido.',
@@ -107,6 +108,7 @@ const es = {
     lostLink: { title: 'Tu página web está lista', text: 'Ábrela desde «Mis páginas web» con tu correo.' },
     rejected: { title: 'No podemos crear esta página web', text: 'Tu solicitud no cumple nuestras reglas de uso. Si crees que es un error, revisa la descripción de tu negocio y vuelve a intentarlo: tus respuestas siguen ahí.', action: 'Revisar mi pedido' },
     rateLimited: { title: 'Llegaste al límite de hoy', text: 'Puedes crear más páginas web mañana.' },
+    hasDraft: { title: 'Ya tienes una página web', text: 'Cada correo puede crear una página web gratis, y con este ya creaste la tuya. Ábrela desde «Mis páginas web» para cambiarla.', link: 'Ir a Mis páginas web' },
     captcha: { title: 'No pudimos comprobar que eres una persona', text: 'Tus respuestas siguen ahí: vuelve a enviarlas. Si aparece una casilla, márcala.', action: 'Intentar de nuevo' },
     failed: { title: 'Algo salió mal de nuestro lado', text: 'No fue tu culpa. Tus respuestas siguen ahí: inténtalo de nuevo en un momento.', action: 'Intentar de nuevo' },
     noApi: 'La aplicación no está configurada (falta la URL del API).',
@@ -250,6 +252,8 @@ const es = {
   questions: {
     title: 'Unas preguntas rápidas',
     intro: 'Con esto tu página web queda más completa. Todas son opcionales.',
+    requiredIntro: 'Para hacer tu página web necesitamos saber qué vendes o qué servicios ofreces. Las demás preguntas son opcionales.',
+    needed: 'Cuéntanos qué vendes o qué servicios ofreces: sin esto no podemos hacer tu página web.',
     submit: 'Crear mi página web',
     skip: 'Saltar preguntas y continuar',
     yes: 'Sí',
@@ -347,6 +351,7 @@ const esVos: DeepPartial<typeof es> = {
     errors: {
       businessName: 'Escribí el nombre de tu negocio (al menos 2 letras).',
       about: 'Contanos un poco más: al menos una frase sobre lo que hacés.',
+      'about:unclear': 'No entendimos qué ofrece tu negocio. Contanos qué vendés o hacés, y dónde. Por ejemplo: «Panadería en Rosario: pan de masa madre y tortas por encargo».',
       'contact.whatsapp': 'Revisá el país y el número de teléfono.',
       'contact.email': 'Ese correo no parece válido. Revisalo, por ejemplo contacto@tunegocio.com.',
       ownerEmail: 'Revisá tu correo: por ejemplo, tu@correo.com.',
@@ -356,6 +361,7 @@ const esVos: DeepPartial<typeof es> = {
     lostLink: { text: 'Abrila desde «Mis páginas web» con tu correo.' },
     rejected: { text: 'Tu solicitud no cumple nuestras reglas de uso. Si creés que es un error, revisá la descripción de tu negocio y volvé a intentarlo: tus respuestas siguen ahí.' },
     rateLimited: { text: 'Podés crear más páginas web mañana.' },
+    hasDraft: { title: 'Ya tenés una página web', text: 'Cada correo puede crear una página web gratis, y con este ya creaste la tuya. Abrila desde «Mis páginas web» para cambiarla.' },
     captcha: { title: 'No pudimos comprobar que sos una persona', text: 'Tus respuestas siguen ahí: volvé a enviarlas. Si aparece una casilla, marcala.' },
     failed: { text: 'No fue tu culpa. Tus respuestas siguen ahí: intentalo de nuevo en un momento.' },
   },
@@ -428,7 +434,7 @@ const esVos: DeepPartial<typeof es> = {
     badToken: { text: 'Puede estar vencido o incompleto. Escaneá el código de nuevo.' },
     limited: { text: 'Abriste esta página muchas veces hoy. Volvé mañana: tu página web sigue ahí.' },
   },
-  questions: { invalid: 'Revisá esta respuesta.' },
+  questions: { invalid: 'Revisá esta respuesta.', needed: 'Contanos qué vendés o qué servicios ofrecés: sin esto no podemos hacer tu página web.', requiredIntro: 'Para hacer tu página web necesitamos saber qué vendés o qué servicios ofrecés. Las demás preguntas son opcionales.' },
   report: {
     description: 'Avisanos si una página web creada con ventas314.com es una estafa o incumple las reglas.',
     intro: 'Si esta página web es una estafa, suplanta a otra empresa o muestra contenido que no debería, contanoslo. Revisamos cada reporte.',
@@ -533,6 +539,7 @@ const pt: typeof es = {
     errors: {
       businessName: 'Escreva o nome do seu negócio (pelo menos 2 letras).',
       about: 'Conte um pouco mais: pelo menos uma frase sobre o que você faz.',
+      'about:unclear': 'Não entendemos o que seu negócio oferece. Conte o que você vende ou faz, e onde. Por exemplo: «Padaria em Recife: pão de fermentação natural e bolos por encomenda».',
       'contact.whatsapp': 'Confira o país e o número de telefone.',
       'contact.email': 'Esse e-mail não parece válido. Confira, por exemplo contato@seunegocio.com.',
       'contact.instagram': 'Esse usuário do Instagram não parece válido.',
@@ -545,6 +552,7 @@ const pt: typeof es = {
     lostLink: { title: 'Seu site está pronto', text: 'Abra pelo «Meus sites» com o seu e-mail.' },
     rejected: { title: 'Não podemos criar este site', text: 'O pedido não segue as nossas regras de uso. Se acha que é um engano, revise a descrição do negócio e tente de novo: as suas respostas continuam lá.', action: 'Revisar meu pedido' },
     rateLimited: { title: 'Você chegou ao limite de hoje', text: 'Amanhã você pode criar mais sites.' },
+    hasDraft: { title: 'Você já tem um site', text: 'Cada e-mail pode criar um site grátis, e com este você já criou o seu. Abra em «Meus sites» para alterá-lo.', link: 'Ir para Meus sites' },
     captcha: { title: 'Não conseguimos confirmar que você é uma pessoa', text: 'As suas respostas continuam lá: envie de novo. Se aparecer uma caixa, marque-a.', action: 'Tentar de novo' },
     failed: { title: 'Algo deu errado do nosso lado', text: 'Não foi culpa sua. As suas respostas continuam lá: tente de novo em instantes.', action: 'Tentar de novo' },
     noApi: 'O aplicativo não está configurado (falta a URL da API).',
@@ -688,6 +696,8 @@ const pt: typeof es = {
   questions: {
     title: 'Algumas perguntas rápidas',
     intro: 'Com isso seu site fica mais completo. Todas são opcionais.',
+    requiredIntro: 'Para fazer seu site, precisamos saber o que você vende ou quais serviços oferece. As outras perguntas são opcionais.',
+    needed: 'Conte o que você vende ou quais serviços oferece: sem isso não conseguimos fazer seu site.',
     submit: 'Criar meu site',
     skip: 'Pular perguntas e continuar',
     yes: 'Sim',

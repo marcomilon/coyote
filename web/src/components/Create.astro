@@ -29,6 +29,8 @@ const clientStrings = {
   question: s.questions,
   rejected: c.rejected,
   rateLimited: c.rateLimited,
+  hasDraft: c.hasDraft,
+  mySitesPath: s.paths.mySites,
   captcha: c.captcha,
   failed: c.failed,
   lostLink: c.lostLink,
@@ -157,7 +159,7 @@ const [readyBefore, readyAfter] = c.working.ready.text.split('{email}');---
       <form class="ticket" data-questions novalidate>
         <header>
           <h2>{s.questions.title}</h2>
-          <p>{s.questions.intro}</p>
+          <p data-questions-intro>{s.questions.intro}</p>
         </header>
         <div data-question-list></div>
         <div class="submit-row">
@@ -170,7 +172,7 @@ const [readyBefore, readyAfter] = c.working.ready.text.split('{email}');---
     <section data-view="message" class="panel" aria-live="assertive">
       <h2 data-message-title></h2>
       <p data-message-text></p>
-      <div class="actions"><button class="btn ghost" type="button" data-back-to-form hidden></button></div>
+      <div class="actions"><button class="btn ghost" type="button" data-back-to-form hidden></button><a class="btn" data-message-link hidden></a></div>
     </section>
   </div>
 </Layout>

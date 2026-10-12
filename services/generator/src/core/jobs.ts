@@ -30,10 +30,16 @@ export interface Job {
   /** clarify: may ask questions first. write: must build now (only one round of questions). */
   stage?: 'clarify' | 'write';
   questions?: Question[];
+  /** The question about what the business sells, when the answers did not say: the owner must answer it (no skip). */
+  requiredQuestion?: string;
   /** Free-text answers to the questions. Contact answers go into `answers.contact` instead. */
   notes?: Note[];
-  screening?: { decision: string; category: string; confidence: number; reason: string };
-  rejectedBy?: 'brand' | 'prescreen' | 'guardrail' | 'policy' | 'image';
+  screening?: { decision: string; category: string; confidence: number; clarity?: string; offers?: boolean; reason: string };
+  /** unclear: no real business described; the owner was asked to describe it again (not a policy rejection). */
+  /** limit: the owner's email already used its free draft (free-draft.ts). */
+  rejectedBy?: 'brand' | 'prescreen' | 'guardrail' | 'policy' | 'image' | 'unclear' | 'limit';
+  /** Create jobs: this job used the email's free draft (given back if the job fails). */
+  freeDraft?: boolean;
   rejectDetail?: string;
   usage: Usage[];
   draftUrl?: string;
@@ -155,6 +161,10 @@ export interface ChatMessage {
 export interface Stores {
   /** Counts one request for this key. Resolves to false when the daily limit is already reached. */
   hitRateLimit(key: string, max: number, ttl: number): Promise<boolean>;
+  /** Gives back one request counted by hitRateLimit. */
+  releaseRateLimit(key: string): Promise<void>;
+  /** The current count of a hitRateLimit key (0 when unseen). */
+  getCount(key: string): Promise<number>;
   isBlocked(slug: string): Promise<boolean>;
   block(slug: string): Promise<void>;
   /** Resolves to true only the first time a key is seen. */
@@ -232,7 +242,11 @@ export function publicJob(job: Job, now: number) {
     /** clarify: questions may still come. write: none left (the owner may close the page). */
     stage: job.stage ?? 'clarify',
     questions: job.status === 'NEEDS_INPUT' ? job.questions : undefined,
+    /** The question the owner must answer; there is no skip. */
+    requiredQuestion: job.status === 'NEEDS_INPUT' ? job.requiredQuestion : undefined,
     draftUrl: job.status === 'DONE' ? job.draftUrl : undefined,
     previewUrl: job.status === 'DONE' ? job.previewUrl : undefined,
+    /** Not a policy rejection: the email already has its free draft. */
+    hasDraft: job.status === 'REJECTED' && job.rejectedBy === 'limit' ? true : undefined,
   };
 }

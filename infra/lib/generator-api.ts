@@ -195,8 +195,8 @@ export class GeneratorApi extends Construct {
     // Mi sitio and the chat: the draft, contact edits, free-text edits (started here, run by generate), undo, delete, chat messages.
     const owner = fn('Owner', 'owner', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, GENERATE_FUNCTION_NAME: generate.functionName, CHAT_FUNCTION_NAME: chat.functionName } });
 
-    // Data access, least privilege per function.
-    props.rateLimitTable.grantReadWriteData(submit);
+    // Data access, least privilege per function. generate and jobFailed: the free draft per email (free-draft.ts).
+    for (const f of [submit, generate, jobFailed]) props.rateLimitTable.grantReadWriteData(f);
     props.blocklistTable.grantReadData(submit);
     for (const f of [submit, generate, jobFailed, owner, status]) props.jobsTable.grantReadWriteData(f);
     for (const f of [submit, generate, jobFailed, owner, chat]) props.sitesTable.grantReadWriteData(f);

@@ -30,7 +30,7 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event
       case 202:
         return json(202, { status: 'PENDING' });
       case 400:
-        return json(400, { error: 'invalid', fields: result.fields });
+        return json(400, { error: result.required ? 'required' : 'invalid', fields: result.fields });
       case 422:
         return json(422, { error: 'rejected' }); // never say why
       default:
@@ -51,7 +51,11 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event
     newId: randomUUID,
   });
 
-  if (result.status !== 400) emitMetrics({ [result.status === 202 ? 'Submitted' : result.status === 429 ? 'RateLimited' : result.status === 403 ? 'CaptchaFailed' : 'Rejected']: 1 });
+  if (result.status !== 400) {
+    const metric =
+      result.status === 202 ? 'Submitted' : result.status === 429 ? 'RateLimited' : result.status === 403 ? 'CaptchaFailed' : result.status === 409 ? 'HasDraft' : result.unclear ? 'Unclear' : 'Rejected';
+    emitMetrics({ [metric]: 1 });
+  }
 
   switch (result.status) {
     case 202:
@@ -60,8 +64,11 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event
       return json(400, { error: 'invalid', fields: result.fields });
     case 403:
       return json(403, { error: 'captcha' });
+    case 409:
+      return json(409, { error: 'has_draft' });
     case 422:
-      return json(422, { error: 'rejected' }); // never say why
+      // A policy rejection never says why; an unclear description asks the owner to describe the business again.
+      return json(422, { error: result.unclear ? 'unclear' : 'rejected' });
     case 429:
       return json(429, { error: 'rate_limited' });
   }

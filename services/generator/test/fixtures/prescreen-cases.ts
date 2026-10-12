@@ -2,6 +2,10 @@ export interface PrescreenCase {
   name: string;
   about: string;
   expect: 'allow' | 'reject';
+  /** Expected clarity. Missing: anything but "unusable" (a real business must never be turned away as unclear). */
+  clarity?: 'unusable' | 'thin';
+  /** false: the description doesn't say what the business sells. Missing: true. Not checked on unusable or rejected cases. */
+  offers?: false;
   note?: string;
 }
 
@@ -31,6 +35,29 @@ export const PRESCREEN_CASES: PrescreenCase[] = [
   { name: 'Restaurante La Brasa', about: 'Parrilla en Asunción. Cortes a la leña, empanadas, cerveza artesanal y vinos de la casa.', expect: 'allow', note: 'a restaurant that also serves drinks' },
   { name: 'Funeraria La Paz', about: 'Servicios funerarios y cremación en Asunción, atención las 24 horas.', expect: 'allow' },
   { name: 'Seguridad Halcón', about: 'Guardias de seguridad privada y monitoreo de alarmas en Santo Domingo.', expect: 'allow' },
+
+  // Real but thin: questions, not a rejection
+  { name: 'Salón Bella', about: 'Salón de belleza en Medellín.', expect: 'allow', clarity: 'thin' },
+  { name: 'Ferretería', about: 'Ferretería en Quito.', expect: 'allow', clarity: 'thin' },
+  { name: 'Doces da Ana', about: 'Faço doces por encomenda.', expect: 'allow', clarity: 'thin' },
+  { name: 'Tacos El Güero', about: 'Vendo tacos en la esquina.', expect: 'allow', clarity: 'thin' },
+
+  // A business, but nothing said about what it sells
+  { name: 'Grupo Andino', about: 'Somos la mejor empresa de Lima, calidad y compromiso con nuestros clientes.', expect: 'allow', offers: false },
+  { name: 'Emprendimiento de Laura', about: 'Mi emprendimiento en Cali, atendemos con mucho amor.', expect: 'allow', offers: false },
+  { name: 'Tienda Online MX', about: 'Tienda online con envíos a todo México.', expect: 'allow', offers: false },
+  { name: 'Soluciones Integrales SAS', about: 'Empresa de soluciones integrales para tu negocio, con experiencia.', expect: 'allow', offers: false },
+  { name: 'Família Souza', about: 'Negócio familiar em Fortaleza desde 1998.', expect: 'allow', offers: false },
+
+  // No business to build a page for: the owner is asked to describe it again
+  { name: 'asdf', about: 'asdf asdf qwerty asdf jkl', expect: 'allow', clarity: 'unusable' },
+  { name: 'Prueba', about: 'esto es una prueba nada más', expect: 'allow', clarity: 'unusable' },
+  { name: 'Hola', about: 'hola hola como estas, buenas tardes', expect: 'allow', clarity: 'unusable' },
+  { name: 'Mi página', about: 'quiero una página web bonita para mi', expect: 'allow', clarity: 'unusable' },
+  { name: 'xxxxx', about: 'aaaaaaa bbbbbbb ccccccc', expect: 'allow', clarity: 'unusable' },
+  { name: 'Teste', about: 'só testando o site de vocês', expect: 'allow', clarity: 'unusable' },
+  { name: 'El Gato', about: 'Mi gato se llama Pelusa y le gusta dormir al sol todo el día.', expect: 'allow', clarity: 'unusable', note: 'text about something other than a business' },
+  { name: 'Pregunta', about: '¿Cuánto cuesta hacer una página web con ustedes?', expect: 'allow', clarity: 'unusable', note: 'a question to us' },
 
   // Must be rejected
   { name: 'Agencia de Lotería La Suerte', about: 'Agencia oficial de lotería y quiniela en Mendoza. Pagamos premios en el acto.', expect: 'reject', note: 'policy: no gambling, licensed or not' },

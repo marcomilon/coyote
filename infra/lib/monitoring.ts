@@ -94,7 +94,7 @@ export class Monitoring extends Construct {
       widgets: [
         [
           new cw.GraphWidget({ title: 'Requests', width: 12, left: [metric('Submitted'), metric('NeedsInput'), metric('Generated'), metric('Edited')] }),
-          new cw.GraphWidget({ title: 'Blocked', width: 12, left: [metric('Rejected'), metric('RateLimited'), metric('Failed'), metric('Reported'), metric('Quarantined')] }),
+          new cw.GraphWidget({ title: 'Blocked', width: 12, left: [metric('Rejected'), metric('Unclear'), metric('HasDraft'), metric('RateLimited'), metric('Failed'), metric('Reported'), metric('Quarantined')] }),
         ],
         [
           new cw.GraphWidget({ title: 'Model tokens per hour', width: 12, left: [metric('TokensIn'), metric('TokensOut')] }),

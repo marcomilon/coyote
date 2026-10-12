@@ -11,7 +11,7 @@ import { captionsOf, showThumbs, UploadLimitError, uploadImages } from './upload
 
 type State = 'form' | 'working' | 'questions' | 'message';
 /** `action`: a button back to the form, with the owner's answers filled in again. */
-type Message = { title: string; text: string; action?: string };
+type Message = { title: string; text: string; action?: string; link?: string };
 interface Strings {
   lang: 'es' | 'pt';
   errors: Record<string, string>;
@@ -24,9 +24,11 @@ interface Strings {
   caption: { label: string; placeholder: string };
   submit: string;
   mySitePath: string;
-  question: QuestionStrings & { invalid: string };
+  question: QuestionStrings & { invalid: string; intro: string; requiredIntro: string; needed: string };
   rejected: Message;
   rateLimited: Message;
+  hasDraft: Message;
+  mySitesPath: string;
   captcha: Message;
   failed: Message;
   lostLink: Message;
@@ -85,6 +87,11 @@ function showMessage(message: Message) {
   const back = $<HTMLButtonElement>('[data-back-to-form]');
   back.textContent = message.action ?? '';
   back.hidden = !message.action;
+  // hasDraft: a way to the owner's existing page instead of the form.
+  const link = $<HTMLAnchorElement>('[data-message-link]');
+  link.textContent = message.link ?? '';
+  link.href = strings.mySitesPath;
+  link.hidden = !message.link;
   history.replaceState(null, '', location.pathname + location.search);
   show('message');
 }
@@ -118,9 +125,11 @@ function setErrors(fields: string[]) {
   root.querySelectorAll<HTMLElement>('[data-error]').forEach((el) => (el.textContent = ''));
   form.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
   for (const field of fields) {
-    const target = root.querySelector<HTMLElement>(`[data-error="${field}"]`) ?? $('[data-error="form"]');
+    // "about:unclear": a field with a message of its own.
+    const name = field.split(':')[0]!;
+    const target = root.querySelector<HTMLElement>(`[data-error="${name}"]`) ?? $('[data-error="form"]');
     target.textContent = strings.errors[field] ?? strings.errors.generic ?? '';
-    const input = form.elements.namedItem(field.replace('contact.', ''));
+    const input = form.elements.namedItem(name.replace('contact.', ''));
     if (input instanceof HTMLElement) input.setAttribute('aria-invalid', 'true');
   }
   form.querySelector<HTMLElement>('[aria-invalid]')?.focus();
@@ -192,13 +201,17 @@ function showDone(jobId: string, job: JobView) {
 }
 
 function showQuestions(jobId: string, job: JobView) {
-  renderQuestions($<HTMLElement>('[data-question-list]'), job.questions ?? [], strings.question);
+  // The description did not say what the business sells: that question must be answered, so there is no skip.
+  const required = job.requiredQuestion !== undefined;
+  renderQuestions($<HTMLElement>('[data-question-list]'), job.questions ?? [], strings.question, job.requiredQuestion);
+  $('[data-questions-intro]').textContent = required ? strings.question.requiredIntro : strings.question.intro;
+  $<HTMLButtonElement>('[data-skip]').hidden = required;
   const submitAnswers = async (body: Parameters<typeof sendAnswers>[1]) => {
     questionsForm.querySelectorAll('button').forEach((b) => (b.disabled = true));
     try {
       const { status, body: result } = await sendAnswers(jobId, body);
       if (status === 202) return void follow(jobId);
-      if (status === 400) return markInvalid($<HTMLElement>('[data-question-list]'), result.fields ?? [], strings.question.invalid);
+      if (status === 400) return markInvalid($<HTMLElement>('[data-question-list]'), result.fields ?? [], result.error === 'required' ? strings.question.needed : strings.question.invalid);
       if (status === 422) return showMessage(strings.rejected);
       if (status === 409) return void follow(jobId); // already answered (another tab): just wait
       showMessage(strings.failed);
@@ -240,7 +253,7 @@ async function follow(jobId: string) {
   const job = await waitForJob(jobId, (current) => progress(jobId, current));
   if (job.status === 'NEEDS_INPUT') showQuestions(jobId, job);
   else if (job.status === 'DONE') showDone(jobId, job);
-  else if (job.status === 'REJECTED') showMessage(strings.rejected);
+  else if (job.status === 'REJECTED') showMessage(job.hasDraft ? strings.hasDraft : strings.rejected);
   else showMessage(strings.failed);
 }
 
@@ -299,7 +312,7 @@ form.addEventListener('submit', async (event) => {
         return formErrors(['photos']);
       }
     }
-    const { status, body } = await api<{ jobId?: string; fields?: string[] }>('/generate', {
+    const { status, body } = await api<{ jobId?: string; fields?: string[]; error?: string }>('/generate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ...raw, ownerEmail, turnstileToken }),
@@ -317,6 +330,8 @@ form.addEventListener('submit', async (event) => {
     human.reset();
     if (status === 400) return formErrors(body.fields?.length ? body.fields : ['generic']);
     if (status === 403) return showMessage(strings.captcha);
+    if (status === 409) return showMessage(strings.hasDraft);
+    if (status === 422 && body.error === 'unclear') return formErrors(['about:unclear']);
     if (status === 422) return showMessage(strings.rejected);
     if (status === 429) return showMessage(strings.rateLimited);
     showMessage(strings.failed);

@@ -5,12 +5,14 @@
  *   abuse-report        who did what in the last 24 h
  *   refill-all          finish every site's current draft again (after a page-check or domain change); no model call
  *   domains             the domains registered for owners (Mi sitio → Dominio)
+ *   free-draft <email>  give an email its free draft back (support: a second business; testing)
  */
 import { readFileSync } from 'node:fs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, paginateScan } from '@aws-sdk/lib-dynamodb';
 import { createStores } from '../src/aws/stores';
 import { refillDraft } from '../src/core/drafts';
+import { returnFreeDraft } from '../src/core/free-draft';
 import type { DomainRecord, Job, SiteRecord } from '../src/core/jobs';
 import { createUrls } from '../src/core/urls';
 
@@ -102,6 +104,12 @@ switch (command) {
       }
     }
     console.log(`${sites.length - failed} site(s) done${failed ? `, ${failed} failed` : ''}.`);
+    break;
+  }
+  case 'free-draft': {
+    if (!slug?.includes('@')) throw new Error('usage: free-draft <email>');
+    await returnFreeDraft(stores, slug);
+    console.log(`${slug}: may create a new free draft.`);
     break;
   }
   case 'domains': {

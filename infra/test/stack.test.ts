@@ -16,6 +16,9 @@ const synth = (props: Partial<CoyoteStackProps> = {}) =>
     }),
   );
 
+/** Inline policies, and the managed ones CDK moves statements to when a role's inline policy grows too big. */
+const iamPolicies = (template: Template) => ({ ...template.findResources('AWS::IAM::Policy'), ...template.findResources('AWS::IAM::ManagedPolicy') });
+
 const cspOf = (template: Template, idPrefix: string): string => {
   const policies = template.findResources('AWS::CloudFront::ResponseHeadersPolicy');
   const [, policy] = Object.entries(policies).find(([id]) => id.startsWith(idPrefix))!;
@@ -62,8 +65,9 @@ describe('CoyoteStack, domainless', () => {
   });
 
   it('lets only the generate Lambda read the Anthropic API key, and gives it time for the page writer', () => {
-    const readers = Object.keys(template.findResources('AWS::IAM::Policy')).filter((id) => JSON.stringify(template.findResources('AWS::IAM::Policy')[id]).includes('coyote/anthropic-api-key'));
-    expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
+    const policies = iamPolicies(template);
+    const readers = Object.keys(policies).filter((id) => JSON.stringify(policies[id]).includes('coyote/anthropic-api-key'));
+    expect([...new Set(readers.map((id) => id.replace(/ServiceRole(Default|Overflow)Policy.*$/, '')))]).toEqual(['GeneratorApiGenerate']);
     template.hasResourceProperties('AWS::Lambda::Function', { Timeout: 600, Environment: { Variables: Match.objectLike({ ANTHROPIC_SECRET_NAME: 'coyote/anthropic-api-key' }) } });
   });
 
@@ -242,7 +246,7 @@ describe('CoyoteStack, domainless', () => {
   });
 
   it('only lets Lambdas call the text models with our guardrail attached', () => {
-    const statements = Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
+    const statements = Object.values(iamPolicies(template)).flatMap(
       (policy) => policy.Properties.PolicyDocument.Statement as { Action: string | string[]; Resource: unknown; Condition?: unknown }[],
     );
     const invoke = statements.filter((s) => [s.Action].flat().includes('bedrock:InvokeModel'));
@@ -256,8 +260,8 @@ describe('CoyoteStack, domainless', () => {
     for (const statement of writer) expect(statement.Action).toBe('bedrock:InvokeModel');
     // The only call without the guardrail: the image model in us-west-2, for generate only (images.ts screens it).
     expect(unguarded).toEqual([{ Action: 'bedrock:InvokeModel', Effect: 'Allow', Resource: { 'Fn::Join': ['', ['arn:', { Ref: 'AWS::Partition' }, `:bedrock:us-west-2::foundation-model/${DEFAULT_IMAGE_MODEL_ID}`]] } }]);
-    const imagePolicies = Object.entries(template.findResources('AWS::IAM::Policy')).filter(([, p]) => JSON.stringify(p).includes(`foundation-model/${DEFAULT_IMAGE_MODEL_ID}`));
-    expect(imagePolicies.map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
+    const imagePolicies = Object.entries(iamPolicies(template)).filter(([, p]) => JSON.stringify(p).includes(`foundation-model/${DEFAULT_IMAGE_MODEL_ID}`));
+    expect(imagePolicies.map(([id]) => id.replace(/ServiceRole(Default|Overflow)Policy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
   });
 
   it('never retries a failed generation and records the failure', () => {

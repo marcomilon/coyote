@@ -38,13 +38,14 @@ function choices(q: Question, kind: 'radio' | 'checkbox', options: { value: stri
   return box;
 }
 
-/** Replaces the container's content with one fieldset per question. */
-export function renderQuestions(container: HTMLElement, questions: Question[], strings: QuestionStrings): void {
+/** Replaces the container's content with one fieldset per question. `required`: the id of the one the owner must answer. */
+export function renderQuestions(container: HTMLElement, questions: Question[], strings: QuestionStrings, required?: string): void {
   container.replaceChildren();
   questions.forEach((q, index) => {
     const fieldset = el('fieldset', { className: 'question' });
     fieldset.dataset.question = q.id;
     const id = `q-${q.id}`;
+    const placeholder = q.id === required ? '' : strings.optional;
     const grouped = q.type === 'choice' || q.type === 'multi' || q.type === 'yesno';
     const title = el(grouped ? 'legend' : 'label', { className: 'q' });
     if (!grouped) (title as HTMLLabelElement).htmlFor = id;
@@ -57,10 +58,10 @@ export function renderQuestions(container: HTMLElement, questions: Question[], s
     } else if (q.type === 'yesno') {
       fieldset.append(choices(q, 'radio', [{ value: 'yes', label: strings.yes }, { value: 'no', label: strings.no }]));
     } else if (q.type === 'textarea') {
-      fieldset.append(el('textarea', { id, name: q.id, maxLength: 500, placeholder: strings.optional }));
+      fieldset.append(el('textarea', { id, name: q.id, maxLength: 500, placeholder, required: q.id === required }));
     } else {
       const spec = INPUTS[q.type] ?? INPUTS.text!;
-      const input = el('input', { id, name: q.id, type: spec.type, maxLength: spec.maxLength, placeholder: spec.placeholder ?? strings.optional });
+      const input = el('input', { id, name: q.id, type: spec.type, maxLength: spec.maxLength, placeholder: spec.placeholder ?? placeholder, required: q.id === required });
       if (spec.autocomplete) input.autocomplete = spec.autocomplete as AutoFill;
       if (spec.inputmode) input.inputMode = spec.inputmode;
       if (q.type === 'instagram' || q.type === 'facebook' || q.type === 'email') input.autocapitalize = 'none';

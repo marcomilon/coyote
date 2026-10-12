@@ -7,6 +7,10 @@ export interface JobView {
   /** clarify: questions may still come. write: none left. */
   stage?: 'clarify' | 'write';
   questions?: Question[];
+  /** Rejected because the email already used its free draft. */
+  hasDraft?: boolean;
+  /** The question the owner must answer (what the business sells); there is no skip. */
+  requiredQuestion?: string;
   draftUrl?: string;
   /** The site's stable URL: always the current version (for "open in another tab"). */
   previewUrl?: string;
@@ -45,5 +49,5 @@ export async function waitForJob(jobId: string, onProgress?: (job: JobView) => v
 
 /** POST /jobs/{id}/answers: the answers, or skip ("Saltar preguntas y continuar"). */
 export function sendAnswers(jobId: string, body: { answers: Record<string, string | string[]> } | { skip: true }) {
-  return api<{ fields?: string[] }>(`/jobs/${jobId}/answers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  return api<{ fields?: string[]; error?: string }>(`/jobs/${jobId}/answers`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 }

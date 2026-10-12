@@ -35,11 +35,16 @@ export type Question = z.infer<typeof Question>;
 /** The `plan_site` tool input. */
 export const Plan = z.object({
   ready: z.boolean().describe('true when there is enough information to build a good site'),
+  enough: z
+    .boolean()
+    .optional()
+    .describe('When not ready: false only if, without the answers, the page would have to invent what the business offers; then the owner must answer'),
+  offersQuestion: z.string().optional().describe('When enough is false: the id of the question that asks what the business sells or what services it gives'),
   questions: z
     .array(Question)
     .max(4)
     .optional()
-    .describe('When not ready: at most 4 questions, all optional for the owner'),
+    .describe('When not ready: at most 4 questions'),
 });
 export type Plan = z.infer<typeof Plan>;
 

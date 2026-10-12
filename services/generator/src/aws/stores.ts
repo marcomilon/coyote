@@ -82,6 +82,28 @@ export function createStores(config: StoreConfig): Stores {
       }
     },
 
+    async getCount(key) {
+      const { Item } = await db.send(new GetCommand({ TableName: config.rateLimitTable, Key: { ip: key }, ConsistentRead: true }));
+      return typeof Item?.count === 'number' ? Item.count : 0;
+    },
+
+    async releaseRateLimit(key) {
+      try {
+        await db.send(
+          new UpdateCommand({
+            TableName: config.rateLimitTable,
+            Key: { ip: key },
+            UpdateExpression: 'ADD #count :minus',
+            ConditionExpression: '#count > :zero',
+            ExpressionAttributeNames: { '#count': 'count' },
+            ExpressionAttributeValues: { ':minus': -1, ':zero': 0 },
+          }),
+        );
+      } catch (error) {
+        if (!isConditionFailure(error)) throw error;
+      }
+    },
+
     async isBlocked(slug) {
       const { Item } = await db.send(new GetCommand({ TableName: config.blocklistTable, Key: { slug } }));
       return Item !== undefined;

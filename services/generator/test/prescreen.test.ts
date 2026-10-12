@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeAnswers } from '../src/core/answers';
 import type { CallTool } from '../src/core/bedrock';
-import { isRejected, prescreen } from '../src/core/prescreen';
+import { isRejected, isUnclear, prescreen } from '../src/core/prescreen';
 import { PRESCREEN_CASES } from './fixtures/prescreen-cases';
 
 const answers = normalizeAnswers({
@@ -18,7 +18,7 @@ describe('prescreen', () => {
       seen = guarded;
       expect(tool.name).toBe('classify');
       return {
-        value: { reason: 'Bakery.', decision: 'allow', category: 'ok', confidence: 0.98 },
+        value: { reason: 'Bakery.', decision: 'allow', category: 'ok', confidence: 0.98, clarity: 'clear', offers: true },
         usage: { step: 'classify', modelId: 'test', inputTokens: 1, outputTokens: 1 },
       };
     }) as CallTool;
@@ -33,10 +33,20 @@ describe('prescreen', () => {
 
 describe('isRejected', () => {
   it('trusts a confident reject only', () => {
-    const base = { reason: '', category: 'adult' as const };
+    const base = { reason: '', category: 'adult' as const, clarity: 'clear' as const, offers: true };
     expect(isRejected({ ...base, decision: 'reject', confidence: 0.9 })).toBe(true);
     expect(isRejected({ ...base, decision: 'reject', confidence: 0.3 })).toBe(false);
     expect(isRejected({ ...base, decision: 'allow', confidence: 0.9 })).toBe(false);
+  });
+});
+
+describe('isUnclear', () => {
+  it('turns away an unusable description, or one that does not say what the business sells', () => {
+    const base = { reason: '', decision: 'allow' as const, category: 'ok' as const, confidence: 0.9, offers: true };
+    expect(isUnclear({ ...base, clarity: 'unusable' })).toBe(true);
+    expect(isUnclear({ ...base, clarity: 'clear', offers: false })).toBe(true);
+    expect(isUnclear({ ...base, clarity: 'thin' })).toBe(false);
+    expect(isUnclear({ ...base, clarity: 'clear' })).toBe(false);
   });
 });
 
@@ -46,5 +56,6 @@ describe('fixture set', () => {
     expect(new Set(names).size).toBe(names.length);
     expect(PRESCREEN_CASES.filter((c) => c.expect === 'allow').length).toBeGreaterThanOrEqual(20);
     expect(PRESCREEN_CASES.filter((c) => c.expect === 'reject').length).toBeGreaterThanOrEqual(20);
+    expect(PRESCREEN_CASES.filter((c) => c.clarity === 'unusable').length).toBeGreaterThanOrEqual(6);
   });
 });

@@ -22,6 +22,11 @@ export function memoryStores() {
       counters.set(key, count + 1);
       return true;
     },
+    getCount: async (key) => counters.get(key) ?? 0,
+    async releaseRateLimit(key) {
+      const count = counters.get(key) ?? 0;
+      if (count > 0) counters.set(key, count - 1);
+    },
     isBlocked: async (slug) => blocked.has(slug),
     async block(slug) {
       blocked.add(slug);

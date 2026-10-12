@@ -12,7 +12,13 @@ export type Lang = z.infer<typeof Lang>;
 /** The 3 form questions plus the language selector, after normalization. */
 export const Answers = z.object({
   businessName: z.string().trim().min(2).max(80),
-  about: z.string().trim().min(10).max(1000),
+  /** At least a short sentence: 10 characters and 3 words. */
+  about: z
+    .string()
+    .trim()
+    .min(10)
+    .max(1000)
+    .refine((text) => text.split(/\s+/).length >= 3),
   contact: Contact,
   lang: Lang,
   /** The form's "Fotos creadas con IA" toggle: the page writer may make photos. Missing: no. */

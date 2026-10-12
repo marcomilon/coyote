@@ -5,7 +5,8 @@ import { findBrand } from './brands';
 import { passesCaptcha, TOKEN_MAX, type VerifyHuman } from './captcha';
 import { JOB_TTL_SECONDS, type Job, type Stores } from './jobs';
 import { announceRejection, type Announce } from './notices';
-import { isRejected, prescreen } from './prescreen';
+import { hasFreeDraftLeft } from './free-draft';
+import { isRejected, isUnclear, prescreen } from './prescreen';
 import { hashIp, rateLimitKey } from './ratelimit';
 import { rejectSlug, slugify, withSuffix } from './slug';
 
@@ -49,7 +50,10 @@ export type SubmitResult =
   | { status: 202; jobId: string }
   | { status: 400; fields: string[] }
   | { status: 403 }
-  | { status: 422 }
+  /** The email already used its free draft (free-draft.ts). */
+  | { status: 409 }
+  /** unclear: the description names no real business; the owner is asked to describe it again. */
+  | { status: 422; unclear?: true }
   | { status: 429 };
 
 const SLUG_ATTEMPTS = 5;
@@ -77,6 +81,7 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
   }
 
   if (!(await passesCaptcha(deps.verifyHuman, token, ip))) return { status: 403 };
+  if (!(await hasFreeDraftLeft(stores, ownerEmail))) return { status: 409 };
 
   const now = deps.now();
   const ipHash = hashIp(ip, deps.ipSalt);
@@ -110,9 +115,17 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
       decision: screening.decision,
       category: screening.category,
       confidence: screening.confidence,
+      clarity: screening.clarity,
+      offers: screening.offers,
       reason: screening.reason.slice(0, 240),
     };
     if (isRejected(screening)) return reject('prescreen', screening.category);
+    if (isUnclear(screening)) {
+      // Not abuse: no notice, and the try does not count against the day's limit, so the owner can describe the business again.
+      await stores.putJob({ ...job, status: 'REJECTED', rejectedBy: 'unclear' });
+      await stores.releaseRateLimit(limit.key).catch(() => undefined);
+      return { status: 422, unclear: true };
+    }
   } catch (error) {
     if (error instanceof GuardrailBlocked) return reject('guardrail', 'input');
     throw error;

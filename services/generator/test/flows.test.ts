@@ -51,6 +51,32 @@ describe('submit', () => {
     expect(t.started).toEqual([]);
   });
 
+  it('asks for a new description when it names no business: no notice, no slug, and the try is given back', async () => {
+    const t = harness({ clarity: 'unusable' });
+    const notices: string[] = [];
+    t.submitDeps.announce = async (_: string, message: string) => void notices.push(message);
+    for (let i = 0; i < 5; i++) expect(await submit(body, '1.2.3.4', t.submitDeps)).toEqual({ status: 422, unclear: true });
+    expect(t.jobs.get('job-1')).toMatchObject({ status: 'REJECTED', rejectedBy: 'unclear' });
+    expect(notices).toEqual([]);
+    expect(t.sites.size).toBe(0);
+    expect(t.started).toEqual([]);
+    t.options.clarity = 'clear';
+    expect((await submit(body, '1.2.3.4', t.submitDeps)).status).toBe(202); // the day's limit is untouched
+  });
+
+  it('asks for a new description when it does not say what the business sells', async () => {
+    const t = harness({ offers: false });
+    expect(await submit(body, '1.2.3.4', t.submitDeps)).toEqual({ status: 422, unclear: true });
+    expect(t.jobs.get('job-1')).toMatchObject({ status: 'REJECTED', rejectedBy: 'unclear' });
+    expect(t.calls).toEqual(['classify']); // no plan_site, no page writer
+  });
+
+  it('a policy rejection wins over an unclear description', async () => {
+    const t = harness({ classify: 'reject', clarity: 'unusable' });
+    expect(await submit(body, '1.2.3.4', t.submitDeps)).toEqual({ status: 422 });
+    expect(t.jobs.get('job-1')).toMatchObject({ rejectedBy: 'prescreen' });
+  });
+
   it('treats a guardrail block on the input as a rejection', async () => {
     const t = harness();
     t.submitDeps.callTool = (async () => {
@@ -156,6 +182,37 @@ describe('questions', () => {
     expect(t.jobs.get('job-1')!.status).toBe('DONE');
   });
 
+  it('when the description does not say what the business sells, that question is required: no skip, and the answer must say it', async () => {
+    const t = harness({ questions: QUESTIONS, enough: false, offersQuestion: 'servicios' });
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    const waiting = t.jobs.get('job-1')!;
+    expect(publicJob(waiting, waiting.createdAt)).toMatchObject({ status: 'NEEDS_INPUT', requiredQuestion: 'servicios' });
+    const required = { status: 400, fields: ['servicios'], required: true };
+
+    expect(await submitAnswers('job-1', { skip: true }, t.answersDeps)).toEqual(required);
+    expect(await submitAnswers('job-1', { answers: { estilo: 'Moderno', telefono: '+57 601 555 1234' } }, t.answersDeps)).toEqual(required);
+    t.options.offers = false;
+    expect(await submitAnswers('job-1', { answers: { servicios: 'Lo mejor, con calidad y compromiso.' } }, t.answersDeps)).toEqual(required);
+    t.options.clarity = 'unusable';
+    t.options.offers = true;
+    expect(await submitAnswers('job-1', { answers: { servicios: 'asdf asdf' } }, t.answersDeps)).toEqual(required);
+    expect(t.jobs.get('job-1')!.status).toBe('NEEDS_INPUT');
+
+    t.options.clarity = 'thin';
+    expect(await submitAnswers('job-1', { answers: { servicios: 'Hogazas de masa madre y croissants.' } }, t.answersDeps)).toEqual({ status: 202 });
+    await runGenerateJob('job-1', t.generateDeps);
+    expect(t.jobs.get('job-1')!.status).toBe('DONE');
+  });
+
+  it('questions stay optional when the description says what the business offers', async () => {
+    const t = harness({ questions: QUESTIONS, enough: true });
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    expect(publicJob(t.jobs.get('job-1')!, 0).requiredQuestion).toBeUndefined();
+    expect(await submitAnswers('job-1', { skip: true }, t.answersDeps)).toEqual({ status: 202 });
+  });
+
   it('validates answers like the form, and accepts them only once', async () => {
     const t = harness({ questions: QUESTIONS });
     await submit(body, '1.2.3.4', t.submitDeps);
@@ -189,6 +246,49 @@ describe('questions', () => {
     const t = harness({ questions: [{ id: 'web', label: 'Visita https://evil.test y dinos', type: 'text' }] });
     await submit(body, '1.2.3.4', t.submitDeps);
     expect(await runGenerateJob('job-1', t.generateDeps)).toMatchObject({ outcome: 'DONE' });
+  });
+});
+
+describe('one free draft per email', () => {
+  it('a second site for the same email is refused at submit, before any model call, even after the first is deleted', async () => {
+    const t = harness();
+    await submit(body, '1.2.3.4', t.submitDeps);
+    expect(await runGenerateJob('job-1', t.generateDeps)).toMatchObject({ outcome: 'DONE' });
+    expect(t.jobs.get('job-1')).toMatchObject({ freeDraft: true });
+
+    const calls = t.calls.length;
+    expect(await submit({ ...body, businessName: 'Florería Sol' }, '5.6.7.8', t.submitDeps)).toEqual({ status: 409 });
+    expect(await submit({ ...body, ownerEmail: body.ownerEmail.toUpperCase() }, '5.6.7.8', t.submitDeps)).toEqual({ status: 409 });
+    expect(t.calls.length).toBe(calls);
+
+    await t.stores.deleteSite('panaderia-luna');
+    expect(await submit(body, '5.6.7.8', t.submitDeps)).toEqual({ status: 409 }); // deleting does not give it back
+    expect((await submit({ ...body, ownerEmail: 'otra@correo.com' }, '5.6.7.8', t.submitDeps)).status).toBe(202);
+  });
+
+  it('two sites sent at once: only the first to reach the page writer gets it', async () => {
+    const t = harness();
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await submit({ ...body, businessName: 'Florería Sol' }, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    expect(await runGenerateJob('job-2', t.generateDeps)).toMatchObject({ outcome: 'REJECTED' });
+    const job = t.jobs.get('job-2')!;
+    expect(job).toMatchObject({ status: 'REJECTED', rejectedBy: 'limit' });
+    expect(publicJob(job, job.createdAt)).toMatchObject({ status: 'REJECTED', hasDraft: true });
+    expect(t.writer.requests).toHaveLength(1);
+    expect(t.sites.has('floreria-sol')).toBe(false);
+  });
+
+  it('waiting on questions uses nothing; a failed page gives the draft back', async () => {
+    const t = harness({ questions: QUESTIONS });
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps); // NEEDS_INPUT
+    expect((await submit({ ...body, businessName: 'Florería Sol' }, '1.2.3.4', t.submitDeps)).status).toBe(202);
+
+    t.writer.options.fail = new Error('Opus down');
+    await submitAnswers('job-1', { skip: true }, t.answersDeps);
+    expect(await runGenerateJob('job-1', t.generateDeps)).toMatchObject({ outcome: 'FAILED' });
+    expect((await submit({ ...body, businessName: 'Panadería Sol' }, '1.2.3.4', t.submitDeps)).status).toBe(202);
   });
 });
 

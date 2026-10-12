@@ -12,7 +12,14 @@ const usage = (step: string) => ({ step, modelId: 'test', inputTokens: 1, output
 
 export interface FakeModelOptions {
   classify?: 'allow' | 'reject';
+  /** The pre-screen's clarity (default: clear). */
+  clarity?: 'clear' | 'thin' | 'unusable';
+  /** The pre-screen's offers (default: true). */
+  offers?: boolean;
   questions?: Question[];
+  /** plan_site's `enough` when it asks (default: unset, so the questions can be skipped), and its offersQuestion. */
+  enough?: boolean;
+  offersQuestion?: string;
   /** The chat's edit_page answer, or a function of the call number (1, 2, …). */
   chat?: Record<string, unknown> | ((call: number) => Record<string, unknown>);
   /** Template mode: the template pick_template picks (default: the first), and fill_page's words. */
@@ -60,10 +67,10 @@ export function fakeModel(options: FakeModelOptions = {}) {
       switch (request.tool.name) {
         case 'classify': {
           const reject = options.classify === 'reject';
-          return { reason: 'x', decision: reject ? 'reject' : 'allow', category: reject ? 'adult' : 'ok', confidence: 0.95 };
+          return { reason: 'x', decision: reject ? 'reject' : 'allow', category: reject ? 'adult' : 'ok', confidence: 0.95, clarity: options.clarity ?? 'clear', offers: options.offers ?? true };
         }
         case 'plan_site':
-          return options.questions?.length ? { ready: false, questions: options.questions } : { ready: true };
+          return options.questions?.length ? { ready: false, enough: options.enough, offersQuestion: options.offersQuestion, questions: options.questions } : { ready: true };
         case 'edit_page': {
           chatCalls++;
           const chat = options.chat;

@@ -2,6 +2,7 @@
 // → Mi sitio, opened with the magic link. Validation uses the same zod schema as the API, so the two can never disagree.
 import { ZodError } from 'zod';
 import { normalizeAnswers } from '../../../services/generator/src/core/answers';
+import { isOurExample } from '../../../services/generator/src/core/example-about';
 import { api, apiUrl, sendAnswers, waitForJob, type JobView } from './jobs';
 import { fullNumber, setUpCountryPicker } from './phone';
 import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
@@ -122,13 +123,17 @@ function animateSteps() {
 }
 
 function setErrors(fields: string[]) {
-  root.querySelectorAll<HTMLElement>('[data-error]').forEach((el) => (el.textContent = ''));
+  root.querySelectorAll<HTMLElement>('[data-error]').forEach((el) => {
+    el.textContent = '';
+    el.classList.remove('callout');
+  });
   form.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
   for (const field of fields) {
     // "about:unclear": a field with a message of its own.
     const name = field.split(':')[0]!;
     const target = root.querySelector<HTMLElement>(`[data-error="${name}"]`) ?? $('[data-error="form"]');
     target.textContent = strings.errors[field] ?? strings.errors.generic ?? '';
+    target.classList.toggle('callout', field !== name);
     const input = form.elements.namedItem(name.replace('contact.', ''));
     if (input instanceof HTMLElement) input.setAttribute('aria-invalid', 'true');
   }
@@ -282,6 +287,7 @@ form.addEventListener('submit', async (event) => {
     throw error;
   }
   if (!validEmail(ownerEmail)) return setErrors(['ownerEmail']);
+  if (isOurExample(raw.about as string)) return setErrors(['about:unclear']); // our own example, copied back
   setErrors([]);
   keepAnswers(data);
 

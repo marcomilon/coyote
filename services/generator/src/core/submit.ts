@@ -5,6 +5,7 @@ import { findBrand } from './brands';
 import { passesCaptcha, TOKEN_MAX, type VerifyHuman } from './captcha';
 import { JOB_TTL_SECONDS, type Job, type Stores } from './jobs';
 import { announceRejection, type Announce } from './notices';
+import { isOurExample } from './example-about';
 import { hasFreeDraftLeft } from './free-draft';
 import { isRejected, isUnclear, prescreen } from './prescreen';
 import { hashIp, rateLimitKey } from './ratelimit';
@@ -82,6 +83,8 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
 
   if (!(await passesCaptcha(deps.verifyHuman, token, ip))) return { status: 403 };
   if (!(await hasFreeDraftLeft(stores, ownerEmail))) return { status: 409 };
+  // Our own example, copied back: no model call, no count.
+  if (isOurExample(answers.about)) return { status: 422, unclear: true };
 
   const now = deps.now();
   const ipHash = hashIp(ip, deps.ipSalt);

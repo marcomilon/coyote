@@ -1,3 +1,4 @@
+import { EXAMPLE_ABOUT } from '../../../services/generator/src/core/example-about';
 export type Lang = 'es' | 'pt';
 
 /** Every user-facing string of the app, in one place. Spanish first; Portuguese mirrors it key by key. */
@@ -9,6 +10,8 @@ const es = {
   loading: 'Cargando…',
   notFound: { title: 'Página no encontrada — ventas314.com', heading: 'Esta página no existe', text: 'Puede que el enlace esté incompleto o que la página se haya movido.', home: 'Ir al inicio' },
   nav: { create: 'Crear mi página web', mySites: 'Mis páginas web', home: 'Inicio', breadcrumb: 'Ruta de navegación' },
+  /** Shown next to the CAPTCHA when Cloudflare wants a click. */
+  humanCheck: { hint: 'Un último paso: marca la casilla de abajo para confirmar que eres una persona.' },
   home: {
     title: 'ventas314.com — tu negocio en internet, hoy',
     description: 'Responde unas pocas preguntas y ventas314.com diseña la página web de tu negocio en minutos. En español, con botón de WhatsApp.',
@@ -36,6 +39,7 @@ const es = {
       items: [
         { icon: '🌐', title: 'Tu página web', text: 'Diseñada para tu negocio y pensada primero para celular.' },
         { icon: '🔗', title: 'Tu dominio', text: 'tunegocio.com o {tld}, a tu nombre.' },
+        { icon: '🔒', title: 'HTTPS gratis', text: 'Certificado de seguridad incluido: tu página web es segura y se abre con el candado.' },
         { icon: '💬', title: 'WhatsApp', text: 'Un botón para que te escriban directo desde tu página web.' },
         { icon: '📍', title: 'Google Maps', text: 'Te encuentran cuando buscan lo que vendes cerca.' },
         { icon: '📷', title: 'Redes sociales', text: 'Tu Instagram y Facebook conectados a tu página web.' },
@@ -80,7 +84,7 @@ const es = {
     q2: {
       label: '¿Qué hace tu negocio?',
       hint: 'Cuenta qué vendes o qué servicios das, en qué ciudad y barrio, y tus horarios si quieres. Entre más detalle, mejor.',
-      placeholder: 'Panadería de barrio en Chapinero, Bogotá. Pan de masa madre, croissants y café. Abrimos de lunes a sábado de 7 a 19…',
+      placeholder: EXAMPLE_ABOUT.es.placeholder,
     },
     q3: { label: '¿Cómo te contactan?', whatsapp: 'Teléfono', whatsappHint: 'Tus clientes te escriben por WhatsApp o te llaman a este número.', country: 'País', countryPick: 'Elige tu país', email: 'Correo del negocio (opcional)', emailPlaceholder: 'contacto@tunegocio.com', address: 'Dirección (opcional)', instagram: 'Instagram (opcional)', instagramPlaceholder: '@tunegocio', facebook: 'Facebook (opcional)', facebookPlaceholder: 'facebook.com/tunegocio' },
     goal: {
@@ -95,7 +99,7 @@ const es = {
     errors: {
       businessName: 'Escribe el nombre de tu negocio (al menos 2 letras).',
       about: 'Cuéntanos un poco más: al menos una frase sobre lo que haces.',
-      'about:unclear': 'No entendimos qué ofrece tu negocio. Cuéntanos qué vendes o haces, y dónde. Por ejemplo: «Panadería en Cusco: pan de masa madre y tortas por encargo».',
+      'about:unclear': `No entendimos qué ofrece tu negocio. Cuéntanos qué vendes o haces, y dónde. Por ejemplo: «${EXAMPLE_ABOUT.es.unclear}».`,
       'contact.whatsapp': 'Revisa el país y el número de teléfono.',
       'contact.email': 'Ese correo no parece válido. Revísalo, por ejemplo contacto@tunegocio.com.',
       'contact.instagram': 'Ese usuario de Instagram no parece válido.',
@@ -285,6 +289,7 @@ type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K
  * are replaced whole. The app builds every Spanish page twice and CloudFront serves this version in those countries.
  */
 const esVos: DeepPartial<typeof es> = {
+  humanCheck: { hint: 'Un último paso: marcá la casilla de abajo para confirmar que sos una persona.' },
   home: {
     description: 'Respondé unas pocas preguntas y ventas314.com diseña la página web de tu negocio en minutos. En español, con botón de WhatsApp.',
     ctaWhatsapp: 'Crealo por WhatsApp',
@@ -299,6 +304,7 @@ const esVos: DeepPartial<typeof es> = {
       items: [
         { icon: '🌐', title: 'Tu página web', text: 'Diseñada para tu negocio y pensada primero para celular.' },
         { icon: '🔗', title: 'Tu dominio', text: 'tunegocio.com o {tld}, a tu nombre.' },
+        { icon: '🔒', title: 'HTTPS gratis', text: 'Certificado de seguridad incluido: tu página web es segura y se abre con el candado.' },
         { icon: '💬', title: 'WhatsApp', text: 'Un botón para que te escriban directo desde tu página web.' },
         { icon: '📍', title: 'Google Maps', text: 'Te encuentran cuando buscan lo que vendés cerca.' },
         { icon: '📷', title: 'Redes sociales', text: 'Tu Instagram y Facebook conectados a tu página web.' },
@@ -335,7 +341,7 @@ const esVos: DeepPartial<typeof es> = {
     sub: 'Llená la comanda. Nosotros cocinamos la página.',
     q2: {
       hint: 'Contá qué vendés o qué servicios das, en qué ciudad y barrio, y tus horarios si querés. Cuanto más detalle, mejor.',
-      placeholder: 'Panadería de barrio en Palermo, Buenos Aires. Pan de masa madre, medialunas y café. Abrimos de lunes a sábado de 7 a 19…',
+      placeholder: EXAMPLE_ABOUT.vos.placeholder,
     },
     q3: { countryPick: 'Elegí tu país' },
     goal: { label: '¿Qué querés que hagan tus clientes?' },
@@ -351,7 +357,7 @@ const esVos: DeepPartial<typeof es> = {
     errors: {
       businessName: 'Escribí el nombre de tu negocio (al menos 2 letras).',
       about: 'Contanos un poco más: al menos una frase sobre lo que hacés.',
-      'about:unclear': 'No entendimos qué ofrece tu negocio. Contanos qué vendés o hacés, y dónde. Por ejemplo: «Panadería en Rosario: pan de masa madre y tortas por encargo».',
+      'about:unclear': `No entendimos qué ofrece tu negocio. Contanos qué vendés o hacés, y dónde. Por ejemplo: «${EXAMPLE_ABOUT.vos.unclear}».`,
       'contact.whatsapp': 'Revisá el país y el número de teléfono.',
       'contact.email': 'Ese correo no parece válido. Revisalo, por ejemplo contacto@tunegocio.com.',
       ownerEmail: 'Revisá tu correo: por ejemplo, tu@correo.com.',
@@ -453,6 +459,7 @@ const pt: typeof es = {
   loading: 'Carregando…',
   notFound: { title: 'Página não encontrada — ventas314.com', heading: 'Esta página não existe', text: 'Talvez o link esteja incompleto ou a página tenha mudado de lugar.', home: 'Ir para o início' },
   nav: { create: 'Criar meu site', mySites: 'Meus sites', home: 'Início', breadcrumb: 'Trilha de navegação' },
+  humanCheck: { hint: 'Só mais um passo: marque a caixa abaixo para confirmar que você é uma pessoa.' },
   home: {
     title: 'ventas314.com — seu negócio na internet, hoje',
     description: 'Responda algumas perguntas e ventas314.com cria o site do seu negócio em minutos. Em português, com botão de WhatsApp.',
@@ -480,6 +487,7 @@ const pt: typeof es = {
       items: [
         { icon: '🌐', title: 'Seu site', text: 'Feito para o seu negócio e pensado primeiro para o celular.' },
         { icon: '🔗', title: 'Seu domínio', text: 'seunegocio.com ou {tld}, no seu nome.' },
+        { icon: '🔒', title: 'HTTPS grátis', text: 'Certificado de segurança incluído: seu site é seguro e abre com o cadeado.' },
         { icon: '💬', title: 'WhatsApp', text: 'Um botão para falarem com você direto do seu site.' },
         { icon: '📍', title: 'Google Maps', text: 'Te encontram quando procuram o que você vende por perto.' },
         { icon: '📷', title: 'Redes sociais', text: 'Seu Instagram e Facebook conectados ao seu site.' },
@@ -524,7 +532,7 @@ const pt: typeof es = {
     q2: {
       label: 'O que o seu negócio faz?',
       hint: 'Conte o que você vende ou quais serviços oferece, em que cidade e bairro, e os horários se quiser. Quanto mais detalhe, melhor.',
-      placeholder: 'Padaria de bairro em Pinheiros, São Paulo. Pão de fermentação natural, croissants e café. Abrimos de segunda a sábado das 7 às 19…',
+      placeholder: EXAMPLE_ABOUT.pt.placeholder,
     },
     q3: { label: 'Como te encontram?', whatsapp: 'Telefone', whatsappHint: 'Seus clientes te mandam WhatsApp ou te ligam neste número.', country: 'País', countryPick: 'Escolha seu país', email: 'E-mail do negócio (opcional)', emailPlaceholder: 'contato@seunegocio.com', address: 'Endereço (opcional)', instagram: 'Instagram (opcional)', instagramPlaceholder: '@seunegocio', facebook: 'Facebook (opcional)', facebookPlaceholder: 'facebook.com/seunegocio' },
     goal: {
@@ -539,7 +547,7 @@ const pt: typeof es = {
     errors: {
       businessName: 'Escreva o nome do seu negócio (pelo menos 2 letras).',
       about: 'Conte um pouco mais: pelo menos uma frase sobre o que você faz.',
-      'about:unclear': 'Não entendemos o que seu negócio oferece. Conte o que você vende ou faz, e onde. Por exemplo: «Padaria em Recife: pão de fermentação natural e bolos por encomenda».',
+      'about:unclear': `Não entendemos o que seu negócio oferece. Conte o que você vende ou faz, e onde. Por exemplo: «${EXAMPLE_ABOUT.pt.unclear}».`,
       'contact.whatsapp': 'Confira o país e o número de telefone.',
       'contact.email': 'Esse e-mail não parece válido. Confira, por exemplo contato@seunegocio.com.',
       'contact.instagram': 'Esse usuário do Instagram não parece válido.',

@@ -137,7 +137,7 @@ const [readyBefore, readyAfter] = c.working.ready.text.split('{email}');---
           <button class="btn" type="submit">{c.submit}</button>
           <p>{c.terms}</p>
         </div>
-        <div class="human-check" data-human-check></div>
+        <div class="human-check" data-human-check><p class="human-hint" role="status" hidden>{s.humanCheck.hint}</p></div>
         <p class="error" data-error="form" role="alert"></p>
       </form>
     </section>

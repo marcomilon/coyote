@@ -30,7 +30,7 @@ const r = s.report;
           <textarea id="reason" name="reason" maxlength="500"></textarea>
         </fieldset>
         <div class="submit-row"><button class="btn" type="submit">{r.submit}</button></div>
-        <div class="human-check" data-human-check></div>
+        <div class="human-check" data-human-check><p class="human-hint" role="status" hidden>{s.humanCheck.hint}</p></div>
         <p class="notice" data-notice data-kind="error" role="alert"></p>
       </form>
     </section>

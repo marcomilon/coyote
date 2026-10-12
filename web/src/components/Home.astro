@@ -124,7 +124,7 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
           const [before, after] = splitTld(item.text);
           return (
             <li class="card">
-              <span class={`icon ${circles[i]}`} aria-hidden="true">
+              <span class={`icon ${circles[i % circles.length]}`} aria-hidden="true">
                 {item.icon}
               </span>
               <h3>{item.title}</h3>

@@ -265,6 +265,18 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 [aria-invalid='true'] { border-color: var(--rojo); background-color: #fff1ee; }
 .error { color: var(--rojo); font-size: .9rem; font-weight: 600; margin-top: .4rem; min-height: 0; }
 .error:empty { display: none; }
+/* An error that needs the owner to rewrite their answer ("about:unclear"): a callout, not a line of red text. */
+.error.callout {
+  display: flex; gap: .75rem; align-items: flex-start; margin-top: .75rem; padding: .9rem 1rem;
+  color: var(--ink); font-size: 1rem; line-height: 1.45; background: #fde4dc;
+  border: 3px solid var(--ink); border-left: 10px solid var(--rojo); border-radius: 6px; box-shadow: var(--shadow);
+  animation: nudge .5s ease 2;
+}
+.error.callout::before {
+  content: '!'; flex: none; display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%;
+  background: var(--rojo); color: #fff; font-family: var(--display); font-size: .95rem;
+}
+@media (prefers-reduced-motion: reduce) { .error.callout { animation: none; } }
 .count { font-size: .8rem; text-align: right; opacity: .6; margin-top: .3rem; font-variant-numeric: tabular-nums; }
 .count.full { color: var(--rojo); opacity: 1; font-weight: 600; }
 .choices { display: flex; flex-wrap: wrap; gap: .4rem; }
@@ -287,8 +299,16 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .two[hidden], .btn[hidden] { display: none; }
 .submit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem 1.5rem; border-top: 3px dashed var(--ink); padding-top: 1.5rem; }
 .submit-row p { font-size: .82rem; opacity: .75; flex: 1 1 14rem; }
-/* Cloudflare Turnstile: invisible unless it wants a click; then its box sits under the button. */
-.human-check:not(:empty) { margin-top: 1rem; }
+/* Cloudflare Turnstile: invisible unless it wants a click; then its box sits under the button, with a hint above it. */
+.human-check > div:not(:empty), .human-hint { margin-top: 1rem; }
+.human-hint {
+  margin-bottom: 0; padding: .75rem 1rem; font-weight: 600; line-height: 1.45; background: #fff1c7;
+  border: 3px solid var(--ink); border-left: 10px solid var(--amarillo); border-radius: 6px; box-shadow: var(--shadow);
+}
+.human-hint[hidden] { display: none; }
+.human-check.attention .human-hint { animation: nudge .5s ease 2; }
+@keyframes nudge { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@media (prefers-reduced-motion: reduce) { .human-check.attention .human-hint { animation: none; } }
 
 /* One view at a time, chosen by data-state on the root */
 [data-view] { display: none; }

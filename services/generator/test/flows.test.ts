@@ -71,6 +71,13 @@ describe('submit', () => {
     expect(t.calls).toEqual(['classify']); // no plan_site, no page writer
   });
 
+  it('sends our own example, copied back, to the form again without a model call or a count', async () => {
+    const t = harness();
+    expect(await submit({ ...body, about: '«Panadería en Rosario: pan de masa madre y tortas por encargo».' }, '1.2.3.4', t.submitDeps)).toEqual({ status: 422, unclear: true });
+    expect(t.calls).toEqual([]);
+    expect(t.counters.size).toBe(0);
+  });
+
   it('a policy rejection wins over an unclear description', async () => {
     const t = harness({ classify: 'reject', clarity: 'unusable' });
     expect(await submit(body, '1.2.3.4', t.submitDeps)).toEqual({ status: 422 });
@@ -192,6 +199,7 @@ describe('questions', () => {
 
     expect(await submitAnswers('job-1', { skip: true }, t.answersDeps)).toEqual(required);
     expect(await submitAnswers('job-1', { answers: { estilo: 'Moderno', telefono: '+57 601 555 1234' } }, t.answersDeps)).toEqual(required);
+    expect(await submitAnswers('job-1', { answers: { servicios: 'Panadería en Cusco: pan de masa madre y tortas por encargo' } }, t.answersDeps)).toEqual(required);
     t.options.offers = false;
     expect(await submitAnswers('job-1', { answers: { servicios: 'Lo mejor, con calidad y compromiso.' } }, t.answersDeps)).toEqual(required);
     t.options.clarity = 'unusable';

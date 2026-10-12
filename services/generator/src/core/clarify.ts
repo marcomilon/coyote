@@ -3,6 +3,7 @@ import { GuardrailBlocked, type CallTool } from './bedrock';
 import { releaseNewSite } from './generate-job';
 import { announceRejection, type Announce } from './notices';
 import type { Stores } from './jobs';
+import { isOurExample } from './example-about';
 import { isRejected, isUnclear, prescreen } from './prescreen';
 import { applyAnswers, type Note } from './questions';
 
@@ -47,7 +48,8 @@ export async function submitAnswers(jobId: string, body: unknown, deps: AnswersD
   const answers = { ...job.answers, contact: { ...job.answers.contact, ...contact } };
   const mustAnswer = job.questions.find((q) => q.id === job.requiredQuestion);
   const required: AnswersResult = { status: 400, fields: [mustAnswer?.id ?? ''], required: true };
-  if (mustAnswer && !notes.some((note) => note.question === mustAnswer.label)) return required;
+  const offer = mustAnswer && notes.find((note) => note.question === mustAnswer.label);
+  if (mustAnswer && (!offer || isOurExample(offer.answer))) return required;
 
   const usage = [...job.usage];
   if (notes.length > 0) {

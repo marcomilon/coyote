@@ -37,18 +37,32 @@ export interface HumanCheck {
   reset(): void;
 }
 
-/** Renders the widget in `container` (an empty element inside the form) and starts the check at once. */
+/**
+ * Renders the widget in `container` (inside the form) and starts the check at once. When a submit waits on a check
+ * Cloudflare wants a click for, the container's `.human-hint` shows and the page scrolls to it.
+ */
 export function humanCheck(container: HTMLElement | null, lang: string): HumanCheck {
   const siteKey = window.COYOTE_CONFIG?.turnstileSiteKey;
   if (!siteKey || !container) return { token: async () => undefined, reset: () => {} };
+  const hint = container.querySelector<HTMLElement>('.human-hint');
+  const box = container.appendChild(document.createElement('div'));
+  let interactive = false;
   const widget = loadTurnstile().then((turnstile) => {
-    const id = turnstile?.render(container, {
+    const id = turnstile?.render(box, {
       sitekey: siteKey,
       language: lang === 'pt' ? 'pt-br' : 'es',
       appearance: 'interaction-only',
       // Our app is always light; Turnstile's default follows the device and draws a dark box on a dark-mode phone.
       theme: 'light',
       'refresh-expired': 'auto',
+      'before-interactive-callback': () => {
+        interactive = true;
+      },
+      'after-interactive-callback': () => {
+        interactive = false;
+        if (hint) hint.hidden = true;
+        container.classList.remove('attention');
+      },
     });
     return turnstile && id !== undefined ? { turnstile, id } : undefined;
   });
@@ -57,9 +71,19 @@ export function humanCheck(container: HTMLElement | null, lang: string): HumanCh
       const w = await widget;
       if (!w) return undefined;
       const until = Date.now() + WAIT_MS;
+      let shown = false;
       for (;;) {
         const token = w.turnstile.getResponse(w.id);
         if (token || Date.now() > until) return token || undefined;
+        // Waiting on a click the visitor has not made: say so, bring the box into view, and draw the eye to it, once.
+        if (interactive && !shown) {
+          shown = true;
+          if (hint) hint.hidden = false;
+          container.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          container.classList.remove('attention');
+          void container.offsetWidth; // restart the animation
+          container.classList.add('attention');
+        }
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
     },

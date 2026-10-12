@@ -69,6 +69,7 @@ export class CoyoteStack extends Stack {
   readonly chatTable: dynamodb.TableV2;
   readonly accountsTable: dynamodb.TableV2;
   readonly domainsTable: dynamodb.TableV2;
+  readonly mailSuppressionTable: dynamodb.TableV2;
   readonly api: apigwv2.HttpApi;
   readonly guardrail: CoyoteGuardrail;
   readonly abuseReports: sns.Topic;
@@ -149,6 +150,8 @@ export class CoyoteStack extends Stack {
     this.blocklistTable = table('BlocklistTable', 'slug', false);
     // Owners' own domains (domains.ts). Kept when a site is deleted: the domain stays registered.
     this.domainsTable = table('DomainsTable', 'domain', false);
+    // Addresses we never email again (core/mail-events.ts): a hard bounce or a complaint, by `emailId`.
+    this.mailSuppressionTable = table('MailSuppressionTable', 'emailId', false);
     // The chat of each site (chat.ts): one row per message, ordered by `at` (ms). Rows expire after 90 days.
     this.chatTable = new dynamodb.TableV2(this, 'ChatTable', {
       partitionKey: { name: 'slug', type: dynamodb.AttributeType.STRING },
@@ -414,15 +417,25 @@ export class CoyoteStack extends Stack {
     // ---------------------------------------------------------------------------------------
     // Email (SES): sign-in links and "your site is ready"
     // ---------------------------------------------------------------------------------------
+    // Bounces and complaints: the identity's default configuration set publishes them to SNS, and the mail-events
+    // Lambda suppresses the addresses (core/mail-events.ts). Every email goes through the identity, so through the set.
+    const mailConfigurationSet = props.senderEmail || domain ? new ses.ConfigurationSet(this, 'MailConfigurationSet') : undefined;
+    const mailEvents = mailConfigurationSet ? new sns.Topic(this, 'MailEvents', { displayName: 'Coyote SES bounces and complaints' }) : undefined;
+    if (mailConfigurationSet && mailEvents) {
+      mailConfigurationSet.addEventDestination('BouncesAndComplaints', {
+        destination: ses.EventDestination.snsTopic(mailEvents),
+        events: [ses.EmailSendingEvent.BOUNCE, ses.EmailSendingEvent.COMPLAINT],
+      });
+    }
     let mailIdentity: ses.EmailIdentity | undefined;
     if (domain) {
       const mailDomain = domain.urls.mailFrom!.split('@')[1]!;
-      mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', { identity: ses.Identity.domain(mailDomain) });
+      mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', { identity: ses.Identity.domain(mailDomain), configurationSet: mailConfigurationSet });
       // SES gives full names; they are tokens at synth, so CDK can't see they already end in the zone and would
       // append it again. The trailing dot marks them as fully qualified.
       mailIdentity.dkimRecords.forEach((record, i) => new route53.CnameRecord(this, `MailDkim${i}`, { zone: domain.zone, recordName: `${record.name}.`, domainName: record.value }));
     } else if (props.senderEmail) {
-      mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', { identity: ses.Identity.email(props.senderEmail) });
+      mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', { identity: ses.Identity.email(props.senderEmail), configurationSet: mailConfigurationSet });
     }
 
     const generatorApi = new GeneratorApi(this, 'GeneratorApi', {
@@ -435,6 +448,9 @@ export class CoyoteStack extends Stack {
       accountsTable: this.accountsTable,
       domainsTable: this.domainsTable,
       mailIdentity,
+      mailConfigurationSet,
+      mailEvents,
+      mailSuppressionTable: this.mailSuppressionTable,
       sitesBucket: this.sitesBucket,
       pageSkillsBucket,
       sitesDistribution,
@@ -475,6 +491,7 @@ export class CoyoteStack extends Stack {
       api: this.api,
       generate: generatorApi.generate,
       abuseReports: this.abuseReports,
+      mailEvents: generatorApi.mailEvents,
       monthlyBudgetUsd: 20,
     });
 

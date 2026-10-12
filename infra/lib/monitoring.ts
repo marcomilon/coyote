@@ -17,6 +17,8 @@ export interface MonitoringProps {
   generate: lambda.IFunction;
   /** Visitor reports go here (one email per report). */
   abuseReports: sns.Topic;
+  /** Turns email off when an SES reputation alarm fires (unset without a sender). */
+  mailEvents?: lambda.IFunction;
   monthlyBudgetUsd: number;
 }
 
@@ -76,6 +78,16 @@ export class Monitoring extends Construct {
     alarm('GenerateErrors', 'The generate Lambda crashed or timed out.', props.generate.metricErrors({ period: Duration.minutes(5), statistic: 'Sum' }), 0);
     alarm('Api5xx', 'The API is returning server errors.', apiMetric('5xx'), 5);
     alarm('Api4xx', 'Unusual number of client errors (includes 422 and 429).', apiMetric('4xx'), 200);
+    if (props.mailEvents) {
+      // The account's SES reputation (fractions, not percent). AWS reviews at 5% bounces / 0.1% complaints; we stop sooner.
+      const reputation = (metricName: string) => new cw.Metric({ namespace: 'AWS/SES', metricName, statistic: 'Maximum', period: Duration.minutes(5) });
+      for (const [name, description, metricName, threshold] of [
+        ['MailBounceRate', 'SES bounce rate above 3%: email is paused. Check, then ./coyote.sh email on.', 'Reputation.BounceRate', 0.03],
+        ['MailComplaintRate', 'SES complaint rate above 0.05%: email is paused. Check, then ./coyote.sh email on.', 'Reputation.ComplaintRate', 0.0005],
+      ] as const) {
+        alarm(name, description, reputation(metricName), threshold).addAlarmAction(new actions.LambdaAction(props.mailEvents, { useUniquePermissionId: true }));
+      }
+    }
 
     new cw.Dashboard(this, 'Dashboard', {
       dashboardName: 'Coyote',

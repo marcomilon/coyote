@@ -29,7 +29,7 @@ describe('CoyoteStack, domainless', () => {
     template.resourceCountIs('AWS::CertificateManager::Certificate', 0);
     template.resourceCountIs('AWS::Route53::RecordSet', 0);
     template.resourceCountIs('AWS::CloudFront::Distribution', 2);
-    template.resourceCountIs('AWS::DynamoDB::GlobalTable', 7);
+    template.resourceCountIs('AWS::DynamoDB::GlobalTable', 8);
   });
 
   it('keeps both buckets private and versions the sites bucket', () => {
@@ -289,6 +289,22 @@ describe('CoyoteStack, domainless', () => {
     expect(senders.sort()).toEqual(['GeneratorApiAccount', 'GeneratorApiGenerate']);
     const account = Object.values(withSender.findResources('AWS::Lambda::Function')).find((f) => JSON.stringify(f.Properties.Environment ?? {}).includes('owner@example.test'));
     expect(account).toBeDefined(); // SENDER_EMAIL reaches the Lambdas
+  });
+
+  it('suppresses bounced and complaining addresses and pauses email on a bad reputation', () => {
+    template.resourceCountIs('AWS::SES::ConfigurationSet', 0);
+    const withSender = synth({ senderEmail: 'owner@example.test' });
+    withSender.hasResourceProperties('AWS::SES::EmailIdentity', { ConfigurationSetAttributes: { ConfigurationSetName: Match.anyValue() } });
+    withSender.hasResourceProperties('AWS::SES::ConfigurationSetEventDestination', {
+      EventDestination: { Enabled: true, MatchingEventTypes: ['bounce', 'complaint'], SnsDestination: Match.anyValue() },
+    });
+    withSender.hasResourceProperties('AWS::SNS::Subscription', { Protocol: 'lambda' });
+    const reputation = Object.values(withSender.findResources('AWS::CloudWatch::Alarm', { Properties: { Namespace: 'AWS/SES' } }));
+    expect(reputation.map((a) => a.Properties.MetricName).sort()).toEqual(['Reputation.BounceRate', 'Reputation.ComplaintRate']);
+    for (const a of reputation) expect(a.Properties.AlarmActions).toHaveLength(2); // the alerts topic and the mail-events Lambda
+    withSender.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/email', Value: 'on' });
+    const guarded = Object.values(withSender.findResources('AWS::Lambda::Function')).filter((f) => f.Properties.Environment?.Variables?.MAIL_SUPPRESSION_TABLE && f.Properties.Environment.Variables.EMAIL_PARAMETER);
+    expect(guarded).toHaveLength(3); // account, generate, mail-events
   });
 
   it('exports the URLs the dev server and the Lambdas need', () => {

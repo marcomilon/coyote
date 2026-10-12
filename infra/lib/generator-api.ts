@@ -10,6 +10,7 @@ import {
   aws_iam as iam,
   aws_lambda as lambda,
   aws_lambda_destinations as destinations,
+  aws_lambda_event_sources as eventSources,
   aws_lambda_nodejs as nodejs,
   aws_logs as logs,
   aws_s3 as s3,
@@ -44,6 +45,8 @@ export const DOMAIN_REGISTER_PARAMETER = '/coyote/domain-register';
 export const TURNSTILE_SECRET_NAME = 'coyote/turnstile';
 /** Whether the anonymous forms need the CAPTCHA (Turnstile): on or off. Set by `./coyote.sh captcha`; survives deploys. */
 export const CAPTCHA_PARAMETER = '/coyote/captcha';
+/** Whether we send email at all: on or off. The bounce/complaint rate alarms turn it off; `./coyote.sh email on` resumes. Survives deploys. */
+export const EMAIL_PARAMETER = '/coyote/email';
 import { DEFAULT_PAGE_SKILL } from '../../services/generator/src/core/frontend-design';
 import { DEFAULT_IMAGE_MODEL_ID, IMAGE_MODEL_REGION } from '../../services/generator/src/core/models';
 import type { CoyoteGuardrail } from './guardrail';
@@ -59,6 +62,11 @@ export interface GeneratorApiProps {
   domainsTable: dynamodb.ITableV2;
   /** Where our emails come from. Unset = no email. */
   mailIdentity?: ses.IEmailIdentity;
+  /** The identity's default configuration set; its bounces and complaints go to `mailEvents`. */
+  mailConfigurationSet?: ses.IConfigurationSet;
+  mailEvents?: sns.ITopic;
+  /** Addresses we never email again (core/mail-events.ts). */
+  mailSuppressionTable: dynamodb.ITableV2;
   sitesBucket: s3.IBucket;
   /** The page writer's skills, `<name>.md` each (`./coyote.sh page-skill`). */
   pageSkillsBucket: s3.IBucket;
@@ -82,6 +90,8 @@ const handlers = `${root}services/generator/src/handlers`;
 /** The Lambdas behind the HTTP API: submit → (async) generate → status (→ answers → generate) → owner. */
 export class GeneratorApi extends Construct {
   readonly generate: lambda.IFunction;
+  /** SES bounces and complaints → suppression; the reputation alarms → email off. Unset without a sender. */
+  readonly mailEvents?: lambda.IFunction;
   /** Every route by its key ("POST /generate"): the stage gives some their own throttle and must wait for them. */
   readonly routes = new Map<string, apigwv2.HttpRoute>();
 
@@ -198,8 +208,36 @@ export class GeneratorApi extends Construct {
     props.rateLimitTable.grantReadWriteData(account);
     if (props.mailIdentity) {
       // In the SES sandbox the recipients are identities too, so the permission covers every identity of the account.
-      const sendEmail = new iam.PolicyStatement({ actions: ['ses:SendEmail'], resources: [`arn:${stack.partition}:ses:${stack.region}:${stack.account}:identity/*`] });
-      for (const f of [account, generate]) f.addToRolePolicy(sendEmail);
+      // The identity's default configuration set is authorized on the same call.
+      const sendEmail = new iam.PolicyStatement({
+        actions: ['ses:SendEmail'],
+        resources: [
+          `arn:${stack.partition}:ses:${stack.region}:${stack.account}:identity/*`,
+          ...(props.mailConfigurationSet ? [`arn:${stack.partition}:ses:${stack.region}:${stack.account}:configuration-set/${props.mailConfigurationSet.configurationSetName}`] : []),
+        ],
+      });
+      const emailSwitch = new ssm.StringParameter(this, 'EmailSwitch', {
+        parameterName: EMAIL_PARAMETER,
+        stringValue: 'on',
+        description: 'Whether we send email: on or off. The bounce and complaint rate alarms turn it off. Set with ./coyote.sh email',
+      });
+      for (const f of [account, generate]) {
+        f.addToRolePolicy(sendEmail);
+        f.addEnvironment('EMAIL_PARAMETER', EMAIL_PARAMETER);
+        f.addEnvironment('MAIL_SUPPRESSION_TABLE', props.mailSuppressionTable.tableName);
+        emailSwitch.grantRead(f);
+        props.mailSuppressionTable.grantReadData(f);
+      }
+      if (props.mailEvents) {
+        const mailEvents = fn('MailEvents', 'mail-events', {
+          memorySize: 256,
+          environment: { EMAIL_PARAMETER, MAIL_SUPPRESSION_TABLE: props.mailSuppressionTable.tableName },
+        });
+        mailEvents.addEventSource(new eventSources.SnsEventSource(props.mailEvents));
+        props.mailSuppressionTable.grantWriteData(mailEvents);
+        emailSwitch.grantWrite(mailEvents);
+        this.mailEvents = mailEvents;
+      }
     }
     // _media/<slug>/: moderated images. _src/<slug>/: sources and site records. _draft/<id>/: served drafts.
     for (const prefix of ['_media/*', '_src/*', '_draft/*']) {

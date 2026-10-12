@@ -29,6 +29,7 @@ npm run templates:make -w services/generator -- --count 5   # Opus designs templ
 ./coyote.sh page-images [on|off]   # show or switch made photos for everyone (owners choose per site on the form; no deploy)
 ./coyote.sh domain-register [on|off]   # show or switch domain registration in Mi sitio → Dominio (Coyote pays from the Porkbun balance; no deploy)
 ./coyote.sh captcha [on|off]   # show or switch the Turnstile CAPTCHA on the create, sign-in link and report forms (no deploy)
+./coyote.sh email [on|off]   # show or switch sending email; the SES bounce/complaint rate alarms turn it off (no deploy)
 ./coyote.sh domains    # the domains owners registered
 ./coyote.sh view <slug>   # copy a site's current draft to out/view/<slug>/ and open it
 ./coyote.sh example-page <page-dir> <slug>   # make an opus:sites page a landing example (examples/sites/<slug>/; then deploy)

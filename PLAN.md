@@ -268,9 +268,9 @@ The owner looks at the draft on a computer and asks for changes from their phone
   - Domainless CSP: `frame-ancestors` uses the app distribution URL. Where an exact URL would make the distributions and the API depend on each other in a circle, a wildcard is used instead: sites `form-action https://*.execute-api.<region>.amazonaws.com`, app `connect-src` the same, app `frame-src https://*.cloudfront.net`. Domain mode uses exact origins everywhere.
   - Cache: default TTL 5 min, so an owner's edit shows up without an invalidation. Missing pages (S3 answers 403) return a small 404 page from `_errors/`.
 - `BucketDeployment` of `web/dist/` (the Astro build) plus the generated `config.js` → `appBucket`.
-- DynamoDB, MVP: `jobs` (pk `jobId`, TTL 90 d; answers, safety outcomes, usage), `sites` (pk `slug`; status, currentDraftId, drafts, ownerWhatsApp, tokenHash, createdAt), `ratelimit` (pk `ip`, TTL), `blocklist` (pk `slug`), `chat` (pk `slug`, sk `at`, TTL 90 d), `accounts` (pk `pk`, sk `sk`, TTL; "Mis sitios"), `domains` (pk `domain`; slug, status, expiresAt, price; kept when the site is deleted). Post-MVP: `messages`, `suppression`, `wa_*` (`PLAN-PHASE2.md`), GSI on `sites.ownerPhone`.
+- DynamoDB, MVP: `jobs` (pk `jobId`, TTL 90 d; answers, safety outcomes, usage), `sites` (pk `slug`; status, currentDraftId, drafts, ownerWhatsApp, tokenHash, createdAt), `ratelimit` (pk `ip`, TTL), `blocklist` (pk `slug`), `chat` (pk `slug`, sk `at`, TTL 90 d), `accounts` (pk `pk`, sk `sk`, TTL; "Mis sitios"), `domains` (pk `domain`; slug, status, expiresAt, price; kept when the site is deleted). `mail-suppression` (pk `emailId`; bounced or complaining addresses). Post-MVP: `messages`, `wa_*` (`PLAN-PHASE2.md`), GSI on `sites.ownerPhone`.
 - `CfnGuardrail` + `CfnGuardrailVersion` (Standard tier; filters, denied topics, word filters as above). ID/version passed to Lambdas via env.
-- Lambdas: `NodejsFunction`, Node 22, esbuild. MVP: `submit` (sync, 15 s), `generate` (async, 5 min, 1 GB, on-failure destination → `job-failed` handler), `status`, `uploads`, `owner` (`/me`), `chat` (async, 2 min, started by `owner`), `account` (`/account/*`), `report`, `domains` (`/me/domain*`, the registrar's API). SES email identity (`senderEmail` in domainless mode, `<domain>` with DKIM in domain mode, sender `no-reply@<domain>`). `submit` also serves `POST /jobs/{id}/answers`. Post-MVP: `contact`, `ses-events`, `digest`, `wa-*`.
+- Lambdas: `NodejsFunction`, Node 22, esbuild. MVP: `submit` (sync, 15 s), `generate` (async, 5 min, 1 GB, on-failure destination → `job-failed` handler), `status`, `uploads`, `owner` (`/me`), `chat` (async, 2 min, started by `owner`), `account` (`/account/*`), `report`, `domains` (`/me/domain*`, the registrar's API). SES email identity (`senderEmail` in domainless mode, `<domain>` with DKIM in domain mode, sender `no-reply@<domain>`). `submit` also serves `POST /jobs/{id}/answers`. `mail-events` (SES bounces and complaints, the reputation alarms). Post-MVP: `contact`, `digest`, `wa-*`.
 - HTTP API on `api.<domain>`: `POST /generate`, `GET /jobs/{id}`, `POST /jobs/{id}/publish`, `POST /uploads`, `/me/*`, `POST /report/{slug}`. CORS locked to `https://www.<domain>`. Throttling.
 - SNS topic `abuse-reports` with email subscription.
 - IAM: `bedrock:InvokeModel` scoped to the model/profile ARN with the `bedrock:GuardrailIdentifier` condition, plus the image model (us-west-2, `generate` only) without it, since its scene goes through `ApplyGuardrail` first; `bedrock:ApplyGuardrail` on the guardrail; `s3:PutObject`/`DeleteObject` on the sites bucket; DynamoDB RW on the MVP tables; `rekognition:DetectModerationLabels`.
@@ -433,8 +433,10 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [ ] 👤 Sandbox exit request approved
 - [ ] Owner email add/verify in "Mi sitio"
 - [ ] Email branch in the `contact` Lambda (built in product phase 2)
-- [ ] `ses-events` (bounce/complaint), suppression table, List-Unsubscribe + pause link
-- [ ] Digest mode + reputation kill switch + alarms
+- [x] `mail-events` (bounce/complaint) and the `mail-suppression` table, for the sign-in and ready emails (see "SES reputation protection"). Checked live: sends to the SES bounce and complaint simulators landed in the table
+- [ ] List-Unsubscribe + pause link
+- [x] Reputation kill switch + alarms
+- [ ] Digest mode
 
 ### Phase 8 — Custom domains
 - [ ] 👤 Porkbun account: prepaid credit, API access for all domains, WHOIS privacy on by default, API spend limit; API key (read, domains, purchase, dns) in Secrets Manager `coyote/porkbun-api` as `{apikey, secretapikey}`
@@ -473,12 +475,12 @@ Built in product phase 2 (Flow C). WhatsApp delivery first; SES email (phase 7) 
 ### SES reputation protection
 AWS reviews accounts at 5% bounces / 0.1% complaints and pauses them at 10% / 0.5%. Keep both near zero:
 - **Verified recipients only**: double opt-in. The verification email is the only unverified send. If it bounces → address marked `invalid`.
-- **Event handling**: SES `ConfigurationSet` → SNS → `ses-events` Lambda. Hard bounce → `sites.ownerEmailStatus = bounced`, sending stops until re-verified. Complaint → address added to `suppression` permanently. The SES account-level suppression list stays on as a backstop.
+- **Event handling** (built, `core/mail-events.ts`): the identity's default `ConfigurationSet` publishes bounces and complaints to SNS `MailEvents` → `mail-events` Lambda. A permanent bounce or a complaint puts the address's `emailId` in the `mail-suppression` table; every send (`aws/mail.ts`) checks it and skips the address. The SES account-level suppression list stays on as a backstop. With owner email verification (later), a hard bounce also sets `sites.ownerEmailStatus = bounced` until re-verified.
 - **Easy opt-out**: every email has `List-Unsubscribe` + `List-Unsubscribe-Post` headers and a signed one-click "Pausar notificaciones" link (`GET /notifications/{slug}/pause?token=`), so owners pause instead of marking spam.
 - **Identity**: `<domain>` with DKIM (sender `no-reply@<domain>`), custom MAIL FROM `mail.<domain>` (SPF-aligned), DMARC `p=quarantine`. A separate sending subdomain would isolate this mail's reputation from the brand domain; for now the sender is the brand domain itself. Customer sites are never public on our domain (only on their owners' domains), so their reputation never affects mail.
 - **Content hygiene**: fixed subject (`Nuevo mensaje desde tu sitio: {businessName}`), fixed template, visitor text quoted as plain text, URLs de-linked (`hxxp://`), no attachments, length caps. Visitor content never goes in the subject or From.
 - **Flood → digest**: more than 5 messages/hour for one slug switches to an hourly digest (EventBridge scheduled Lambda drains `messages` with `pendingDigest=true`). The 30/day per-slug cap still applies.
-- **Kill switch**: CloudWatch alarms on `Reputation.BounceRate` > 3% and `Reputation.ComplaintRate` > 0.05% (5-min period) → a Lambda sets SSM `/coyote/email/paused=true`. The `contact` Lambda checks the flag (cached 60 s) and stores messages without sending. SNS email to the admin.
+- **Kill switch** (built): CloudWatch alarms on the account's `Reputation.BounceRate` > 3% and `Reputation.ComplaintRate` > 0.05% (5-min period) → the `alerts` topic and the `mail-events` Lambda, which sets SSM `/coyote/email` to `off`. Every send checks the switch (cached 60 s) and sends nothing while it is off; `./coyote.sh email on` resumes. The `contact` Lambda will store messages without sending while it is off.
 - **Sandbox exit request** wording: transactional contact notifications, double opt-in recipients, automated bounce/complaint processing, expected volume.
 
 ## Post-MVP: Custom domains (phase 8)

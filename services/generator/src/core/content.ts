@@ -33,7 +33,9 @@ const assetPath = z.string().regex(/^assets\/[a-z0-9][a-z0-9._-]{0,80}$/);
 export const Media = z.object({
   logo: assetPath.optional(),
   /** The owner's uploaded photos. */
-  photos: z.array(assetPath).max(3),
+  photos: z.array(assetPath).max(6),
+  /** What the owner says each photo shows (Tus fotos), by file. */
+  captions: z.record(assetPath, z.string().trim().min(1).max(100)).optional(),
   /** Photos the page writer made (make_image) that the page uses. */
   generated: z.array(assetPath).max(8).optional(),
 });

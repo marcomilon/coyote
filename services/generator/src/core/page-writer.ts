@@ -55,7 +55,8 @@ const PAGE_DEADLINE_MS = 9 * 60 * 1000;
 /** A photo the page may use, sent to the model as an image so it designs around it. */
 export interface PagePhoto {
   file: string;
-  label: string;
+  /** What the owner says the photo shows (Tus fotos). */
+  caption?: string;
   bytes: Uint8Array;
   mediaType: 'image/jpeg' | 'image/png';
 }
@@ -193,9 +194,11 @@ export function pagePrompt({ answers, notes, photos, look, goal, current, instru
   ]
     .filter(Boolean)
     .join('\n');
-  const files = photos.map((p) => p.file);
+  const logo = photos.find((p) => p.file.startsWith('assets/logo'))?.file;
+  const files = photos.filter((p) => p.file !== logo).map((p) => (p.caption ? `${p.file} ("${p.caption}")` : p.file));
   const make = 'make photos with the make_image tool (describe each scene in English)';
   const photosLine =
+    (logo ? `The business's logo is at ${logo}. ` : '') +
     (files.length === 0
       ? `There are no photos of the business: where the page needs images, ${images ? `${make} instead of drawing them as SVG` : 'draw them as SVG'}. `
       : files.length === 1 ? `There is a photo of the business at ${files[0]}. ` : `There are photos of the business at ${files.join(', ')}. `) +
@@ -245,9 +248,12 @@ export function parsePage(text: string): string | undefined {
 
 /** The API request for a page. */
 export function pageParams(request: PageRequest, model: string, effort: PageEffort, skill: PageSkill | null = DEFAULT_PAGE_SKILL, images = false): Anthropic.MessageStreamParams {
-  // The photos go first, in the order the request names them, so the design can follow them.
+  // The photos go first, each after its file name (and what the owner says it shows), so the design can follow them.
   const content: Anthropic.ContentBlockParam[] = [
-    ...request.photos.map((p): Anthropic.ContentBlockParam => ({ type: 'image', source: { type: 'base64', media_type: p.mediaType, data: Buffer.from(p.bytes).toString('base64') } })),
+    ...request.photos.flatMap((p): Anthropic.ContentBlockParam[] => [
+      { type: 'text', text: p.caption ? `${p.file}, the owner says: "${p.caption}"` : p.file },
+      { type: 'image', source: { type: 'base64', media_type: p.mediaType, data: Buffer.from(p.bytes).toString('base64') } },
+    ]),
     { type: 'text', text: pagePrompt(request, skill?.name ?? null, images) },
   ];
   return {

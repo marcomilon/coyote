@@ -73,14 +73,27 @@ export async function ownerView(site: SiteRecord, { stores, urls }: Pick<OwnerDe
     lang: doc?.answers.lang,
     businessName: doc?.answers.businessName,
     contact: doc?.answers.contact,
+    // The logo and the owner's photos, from the current draft (Mi sitio → Fotos).
+    images: doc && site.currentDraftId ? siteImages(doc, urls.draftUrl(site.currentDraftId)) : undefined,
   };
 }
+
+const siteImages = ({ media }: SiteDoc, base: string) => ({
+  logo: media.logo && { file: media.logo, url: base + media.logo },
+  photos: media.photos.map((file) => ({ file, url: base + file, caption: media.captions?.[file] })),
+});
 
 const ContactInput = z.object(Object.fromEntries(Object.keys(Contact.shape).map((key) => [key, z.string().max(300).optional()])) as Record<ContactField, z.ZodOptional<z.ZodString>>).strict();
 const EditBody = z
   .object({
     instruction: z.string().trim().min(3).max(1000).optional(),
     contact: ContactInput.optional(),
+    /** Photos added in Mi sitio (POST /uploads), and the site's images to take out. */
+    uploadId: z.string().uuid().optional(),
+    removePhotos: z.array(z.string().max(100)).max(7).optional(),
+    /** New descriptions of the site's photos, by file ("" clears one); what the added photos show, in upload order. */
+    captions: z.record(z.string().max(100), z.string().trim().max(100)).optional(),
+    newCaptions: z.array(z.string().trim().max(100)).max(6).optional(),
     /** The chat reply whose "Rediseñar" button started this edit (its `at`). */
     from: z.number().int().positive().optional(),
   })
@@ -110,15 +123,23 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   if (!site.currentDraftId) return { status: 409 };
   const parsed = EditBody.safeParse(body ?? {});
   if (!parsed.success) return { status: 400, fields: [...new Set(parsed.error.issues.map((i) => i.path.join('.') || 'body'))] };
-  const { instruction, contact, from } = parsed.data;
-  if (!instruction && !contact) return { status: 400, fields: ['instruction'] };
+  const { instruction, contact, from, uploadId } = parsed.data;
+  const removePhotos = parsed.data.removePhotos?.length ? parsed.data.removePhotos : undefined;
+  const captions = parsed.data.captions && Object.keys(parsed.data.captions).length > 0 ? parsed.data.captions : undefined;
+  const newCaptions = uploadId && parsed.data.newCaptions?.some(Boolean) ? parsed.data.newCaptions : undefined;
+  // A redesign: a change request, or photos added, taken out, or described.
+  const redesign = Boolean(instruction || uploadId || removePhotos || captions);
+  if (!redesign && !contact) return { status: 400, fields: ['instruction'] };
 
   const now = deps.now();
   // One redesign at a time: a second one would start from the page the first is about to replace.
-  if (instruction && (await runningEdit(site, stores, now))) return { status: 409, error: 'busy' };
-  if (instruction && !(await stores.hitRateLimit(`edits#${site.slug}#${day(now)}`, EDITS_PER_DAY, inTwoDays(now)))) return { status: 429 };
+  if (redesign && (await runningEdit(site, stores, now))) return { status: 409, error: 'busy' };
+  if (redesign && !(await stores.hitRateLimit(`edits#${site.slug}#${day(now)}`, EDITS_PER_DAY, inTwoDays(now)))) return { status: 429 };
 
   let current = await loadDraft(site.slug, site.currentDraftId, stores);
+  const images = [current.media.logo, ...current.media.photos];
+  if (removePhotos?.some((file) => !images.includes(file))) return { status: 400, fields: ['removePhotos'] };
+  if (captions && Object.keys(captions).some((file) => !current.media.photos.includes(file))) return { status: 400, fields: ['captions'] };
 
   let missing: string[] = [];
   if (contact) {
@@ -130,7 +151,7 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
     missing = changed.missing;
   }
 
-  if (!instruction) return { status: 200, missing };
+  if (!redesign) return { status: 200, missing };
 
   const source = site.jobId ? await stores.getJob(site.jobId) : undefined;
   const jobId = deps.newId();
@@ -144,7 +165,11 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
     ttl: Math.floor(now / 1000) + JOB_TTL_SECONDS,
     ipHash: source?.ipHash ?? 'owner',
     answers: current.answers,
-    instruction,
+    ...(instruction && { instruction }),
+    ...(uploadId && { uploadId }),
+    ...(removePhotos && { removePhotos }),
+    ...(captions && { captions }),
+    ...(newCaptions && { newCaptions }),
     slug: site.slug,
     usage: [],
     chatAt: await noteRedesign(stores, site.slug, jobId, voiceOf(current.answers), now),

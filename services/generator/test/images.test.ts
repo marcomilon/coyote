@@ -108,7 +108,7 @@ describe('the page writer with make_image', () => {
     expect(pagePrompt(request, null, true)).toContain('make photos with the make_image tool (describe each scene in English) instead of drawing them as SVG');
     expect(pagePrompt(request, null)).not.toContain('make_image');
     expect(pagePrompt(request, null)).toContain('draw them as SVG');
-    const photos = [{ file: 'assets/photo-1.jpg', label: '', bytes: new Uint8Array(), mediaType: 'image/jpeg' as const }];
+    const photos = [{ file: 'assets/photo-1.jpg', bytes: new Uint8Array(), mediaType: 'image/jpeg' as const }];
     expect(pagePrompt({ ...request, photos }, null, true)).toContain('Where the page needs more images, make photos with the make_image tool');
   });
 

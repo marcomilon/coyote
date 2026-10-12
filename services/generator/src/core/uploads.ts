@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Media } from './content';
 import type { Stores } from './jobs';
@@ -5,7 +6,7 @@ import { hashIp } from './ratelimit';
 
 /** The browser resizes before uploading (logo ≤ 512 px PNG, photos ≤ 1600 px JPEG), so files are small. */
 export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
-export const MAX_PHOTOS = 3;
+export const MAX_PHOTOS = 6;
 const UPLOADS_PER_IP_PER_DAY = 20;
 
 const FILES = {
@@ -59,15 +60,24 @@ export interface ProcessDeps {
   stores: Stores;
   /** Resolves to the moderation labels that make an image unacceptable (empty = fine). Throws if it is not an image. */
   moderate(key: string): Promise<string[]>;
+  /** The suffix that makes each kept file's name unique (tests pass a fixed one). */
+  newFileId?: () => string;
 }
 
 export type ProcessResult = { ok: true; media: Media } | { ok: false; reason: string };
 
-/** Moderates every uploaded file, then copies the clean ones next to the page. Anything flagged rejects the job. */
-export async function processUploads(uploadId: string, targetPrefix: string, { stores, moderate }: ProcessDeps): Promise<ProcessResult> {
+/**
+ * Moderates every uploaded file, then copies the clean ones next to the page under new names (`logo-<id>.png`,
+ * `photo-<id>.jpg`), so photos added later never overwrite ones a page uses. Anything flagged rejects the job.
+ * `notes[i]` is what the owner says upload photo-(i+1) shows; it becomes that photo's caption.
+ */
+export async function processUploads(uploadId: string, targetPrefix: string, { stores, moderate, newFileId }: ProcessDeps, notes: string[] = []): Promise<ProcessResult> {
   const prefix = `_uploads/${uploadId}/`;
   const expected = new Map<string, string>([[FILES.logo.key, FILES.logo.contentType], ...Array.from({ length: MAX_PHOTOS }, (_, i) => [FILES.photo.key(i + 1), FILES.photo.contentType] as [string, string])]);
-  const names = (await stores.listKeys(prefix)).map((key) => key.slice(prefix.length)).filter((name) => expected.has(name)).sort();
+  const names = (await stores.listKeys(prefix))
+    .map((key) => key.slice(prefix.length))
+    .filter((name) => expected.has(name))
+    .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
 
   for (const name of names) {
     let labels: string[];
@@ -81,9 +91,28 @@ export async function processUploads(uploadId: string, targetPrefix: string, { s
 
   const media: Media = { photos: [] };
   for (const name of names) {
-    await stores.copyObject(prefix + name, `${targetPrefix}assets/${name}`, expected.get(name)!);
-    if (name === FILES.logo.key) media.logo = `assets/${name}`;
-    else media.photos.push(`assets/${name}`);
+    const [base, ext] = name.split('.') as [string, string];
+    const file = `assets/${base.replace(/-\d+$/, '')}-${(newFileId ?? (() => randomUUID().slice(0, 8)))()}.${ext}`;
+    await stores.copyObject(prefix + name, `${targetPrefix}${file}`, expected.get(name)!);
+    if (name === FILES.logo.key) media.logo = file;
+    else {
+      media.photos.push(file);
+      const note = notes[Number(/\d+/.exec(name)![0]) - 1]?.trim();
+      if (note) media.captions = { ...media.captions, [file]: note.slice(0, 100) };
+    }
   }
   return { ok: true, media };
+}
+
+/**
+ * The site's images after a photo change in Mi sitio: a new logo replaces the old one, new photos go last, and
+ * `captions` changes the descriptions of the photos that stay ("" clears one).
+ */
+export function mergeMedia(current: Media, added: Media, remove: string[] = [], captions: Record<string, string> = {}): Media {
+  const logo = added.logo ?? (current.logo && !remove.includes(current.logo) ? current.logo : undefined);
+  const photos = [...current.photos.filter((p) => !remove.includes(p)), ...added.photos].slice(-MAX_PHOTOS);
+  const all: Record<string, string> = { ...current.captions, ...captions, ...added.captions };
+  const kept = Object.fromEntries(photos.flatMap((file) => (all[file]?.trim() ? [[file, all[file]!.trim().slice(0, 100)]] : [])));
+  const { logo: _old, captions: _captions, ...rest } = current;
+  return { ...rest, ...(logo && { logo }), photos, ...(Object.keys(kept).length > 0 && { captions: kept }) };
 }

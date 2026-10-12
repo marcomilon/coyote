@@ -18,6 +18,8 @@ export const Answers = z.object({
   /** The form's "Fotos creadas con IA" toggle: the page writer may make photos. Missing: no. */
   aiImages: z.boolean().optional(),
   goal: Goal.optional(),
+  /** The form's photo descriptions: entry i is upload photo-(i+1). Empty entries are "". Kept with the site's images (Media.captions). */
+  photoNotes: z.array(z.string().trim().max(100)).max(6).optional(),
 });
 export type Answers = z.infer<typeof Answers>;
 
@@ -32,6 +34,7 @@ export interface RawAnswers {
   lang?: string;
   aiImages?: boolean;
   goal?: string;
+  photoNotes?: string[];
 }
 
 const handle = (value: string | undefined, host: string): string | undefined => {
@@ -76,6 +79,7 @@ export function normalizeAnswers(raw: RawAnswers): Answers {
     lang: raw.lang ?? 'es',
     ...(raw.aiImages !== undefined && { aiImages: raw.aiImages === true }),
     ...(raw.goal && { goal: raw.goal }),
+    ...(raw.photoNotes?.some((note) => note.trim()) && { photoNotes: raw.photoNotes }),
     contact: {
       whatsapp: cleanContact('whatsapp', raw.whatsapp) ?? '',
       email: cleanContact('email', raw.email),

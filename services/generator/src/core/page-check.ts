@@ -127,9 +127,11 @@ export interface PageCheckOptions {
   homeUrl: string;
   reportUrl: string;
   privacyUrl: string;
+  /** The site's image files (`assets/…`). Set: an image of the page's own that is not one of them is removed. */
+  assets?: string[];
 }
 
-export function checkPage(page: string, { contact, ownerText = '', businessName, lang, homeUrl, reportUrl, privacyUrl }: PageCheckOptions): PageCheckResult {
+export function checkPage(page: string, { contact, ownerText = '', businessName, lang, homeUrl, reportUrl, privacyUrl, assets }: PageCheckOptions): PageCheckResult {
   const known = knownDetails(contact, ownerText);
   const violations: Violation[] = [];
   const repairs: string[] = [];
@@ -220,6 +222,13 @@ export function checkPage(page: string, { contact, ownerText = '', businessName,
         if (outside) {
           doomed.push(el);
           repairs.push(`removed an outside image`);
+          return;
+        }
+        // A photo the owner took out, or a file name the writer made up: it would show as a broken image.
+        const missing = assets && value.split(',').map((part) => part.trim().split(/\s+/)[0]!.replace(/^\.\//, '')).find((url) => url.startsWith('assets/') && !assets.includes(url));
+        if (missing) {
+          doomed.push(el);
+          repairs.push(`removed an image that is not the site's (${missing.slice(0, 60)})`);
           return;
         }
       }

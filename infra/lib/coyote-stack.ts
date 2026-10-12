@@ -353,16 +353,23 @@ export class CoyoteStack extends Stack {
 
     const webDist = props.webDist ?? asset('../../web/dist');
     if (!existsSync(webDist)) throw new Error(`${webDist} does not exist. Build the frontend first: npm run build -w web`);
-    new s3deploy.BucketDeployment(this, 'AppDeployment', {
-      sources: [
-        // config.js is excluded: a local one (written for `astro dev`) must never reach the bucket.
-        s3deploy.Source.asset(webDist, { exclude: ['config.js'] }),
-        s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl, examples: exampleUrls })};\n`),
-      ],
+    const appDeployment = new s3deploy.BucketDeployment(this, 'AppDeployment', {
+      // config.js is excluded (and so never pruned): a local one (written for `astro dev`) must never reach the bucket.
+      sources: [s3deploy.Source.asset(webDist, { exclude: ['config.js'] })],
+      exclude: ['config.js'],
       destinationBucket: this.appBucket,
       distribution: appDistribution,
       distributionPaths: ['/*'],
     });
+    // config.js on its own, with no-cache: browsers would otherwise keep an old one (no new example links, an old API URL).
+    new s3deploy.BucketDeployment(this, 'AppConfigDeployment', {
+      sources: [s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl, examples: exampleUrls })};\n`)],
+      destinationBucket: this.appBucket,
+      prune: false,
+      cacheControl: [s3deploy.CacheControl.noCache()],
+      distribution: appDistribution,
+      distributionPaths: ['/config.js'],
+    }).node.addDependency(appDeployment);
 
     // ---------------------------------------------------------------------------------------
     // Safety

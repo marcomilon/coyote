@@ -1,13 +1,14 @@
 // "Mi sitio": the owner's page. The magic-link token arrives in the URL hash (owner-token.ts keeps it and takes it
 // out of the address) and is sent as a Bearer token.
-// Three tabs: the current draft; the chat that changes it (texts, contact details, undo, a redesign), with the
-// QR that opens the same chat on the owner's phone; and the owner's own domain (domain.ts). The preview follows
-// every change live. And delete.
+// Four tabs: the current draft; the chat that changes it (texts, contact details, undo, a redesign), with the
+// QR that opens the same chat on the owner's phone; the owner's logo and photos; and the owner's own domain
+// (domain.ts). The preview follows every change live. And delete.
 import { loadAccount } from './account';
 import { api as apiCall, apiUrl } from './jobs';
 import { startChat, type ChatStrings } from './chat-thread';
 import { startDomainTab, type DomainStrings } from './domain';
 import { qrCode } from './live-preview';
+import { captionField, captionsOf, showThumbs, UploadLimitError, uploadImages } from './upload';
 import { forgetOwnerTokens, ownerHash, ownerToken, tokenHash } from './owner-token';
 
 interface View {
@@ -16,6 +17,12 @@ interface View {
   draftUrl?: string;
   previewUrl?: string;
   businessName?: string;
+  images?: { logo?: SiteImage; photos: SiteImage[] };
+}
+interface SiteImage {
+  file: string;
+  url: string;
+  caption?: string;
 }
 type Message = { title: string; text: string };
 interface Strings {
@@ -31,7 +38,21 @@ interface Strings {
   qr: { title: string; updated: string };
   chat: ChatStrings;
   domain: DomainStrings;
+  photos: PhotoStrings;
   lang: string;
+}
+interface PhotoStrings {
+  caption: { label: string; placeholder: string };
+  remove: string;
+  keep: string;
+  saving: string;
+  save: string;
+  started: string;
+  busy: string;
+  tooMany: string;
+  notImage: string;
+  failed: string;
+  limited: string;
 }
 
 const root = document.getElementById('mysite') as HTMLElement;
@@ -73,6 +94,7 @@ function fill(view: View) {
   $<HTMLAnchorElement>('[data-draft-link]').href = `${strings.previewPath}${ownerHash()}`;
   showChatHandoff();
   showLater(view.slug);
+  showPhotos(view.images);
   $<HTMLButtonElement>('[data-delete]').onclick = async () => {
     if (window.prompt(`${strings.deleteConfirm} ${view.slug}`) !== view.slug) return;
     const { status } = await api('/me', 'DELETE');
@@ -115,11 +137,133 @@ function startSiteChat() {
       if (first) return;
       $<HTMLIFrameElement>('.device iframe').src = current;
       notice(strings.qr.updated);
+      // A redesign may have changed the photos.
+      void api<View>('/me').then(({ status, body }) => status === 200 && showPhotos(body.images));
     },
     // Mi sitio checks the token itself (GET /me) and shows its own message.
     onNote() {},
   });
 }
+
+// Tus fotos: the current logo and photos, each with a button to take it out and (photos) what it shows; new files
+// are picked below them.
+const MAX_PHOTOS = 6; // as in services/generator/src/core/uploads.ts
+const photosForm = $<HTMLFormElement>('[data-photos-form]');
+const logoInput = photosForm.elements.namedItem('logo') as HTMLInputElement;
+const photosInput = photosForm.elements.namedItem('photos') as HTMLInputElement;
+const removed = new Set<string>();
+/** Descriptions the owner changed, by file. */
+const described = new Map<string, string>();
+let images: View['images'];
+
+function photoError(text: string) {
+  $('[data-photos-error]').textContent = text;
+}
+
+function showPhotos(next: View['images']) {
+  images = next;
+  removed.clear();
+  described.clear();
+  const item = (image: SiteImage, withCaption: boolean) => {
+    const li = document.createElement('li');
+    const img = document.createElement('img');
+    img.src = image.url;
+    img.alt = '';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.textContent = strings.photos.remove;
+    toggle.setAttribute('aria-pressed', 'false');
+    toggle.onclick = () => {
+      const out = !removed.delete(image.file);
+      if (out) removed.add(image.file);
+      li.toggleAttribute('data-removed', out);
+      toggle.textContent = out ? strings.photos.keep : strings.photos.remove;
+      toggle.setAttribute('aria-pressed', String(out));
+      photosChanged();
+    };
+    const frame = document.createElement('div');
+    frame.className = 'thumb';
+    frame.append(img, toggle);
+    li.append(frame);
+    if (withCaption) {
+      li.append(
+        captionField(strings.photos.caption, image.caption ?? '', (value) => {
+          if (value.trim() === (image.caption ?? '')) described.delete(image.file);
+          else described.set(image.file, value.trim());
+          photosChanged();
+        }),
+      );
+    }
+    return li;
+  };
+  $('[data-current="logo"]').replaceChildren(...(next?.logo ? [item(next.logo, false)] : []));
+  $('[data-current="photos"]').replaceChildren(...(next?.photos ?? []).map((photo) => item(photo, true)));
+  $<HTMLElement>('[data-no-photos]').hidden = (next?.photos.length ?? 0) > 0;
+  const label = $<HTMLElement>('[data-logo-label]');
+  label.textContent = next?.logo ? label.dataset.change! : label.dataset.add!;
+  photosChanged();
+}
+
+/** The photos the page would have after saving, and whether there is anything to save. */
+function photosChanged() {
+  const kept = (images?.photos ?? []).filter((photo) => !removed.has(photo.file)).length;
+  const added = photosInput.files?.length ?? 0;
+  photoError(kept + added > MAX_PHOTOS ? strings.photos.tooMany : '');
+  $<HTMLButtonElement>('[data-photos-save]').disabled = kept + added > MAX_PHOTOS || (removed.size === 0 && described.size === 0 && added === 0 && !logoInput.files?.length);
+}
+
+const thumbStrings = (name: string) => ({ remove: strings.photos.remove, ...(name === 'photos' && { caption: strings.photos.caption }) });
+
+for (const input of [logoInput, photosInput]) {
+  const name = input.name;
+  input.addEventListener('change', () => {
+    const files = [...(input.files ?? [])];
+    const kept = files.filter((file) => file.type.startsWith('image/')).slice(0, name === 'logo' ? 1 : MAX_PHOTOS);
+    if (kept.length < files.length) {
+      const transfer = new DataTransfer();
+      kept.forEach((file) => transfer.items.add(file));
+      input.files = transfer.files;
+    }
+    showThumbs(input, $(`[data-thumbs="${name}"]`), thumbStrings(name), photosChanged);
+    photosChanged();
+    if (files.some((file) => !file.type.startsWith('image/'))) photoError(strings.photos.notImage);
+  });
+}
+
+photosForm.onsubmit = async (event) => {
+  event.preventDefault();
+  const save = $<HTMLButtonElement>('[data-photos-save]');
+  const logo = logoInput.files?.[0];
+  const photos = [...(photosInput.files ?? [])];
+  save.disabled = true;
+  save.textContent = strings.photos.saving;
+  photoError('');
+  try {
+    const uploadId = logo || photos.length > 0 ? await uploadImages(apiUrl, logo, photos) : undefined;
+    const newCaptions = captionsOf(photosInput);
+    const captions = Object.fromEntries([...described].filter(([file]) => !removed.has(file)));
+    const { status } = await api('/me/edit', 'POST', {
+      ...(uploadId && { uploadId }),
+      ...(uploadId && newCaptions.some(Boolean) && { newCaptions }),
+      ...(removed.size > 0 && { removePhotos: [...removed] }),
+      ...(Object.keys(captions).length > 0 && { captions }),
+    });
+    if (status === 202) {
+      for (const input of [logoInput, photosInput]) {
+        input.value = '';
+        showThumbs(input, $(`[data-thumbs="${input.name}"]`), thumbStrings(input.name));
+      }
+      showPhotos(images);
+      notice(strings.photos.started);
+      showTab('preview');
+    } else photoError(status === 409 ? strings.photos.busy : status === 429 ? strings.photos.limited : strings.photos.failed);
+  } catch (error) {
+    photoError(error instanceof UploadLimitError ? strings.photos.limited : strings.photos.failed);
+  } finally {
+    save.textContent = strings.photos.save;
+    photosChanged();
+  }
+};
 
 async function load() {
   if (!token || !apiUrl) return showMessage(strings.noToken, !!apiUrl);

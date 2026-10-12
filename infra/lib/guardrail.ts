@@ -86,8 +86,9 @@ export class CoyoteGuardrail extends Construct {
         topicsTierConfig: { tierName: 'STANDARD' },
         topicsConfig: DENIED_TOPICS.map((topic) => ({ ...topic, type: 'DENY' })),
       },
+      // No managed PROFANITY list: it matches single words with no context and blocked "ají de gallina".
+      // Insults are caught in context by the INSULTS and HATE filters, the pre-screen and policy.ts.
       wordPolicyConfig: {
-        managedWordListsConfig: [{ type: 'PROFANITY' }],
         wordsConfig: SCAM_WORDS.map((text) => ({ text })),
       },
     };

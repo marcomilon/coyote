@@ -31,8 +31,8 @@ export const SiteDoc = z.object({
 export type SiteDoc = z.infer<typeof SiteDoc>;
 
 /** Everything the owner wrote besides the contact answers: its phone numbers and emails may appear on the page. */
-export const ownerText = ({ answers, notes, requests }: Pick<SiteDoc, 'answers' | 'notes' | 'requests'>) =>
-  [answers.about, ...notes.map((n) => n.answer), ...(requests ?? [])].join('\n');
+export const ownerText = ({ answers, notes, requests, media }: Pick<SiteDoc, 'answers' | 'notes' | 'requests'> & { media?: Pick<Media, 'captions'> }) =>
+  [answers.about, ...notes.map((n) => n.answer), ...(requests ?? []), ...(answers.photoNotes ?? []), ...Object.values(media?.captions ?? {})].join('\n');
 
 /** Versions kept per site ("Deshacer" goes back through them). */
 export const MAX_DRAFTS = 5;
@@ -76,7 +76,8 @@ export async function refreshPreview(slug: string, draftId: string, deps: Pick<D
 /** Finishes the written page (checks, repairs, footer). A violation here is our bug. */
 export function renderDraft(doc: SiteDoc, slug: string, urls: Urls): string {
   const { contact, businessName, lang } = doc.answers;
-  const checked = checkPage(doc.page, { contact, ownerText: ownerText(doc), businessName, lang, ...urls.pageLinks(slug, lang) });
+  const assets = [doc.media.logo, ...doc.media.photos, ...(doc.media.generated ?? [])].filter((file): file is string => !!file);
+  const checked = checkPage(doc.page, { contact, ownerText: ownerText(doc), businessName, lang, ...urls.pageLinks(slug, lang), assets });
   if (checked.violations.length > 0) throw new Error(`written page breaks the page checks: ${JSON.stringify(checked.violations)}`);
   return checked.html;
 }

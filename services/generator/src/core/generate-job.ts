@@ -13,7 +13,7 @@ import { isRejected, prescreen } from './prescreen';
 import { planSite } from './site-writer';
 import { readyEmail, type SendEmail } from './mail';
 import { issueToken, TOKEN_TTL_SECONDS } from './token';
-import { processUploads } from './uploads';
+import { mergeMedia, processUploads } from './uploads';
 import type { Urls } from './urls';
 import { announceNewSite, announceRejection, type Announce, type PageWriterStatus } from './notices';
 
@@ -29,6 +29,8 @@ export interface GenerateJobDeps {
   outputAllowed(text: string): Promise<boolean>;
   /** Image moderation. Resolves to the labels that make an image unacceptable. */
   moderate(key: string): Promise<string[]>;
+  /** Names uploaded files (uploads.ts); tests pass a fixed one. */
+  newFileId?: () => string;
   /** The words legible in a made photo (images.ts). Unset: not checked. */
   readText?(key: string): Promise<string[]>;
   now(): number;
@@ -69,21 +71,36 @@ async function loadImages(slug: string, media: Media, stores: Stores): Promise<I
     const bytes = await stores.getBytes(`${mediaPrefix(slug)}${path}`);
     if (bytes) images.push({ label, format: path.endsWith('.png') ? 'png' : 'jpeg', bytes });
   };
-  await add(media.logo, 'The logo ({{logo}}):');
-  for (const [i, photo] of media.photos.entries()) await add(photo, `Photo ${i + 1} ({{photo:${i + 1}}}):`);
+  await add(media.logo, 'The logo:');
+  for (const [i, photo] of media.photos.entries()) await add(photo, `Photo ${i + 1}${media.captions?.[photo] ? ` (the owner says it shows: ${media.captions[photo]})` : ''}:`);
   return images;
 }
 
 async function pagePhotos(slug: string, media: Media, stores: Stores): Promise<PagePhoto[]> {
   const photos: PagePhoto[] = [];
-  const add = async (file: string | undefined, label: string) => {
+  const add = async (file: string | undefined, caption?: string) => {
     if (!file) return;
     const bytes = await stores.getBytes(`${mediaPrefix(slug)}${file}`);
-    if (bytes) photos.push({ file, label, bytes, mediaType: file.endsWith('.png') ? 'image/png' : 'image/jpeg' });
+    if (bytes) photos.push({ file, ...(caption && { caption }), bytes, mediaType: file.endsWith('.png') ? 'image/png' : 'image/jpeg' });
   };
-  await add(media.logo, 'the logo');
-  for (const [i, photo] of media.photos.entries()) await add(photo, i === 0 ? 'main photo' : `photo ${i + 1}`);
+  await add(media.logo);
+  for (const photo of media.photos) await add(photo, media.captions?.[photo]);
   return photos;
+}
+
+/** The page writer's request for photos the owner added or took out in Mi sitio. */
+export function photoInstruction({ added, removed, described = [] }: { added: string[]; removed: string[]; described?: string[] }, media: Media): string {
+  const logo = added.find((file) => file === media.logo);
+  const photos = added.filter((file) => file !== logo);
+  const said = (file: string) => (media.captions?.[file] ? ` ("${media.captions[file]}")` : '');
+  return [
+    logo && `Use the owner's new logo (${logo}) in place of the current one.`,
+    photos.length > 0 && `The owner added ${photos.length === 1 ? `a photo of the business: ${photos[0]}${said(photos[0]!)}.` : `photos of the business: ${photos.map((file) => file + said(file)).join(', ')}.`} Use ${photos.length === 1 ? 'it' : 'them'} where ${photos.length === 1 ? 'it fits' : 'they fit'} best, in place of made photos or drawings where that suits the page.`,
+    described.length > 0 && `The owner described ${described.map((file) => (media.captions?.[file] ? `${file} as "${media.captions[file]}"` : `${file} as nothing in particular`)).join(', ')}: place ${described.length === 1 ? 'it' : 'them'} to match.`,
+    removed.length > 0 && `The owner took out ${removed.join(', ')}: remove ${removed.length === 1 ? 'it' : 'them'} from the page.`,
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 const LOWER: Record<PageEffort, PageEffort> = { max: 'xhigh', xhigh: 'high', high: 'medium', medium: 'low', low: 'low' };
@@ -114,7 +131,7 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
   usage.push(reply.usage);
   const page = parsePage(reply.text);
   if (!page) return { problem: 'failed', detail: `no HTML page in the reply (stop: ${reply.stopReason})` };
-  const checked = checkPage(page, { contact: answers.contact, ownerText: ownerText({ answers, notes: request.notes, requests }), businessName: answers.businessName, lang: answers.lang, ...deps.urls.pageLinks(slug, answers.lang) });
+  const checked = checkPage(page, { contact: answers.contact, ownerText: ownerText({ answers, notes: request.notes, requests, media: { captions: Object.fromEntries(request.photos.flatMap((p) => (p.caption ? [[p.file, p.caption]] : []))) } }), businessName: answers.businessName, lang: answers.lang, ...deps.urls.pageLinks(slug, answers.lang) });
   if (checked.violations.length > 0) return { problem: 'policy', detail: JSON.stringify(checked.violations).slice(0, 300), violations: checked.violations };
   if (!(await deps.outputAllowed(checked.texts.join('\n')))) return { problem: 'guardrail', detail: 'page text' };
   if (checked.repairs.length > 0) console.info('page repaired', { slug, repairs: checked.repairs });
@@ -148,12 +165,16 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     let media: Media = job.media ?? { photos: [] };
     let current: SiteDoc | undefined;
 
+    let photoChange = job.photoChange;
     if (kind === 'edit') {
-      if (!site.currentDraftId || !job.instruction) throw new Error(`edit job ${jobId} has no draft or no request`);
+      const photosChanged = Boolean(job.uploadId || job.removePhotos?.length || job.captions);
+      if (!site.currentDraftId || !(job.instruction || photoChange || photosChanged)) throw new Error(`edit job ${jobId} has no draft or no request`);
       current = await loadDraft(slug, site.currentDraftId, stores);
-      media = current.media;
-      if (stage === 'clarify') {
-        const screening = await prescreen(job.answers, { callTool: deps.callTool, modelId: deps.prescreenModelId }, job.instruction);
+      media = job.media ?? current.media;
+      // The owner's words: the request and the photo descriptions.
+      const screened = [job.instruction, ...Object.values(job.captions ?? {}), ...(job.newCaptions ?? [])].filter(Boolean).join('\n');
+      if (stage === 'clarify' && screened) {
+        const screening = await prescreen(job.answers, { callTool: deps.callTool, modelId: deps.prescreenModelId }, screened);
         usage.push(screening.usage);
         if (isRejected(screening)) {
           await finish({ status: 'REJECTED', rejectedBy: 'prescreen', rejectDetail: screening.category });
@@ -161,9 +182,24 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
           return { outcome: 'REJECTED', ...tokens() };
         }
       }
+      if (stage === 'clarify' && photosChanged) {
+        // Photos added, taken out, or described in Mi sitio: moderated like a new site's, and the site keeps its last version if refused.
+        const none: Media = { photos: [] };
+        const processed = job.uploadId ? await processUploads(job.uploadId, mediaPrefix(slug), deps, job.newCaptions) : { ok: true as const, media: none };
+        if (!processed.ok) {
+          await finish({ status: 'REJECTED', rejectedBy: 'image', rejectDetail: processed.reason.slice(0, 300) });
+          await announceRejection(deps.announce, job, 'image', processed.reason.slice(0, 300));
+          return { outcome: 'REJECTED', ...tokens() };
+        }
+        const removed = (job.removePhotos ?? []).filter((file) => file === current!.media.logo || current!.media.photos.includes(file));
+        media = mergeMedia(current.media, processed.media, removed, job.captions);
+        const described = Object.keys(job.captions ?? {}).filter((file) => media.photos.includes(file));
+        photoChange = { added: [processed.media.logo, ...processed.media.photos].filter((f): f is string => !!f), removed, ...(described.length > 0 && { described }) };
+        await stores.updateJob(jobId, { media, photoChange });
+      }
     } else if (stage === 'clarify' && job.uploadId) {
       // Images first: moderation costs a tenth of a cent, a page costs about 40.
-      const processed = await processUploads(job.uploadId, mediaPrefix(slug), deps);
+      const processed = await processUploads(job.uploadId, mediaPrefix(slug), deps, job.answers.photoNotes);
       if (!processed.ok) {
         await releaseNewSite(job, deps);
         await finish({ status: 'REJECTED', rejectedBy: 'image', rejectDetail: processed.reason.slice(0, 300) });
@@ -172,10 +208,13 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       }
       media = processed.media;
     }
+    // What the page writer is asked to change: the owner's words, then the photo change.
+    const instruction = [job.instruction, photoChange && photoInstruction(photoChange, media)].filter(Boolean).join(' ') || undefined;
 
     const notes = [...(current?.notes ?? []), ...(job.notes ?? [])];
-    if (stage === 'clarify') {
-      const plan = await planSite({ answers: job.answers, notes, images: await loadImages(slug, media, stores), photos: media.photos.length, instruction: job.instruction }, deps);
+    // A photo change alone needs no questions.
+    if (stage === 'clarify' && (kind === 'create' || job.instruction)) {
+      const plan = await planSite({ answers: job.answers, notes, images: await loadImages(slug, media, stores), photos: media.photos.length, instruction }, deps);
       usage.push(...plan.usage);
       if (plan.questions.length > 0) {
         await finish({ status: 'NEEDS_INPUT', questions: plan.questions, media });
@@ -189,7 +228,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     const photos = await pagePhotos(slug, media, stores);
     const goal = job.answers.goal && { goal: job.answers.goal };
     const request = current
-      ? { answers: job.answers, notes, photos, ...goal, current: current.page, instruction: job.instruction }
+      ? { answers: job.answers, notes, photos, ...goal, current: current.page, instruction }
       : { answers: job.answers, notes, photos, ...goal, ...(deps.pageLook !== false && { look: pickLook(deps.random) }) };
     const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
     const written = await writeCheckedPage(request, requests, slug, deps, usage);
@@ -202,7 +241,9 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     const generated = [...new Set([...(media.generated ?? []), ...written.made])].filter((file) => written.page.includes(file)).slice(-8);
     const { generated: _earlier, ...files } = media;
     media = generated.length > 0 ? { ...files, generated } : files;
-    const doc: SiteDoc = current ? { ...current, notes, media, page: written.page, requests } : { answers: job.answers, notes, media, page: written.page };
+    // The form's photo descriptions live on as media.captions, which Tus fotos keeps up to date.
+    const { photoNotes: _notes, ...answers } = job.answers;
+    const doc: SiteDoc = current ? { ...current, notes, media, page: written.page, requests } : { answers, notes, media, page: written.page };
 
     const draftId = await saveDraft(site, doc, deps);
     site = (await stores.getSite(slug)) ?? site;

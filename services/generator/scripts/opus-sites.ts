@@ -12,13 +12,16 @@
  * only when GUARDRAIL_ID/GUARDRAIL_VERSION are set); such a page is pages/<biz>/<slug>/index.html with its assets/.
  * --tones all|<tone>,<tone>: instead of the random look, one page per tone, each offered alone (light, no ticker).
  * --goal on: the request says the business's goal (`goal` in examples/<id>.json: whatsapp, call, visit, book).
+ * The owner's photos: `photos` in examples/<id>.json, `{ "logo": "<path>", "photos": [{ "file": "<path>", "caption": "…" }] }`
+ * (paths from the repo root, PNG or JPEG). They go to the page writer as production sends them, and the page is
+ * pages/<biz>/<slug>/index.html with its assets/ (logo.png, photo-N.<ext>).
  * Every page of a business in one run (same repeat number) gets the same look nudge, so only the axes differ.
  * --out an earlier run adds to it: its other results stay in the gallery (same businesses).
  * Real API calls: about $0.50 a page on Opus. The key is ANTHROPIC_API_KEY or the secret (profile coyote).
  */
 import { DetectModerationLabelsCommand, DetectTextCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -28,7 +31,7 @@ import { ownerText } from '../src/core/drafts';
 import { imageMaker, legibleWords } from '../src/core/images';
 import { IMAGE_PRICE, imageModelId, usageCost } from '../src/core/models';
 import { checkPage } from '../src/core/page-check';
-import { anthropicWritePage, DEFAULT_PAGE_SKILL, NO_SKILL, pageModel, pagePrompt, parsePage, pickLook, skillText, TONES, type Look, type PageEffort, type PageSkill } from '../src/core/page-writer';
+import { anthropicWritePage, DEFAULT_PAGE_SKILL, NO_SKILL, pageModel, pagePrompt, parsePage, pickLook, skillText, TONES, type Look, type PageEffort, type PagePhoto, type PageSkill } from '../src/core/page-writer';
 import type { Note } from '../src/core/questions';
 import { BUSINESSES } from './bakeoff-businesses';
 
@@ -57,20 +60,40 @@ interface Business {
   answers: Answers;
   notes: Note[];
   goal?: PageGoal;
+  /** The owner's photos, with the repo file each one comes from. */
+  photos: (PagePhoto & { source: string })[];
+}
+
+interface ExamplePhotos {
+  logo?: string;
+  photos?: { file: string; caption?: string }[];
+}
+
+function examplePhotos({ logo, photos = [] }: ExamplePhotos): Business['photos'] {
+  const photo = (source: string, file: string, caption?: string) => {
+    const path = resolve(repo, source);
+    if (!existsSync(path)) throw new Error(`no such photo: ${source}`);
+    const mediaType = /\.png$/i.test(source) ? ('image/png' as const) : ('image/jpeg' as const);
+    return { file, ...(caption && { caption }), bytes: readFileSync(path), mediaType, source: path };
+  };
+  return [
+    ...(logo ? [photo(logo, `assets/logo.${/\.png$/i.test(logo) ? 'png' : 'jpg'}`)] : []),
+    ...photos.map((p, i) => photo(p.file, `assets/photo-${i + 1}.${/\.png$/i.test(p.file) ? 'png' : 'jpg'}`, p.caption)),
+  ];
 }
 
 function business(id: string): Business {
   const file = resolve(repo, 'examples', `${id}.json`);
   if (existsSync(file)) {
-    const { form, details, goal } = JSON.parse(readFileSync(file, 'utf8')) as { form: Parameters<typeof normalizeAnswers>[0]; details?: string; goal?: PageGoal };
+    const { form, details, goal, photos } = JSON.parse(readFileSync(file, 'utf8')) as { form: Parameters<typeof normalizeAnswers>[0]; details?: string; goal?: PageGoal; photos?: ExamplePhotos };
     if (goal && !PAGE_GOALS.includes(goal)) throw new Error(`examples/${id}.json: goal must be one of ${PAGE_GOALS.join(', ')}`);
-    return { id, answers: normalizeAnswers(form), notes: details ? [{ question: 'More details:', answer: details }] : [], ...(goal && { goal }) };
+    return { id, answers: normalizeAnswers(form), notes: details ? [{ question: 'More details:', answer: details }] : [], ...(goal && { goal }), photos: photos ? examplePhotos(photos) : [] };
   }
   const known = BUSINESSES.find((b) => b.id === id);
   if (!known) throw new Error(`unknown business ${id}: no examples/${id}.json and not in bakeoff-businesses.ts`);
   const answers = normalizeAnswers(known.form);
   const contact = { ...answers.contact, address: answers.contact.address ?? known.canned.address, instagram: answers.contact.instagram ?? known.canned.instagram?.replace(/^@/, '') };
-  return { id, answers: { ...answers, contact }, notes: [{ question: 'More details:', answer: known.canned.details }] };
+  return { id, answers: { ...answers, contact }, notes: [{ question: 'More details:', answer: known.canned.details }], photos: [] };
 }
 
 async function skill(spec: string): Promise<PageSkill | null> {
@@ -182,7 +205,13 @@ async function run({ b, s, look, images, goal, tone, n }: (typeof jobs)[number])
   const skillName = s?.name ?? NO_SKILL;
   const slug = `${skillName}-look-${tone ? tone.replace(/[^a-z]+/gi, '-').toLowerCase() : look ? 'on' : 'off'}${images ? '-images' : ''}${goal ? `-goal-${goal}` : ''}-${n}`;
   const lookNudge = tone ? { tones: [tone], dark: false, noTicker: true } : lookFor(b, n);
-  const request = { answers: b.answers, notes: b.notes, photos: [], ...(goal && { goal }), ...(look && { look: lookNudge }) };
+  const request = { answers: b.answers, notes: b.notes, photos: b.photos.map(({ source: _source, ...photo }) => photo), ...(goal && { goal }), ...(look && { look: lookNudge }) };
+  // A page with photos (the owner's or made ones) is a folder with its assets/.
+  const folder = images || b.photos.length > 0;
+  for (const photo of b.photos) {
+    mkdirSync(resolve(outDir, 'pages', b.id, slug, 'assets'), { recursive: true });
+    copyFileSync(photo.source, resolve(outDir, 'pages', b.id, slug, photo.file));
+  }
   const base: Result = { business: b.id, businessName: b.answers.businessName, skill: skillName, look, images, ...(goal && { goal }), n, model, effort, tones: request.look, prompt: `pages/${b.id}/${slug}.txt`, seconds: 0, violations: [], repairs: [] };
   mkdirSync(resolve(outDir, 'pages', b.id), { recursive: true });
   writeFileSync(resolve(outDir, base.prompt), `${pagePrompt(request, s?.name ?? null, images)}\n`);
@@ -202,14 +231,14 @@ async function run({ b, s, look, images, goal, tone, n }: (typeof jobs)[number])
     if (!page) return { ...base, error: `no HTML page in the reply (stop: ${reply.stopReason})` };
     const checked = checkPage(page, {
       contact: b.answers.contact,
-      ownerText: ownerText({ answers: b.answers, notes: b.notes }),
+      ownerText: ownerText({ answers: b.answers, notes: b.notes, media: { captions: Object.fromEntries(b.photos.flatMap((p) => (p.caption ? [[p.file, p.caption]] : []))) } }),
       businessName: b.answers.businessName,
       lang: b.answers.lang,
       homeUrl: 'https://app.example/',
       reportUrl: 'https://app.example/reportar',
       privacyUrl: 'https://app.example/privacidad',
     });
-    const file = images ? `pages/${b.id}/${slug}/index.html` : `pages/${b.id}/${slug}.html`;
+    const file = folder ? `pages/${b.id}/${slug}/index.html` : `pages/${b.id}/${slug}.html`;
     writeFileSync(resolve(outDir, file), checked.html);
     return { ...base, page: file, violations: checked.violations.map((v) => `${v.code}: ${v.detail}`), repairs: checked.repairs };
   } catch (error) {

@@ -60,10 +60,11 @@ function contactSummary(contact: Contact): string {
 /** The requester's text. Sent as the guarded part of every prompt. Contact details are never included. */
 export function answersBlock(answers: Answers, notes: Note[] = [], instruction?: string): string {
   const extra = notes.map((n) => `\n${n.question}\n→ ${n.answer}`).join('');
+  const photos = (answers.photoNotes ?? []).map((note, i) => (note ? `\nPhoto ${i + 1}: ${note}` : '')).join('');
   const request = instruction ? `\n<request>\n${instruction}\n</request>` : '';
   return `<answers>
 Business name: ${answers.businessName}
 What the business does: ${answers.about}${answers.contact.address ? `\nAddress: ${answers.contact.address}` : ''}
-Site language: ${answers.lang}${extra ? `\nThe owner's answers to earlier questions:${extra}` : ''}
+Site language: ${answers.lang}${photos ? `\nWhat the owner's photos show:${photos}` : ''}${extra ? `\nThe owner's answers to earlier questions:${extra}` : ''}
 </answers>${request}`;
 }

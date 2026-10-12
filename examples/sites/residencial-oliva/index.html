@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="es-PE">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Residencial Oliva · Departamentos en preventa en Jesús María, Lima</title>
+<meta name="description" content="Residencial Oliva: nuevo edificio de departamentos de 1, 2 y 3 dormitorios en Jesús María, Lima. En preventa, venta directa sin intermediarios. Agenda tu visita por WhatsApp.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Marcellus&amp;family=Jost:wght@300;400;500&amp;display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#151912;
+    --bg-2:#1c2118;
+    --bg-3:#242a1f;
+    --ink:#ede5d5;
+    --muted:#aea795;
+    --olive:#7d8b58;
+    --sage:#a9b48a;
+    --wood:#b9895c;
+    --amber:#dca46a;
+    --line:rgba(237,229,213,.14);
+    --wa:#2fae5f;
+    --radius:28px;
+    --ease:cubic-bezier(.22,.8,.24,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Jost",sans-serif;
+    font-weight:300;
+    font-size:1.05rem;
+    line-height:1.65;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* grain */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:100;pointer-events:none;opacity:.07;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  img{display:block;max-width:100%}
+  a{color:inherit}
+  h1,h2,h3{font-family:"Marcellus",serif;font-weight:400;line-height:1.05;letter-spacing:.005em}
+  em{font-style:normal;color:var(--amber)}
+  .wrap{width:min(1240px,92vw);margin-inline:auto}
+  .eyebrow{
+    font-size:.78rem;letter-spacing:.32em;text-transform:uppercase;color:var(--sage);font-weight:400;
+    display:inline-flex;align-items:center;gap:.8rem;
+  }
+  .eyebrow::before{content:"";width:34px;height:1px;background:currentColor;opacity:.7}
+  :focus-visible{outline:2px solid var(--amber);outline-offset:4px;border-radius:6px}
+
+  /* buttons */
+  .btn{
+    display:inline-flex;align-items:center;gap:.7rem;text-decoration:none;
+    font-family:"Jost",sans-serif;font-weight:500;font-size:.95rem;letter-spacing:.04em;
+    padding:1rem 1.6rem;border-radius:999px;border:1px solid transparent;cursor:pointer;
+    transition:transform .4s var(--ease),background .3s,color .3s,border-color .3s,box-shadow .4s;
+  }
+  .btn svg{width:20px;height:20px;flex:none}
+  .btn-wa{background:var(--ink);color:var(--bg);box-shadow:0 10px 40px -12px rgba(220,164,106,.55)}
+  .btn-wa:hover{background:var(--amber);transform:translateY(-3px)}
+  .btn-ghost{border-color:var(--line);color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--sage);color:var(--sage)}
+
+  /* header */
+  header{
+    position:fixed;top:0;left:0;right:0;z-index:50;
+    transition:background .4s,backdrop-filter .4s,border-color .4s;border-bottom:1px solid transparent;
+  }
+  header.scrolled{background:rgba(21,25,18,.82);backdrop-filter:blur(14px);border-color:var(--line)}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:78px}
+  .brand{display:flex;align-items:center;gap:.75rem;text-decoration:none}
+  .brand svg{width:30px;height:30px}
+  .brand span{font-family:"Marcellus",serif;font-size:1.3rem;letter-spacing:.08em}
+  .brand small{display:block;font-family:"Jost";font-size:.62rem;letter-spacing:.34em;color:var(--muted);text-transform:uppercase;margin-top:-2px}
+  .nav ul{display:flex;gap:2.2rem;list-style:none}
+  .nav ul a{text-decoration:none;font-size:.88rem;letter-spacing:.08em;color:var(--muted);transition:color .3s}
+  .nav ul a:hover{color:var(--ink)}
+  .nav .btn{padding:.7rem 1.2rem;font-size:.85rem}
+
+  /* hero */
+  .hero{position:relative;min-height:100vh;padding:130px 0 70px;display:flex;align-items:center;overflow:hidden}
+  .hero::before{
+    content:"";position:absolute;inset:0;z-index:-1;
+    background:
+      radial-gradient(60% 55% at 78% 30%,rgba(220,164,106,.22),transparent 70%),
+      radial-gradient(45% 50% at 10% 85%,rgba(125,139,88,.22),transparent 70%);
+  }
+  .hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:4rem;align-items:center}
+  .hero h1{font-size:clamp(3rem,7vw,6.4rem);margin:1.6rem 0 1.8rem}
+  .hero h1 .line{display:block;overflow:hidden}
+  .hero h1 .line > span{display:inline-block;transform:translateY(105%);animation:rise 1.1s var(--ease) forwards}
+  .hero h1 .line:nth-child(2) > span{animation-delay:.12s}
+  .hero h1 .line:nth-child(3) > span{animation-delay:.24s}
+  .hero p.lead{max-width:34rem;color:var(--muted);font-size:1.12rem}
+  .hero-ctas{display:flex;flex-wrap:wrap;gap:1rem;margin-top:2.4rem}
+  .fade{opacity:0;transform:translateY(18px);animation:fadeUp 1s var(--ease) forwards}
+  .d1{animation-delay:.45s}.d2{animation-delay:.6s}.d3{animation-delay:.75s}.d4{animation-delay:.9s}
+
+  .hero-visual{position:relative;justify-self:end;width:min(500px,100%)}
+  .arch{
+    position:relative;border-radius:999px 999px 30px 30px;overflow:hidden;aspect-ratio:4/5.1;
+    box-shadow:0 50px 90px -40px rgba(0,0,0,.8);
+    clip-path:inset(100% 0 0 0 round 999px 999px 30px 30px);
+    animation:reveal 1.5s .2s var(--ease) forwards;
+  }
+  .arch img{width:100%;height:100%;object-fit:cover;object-position:50% 30%;transform:scale(1.15);animation:settle 2.2s .2s var(--ease) forwards}
+  .arch::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(21,25,18,.55),transparent 40%)}
+  .arch-outline{
+    position:absolute;inset:-18px -18px auto auto;width:100%;aspect-ratio:4/5.1;
+    border:1px solid rgba(220,164,106,.35);border-radius:999px 999px 30px 30px;z-index:-1;
+    opacity:0;animation:fadeIn 1.4s 1s forwards;
+  }
+  .branch{position:absolute;left:-90px;bottom:40px;width:210px;z-index:2;pointer-events:none}
+  .branch .stem{stroke-dasharray:420;stroke-dashoffset:420;animation:draw 1.8s .9s var(--ease) forwards}
+  .branch .leaf{transform-box:fill-box;transform-origin:0% 50%;transform:scale(0);animation:grow .9s var(--ease) forwards}
+  .seal{
+    position:absolute;right:-34px;bottom:-34px;width:150px;height:150px;z-index:3;
+    background:var(--bg);border-radius:50%;display:grid;place-items:center;
+    border:1px solid var(--line);opacity:0;animation:fadeIn 1s 1.3s forwards;
+  }
+  .seal svg.ring{position:absolute;inset:0;width:100%;height:100%;animation:spin 28s linear infinite}
+  .seal svg.ring text{font-family:"Jost";font-size:10.6px;letter-spacing:.24em;fill:var(--muted);text-transform:uppercase}
+  .seal .core{width:46px;height:46px}
+  .photo-cap{
+    position:absolute;left:24px;bottom:22px;z-index:2;font-size:.75rem;letter-spacing:.2em;text-transform:uppercase;color:var(--ink);opacity:.85
+  }
+
+  /* facts */
+  .facts{border-block:1px solid var(--line);background:var(--bg-2)}
+  .facts ul{list-style:none;display:grid;grid-template-columns:repeat(4,1fr)}
+  .facts li{padding:2rem 1.5rem;border-right:1px solid var(--line)}
+  .facts li:last-child{border-right:0}
+  .facts strong{display:block;font-family:"Marcellus",serif;font-weight:400;font-size:1.9rem;color:var(--ink);line-height:1.1}
+  .facts span{font-size:.85rem;color:var(--muted);letter-spacing:.06em}
+
+  section{position:relative}
+  .sec{padding:clamp(5rem,11vw,9rem) 0}
+  .sec-head h2{font-size:clamp(2.3rem,4.8vw,4rem);margin-top:1.2rem}
+  .sec-head p{color:var(--muted);max-width:36rem;margin-top:1.2rem}
+
+  /* building */
+  .building-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:5rem;align-items:start}
+  .building .sec-head{position:sticky;top:120px}
+  .blob{
+    position:absolute;width:520px;height:520px;left:-200px;top:20%;z-index:-1;filter:blur(10px);opacity:.5;
+    background:radial-gradient(circle at 40% 40%,rgba(125,139,88,.35),transparent 65%);
+    border-radius:42% 58% 63% 37% / 41% 44% 56% 59%;animation:morph 16s ease-in-out infinite alternate;
+  }
+  .features{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:1.2rem}
+  .feature{
+    background:var(--bg-2);border:1px solid var(--line);padding:2rem 1.8rem 1.9rem;
+    border-radius:var(--radius);transition:transform .5s var(--ease),border-color .4s,background .4s;
+  }
+  .feature:nth-child(even){transform:translateY(2.4rem)}
+  .feature:hover{border-color:rgba(169,180,138,.45);background:var(--bg-3)}
+  .feature .ic{width:44px;height:44px;border-radius:50% 50% 50% 8px;background:rgba(169,180,138,.12);display:grid;place-items:center;margin-bottom:1.4rem}
+  .feature .ic svg{width:22px;height:22px;stroke:var(--sage);fill:none;stroke-width:1.4}
+  .feature h3{font-size:1.45rem;margin-bottom:.4rem}
+  .feature p{color:var(--muted);font-size:.95rem}
+
+  /* models */
+  .models{background:var(--bg-2);border-radius:60px 60px 0 0}
+  .models-top{display:flex;justify-content:space-between;align-items:end;gap:2rem;flex-wrap:wrap;margin-bottom:3rem}
+  .tabs{display:flex;gap:.5rem;background:var(--bg);padding:.4rem;border-radius:999px;border:1px solid var(--line)}
+  .tab{
+    font-family:"Marcellus",serif;font-size:1.05rem;letter-spacing:.06em;
+    background:none;border:0;color:var(--muted);padding:.75rem 1.4rem;border-radius:999px;cursor:pointer;
+    transition:background .35s,color .35s;
+  }
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:var(--olive);color:var(--ink)}
+  .model-stage{display:grid;grid-template-columns:1.45fr .8fr;gap:3rem;align-items:center}
+  .model-photo{position:relative;border-radius:var(--radius);overflow:hidden;aspect-ratio:668/341;background:var(--bg-3)}
+  .model-photo img{width:100%;height:100%;object-fit:cover;transition:opacity .45s ease,transform 1.2s var(--ease)}
+  .model-photo img.out{opacity:0;transform:scale(1.04)}
+  .model-info .letter{font-size:.8rem;letter-spacing:.3em;text-transform:uppercase;color:var(--sage)}
+  .model-info .area{font-family:"Marcellus",serif;font-size:clamp(5rem,10vw,8.5rem);line-height:.9;margin:.6rem 0 .3rem;color:var(--ink)}
+  .model-info .area sup{font-size:.32em;vertical-align:top;margin-left:.3rem;color:var(--amber);position:relative;top:.5em}
+  .model-info .rooms{font-family:"Marcellus",serif;font-size:1.7rem;color:var(--amber)}
+  .model-info ul{list-style:none;margin:1.6rem 0 2rem;border-top:1px solid var(--line)}
+  .model-info li{padding:.75rem 0;border-bottom:1px solid var(--line);color:var(--muted);font-size:.95rem;display:flex;gap:.7rem;align-items:center}
+  .model-info li::before{content:"";width:7px;height:7px;border-radius:50% 0 50% 0;background:var(--sage);flex:none}
+  .swap{transition:opacity .35s ease}
+  .swap.out{opacity:0}
+  .thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1.6rem}
+  .thumb{
+    border:1px solid var(--line);background:none;border-radius:18px;overflow:hidden;cursor:pointer;padding:0;position:relative;
+    aspect-ratio:668/250;opacity:.5;transition:opacity .4s,border-color .4s;
+  }
+  .thumb img{width:100%;height:100%;object-fit:cover;object-position:50% 30%}
+  .thumb.active,.thumb:hover{opacity:1;border-color:var(--sage)}
+
+  /* steps */
+  .steps{background:var(--bg-2)}
+  .steps-inner{
+    background:linear-gradient(140deg,var(--olive) 0%,#5d6a3e 100%);color:#f4efe3;
+    border-radius:var(--radius) var(--radius) 120px var(--radius);padding:clamp(3rem,6vw,5.5rem);position:relative;overflow:hidden;
+  }
+  .steps-inner::after{
+    content:"";position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;
+    border:1px solid rgba(244,239,227,.18);box-shadow:0 0 0 60px rgba(244,239,227,.04),0 0 0 120px rgba(244,239,227,.03);
+  }
+  .steps-inner .eyebrow{color:#e4e9d2}
+  .steps-inner h2{font-size:clamp(2.2rem,4.5vw,3.8rem);margin:1.2rem 0 1rem;max-width:20ch}
+  .steps-inner > p{max-width:40rem;opacity:.85}
+  .step-list{list-style:none;display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:3.5rem;counter-reset:s;position:relative;z-index:1}
+  .step-list li{counter-increment:s;border-top:1px solid rgba(244,239,227,.3);padding-top:1.4rem}
+  .step-list li::before{content:"0" counter(s);font-family:"Marcellus",serif;font-size:2.6rem;display:block;line-height:1;margin-bottom:.8rem;color:#f7d6ae}
+  .step-list h3{font-size:1.4rem;margin-bottom:.4rem}
+  .step-list p{opacity:.82;font-size:.95rem}
+  .steps-inner .btn-wa{margin-top:3rem;position:relative;z-index:1}
+
+  /* contact */
+  .contact::before{
+    content:"";position:absolute;inset:0;z-index:-1;
+    background:radial-gradient(50% 60% at 85% 70%,rgba(220,164,106,.14),transparent 70%);
+  }
+  .contact-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:4.5rem;align-items:center}
+  .contact h2{font-size:clamp(2.5rem,5.4vw,4.6rem);margin:1.2rem 0 1.4rem}
+  .contact .lead{color:var(--muted);max-width:32rem}
+  .contact .btn-wa{margin-top:2.2rem;font-size:1.05rem;padding:1.15rem 1.9rem}
+  .channels{list-style:none;margin-top:3rem;display:grid;gap:0;border-top:1px solid var(--line)}
+  .channels li{border-bottom:1px solid var(--line)}
+  .channels a,.channels div{display:grid;grid-template-columns:120px 1fr auto;gap:1rem;align-items:center;padding:1.15rem 0;text-decoration:none}
+  .channels .k{font-size:.74rem;letter-spacing:.24em;text-transform:uppercase;color:var(--sage)}
+  .channels .v{font-size:1.05rem}
+  .channels .arr{color:var(--muted);transition:transform .35s var(--ease),color .3s}
+  .channels a:hover .arr{transform:translateX(6px);color:var(--amber)}
+  .channels a:hover .v{color:var(--amber)}
+  .plate{
+    background:#f6f2ea;border-radius:240px 240px 32px 32px;padding:3.5rem 2.5rem 2.5rem;position:relative;
+    box-shadow:0 40px 90px -40px rgba(0,0,0,.85);
+  }
+  .plate img{width:100%;height:auto;mix-blend-mode:multiply}
+  .plate p{color:#4a4436;text-align:center;font-size:.9rem;margin-top:1rem;letter-spacing:.04em}
+  .plate p strong{display:block;font-family:"Marcellus",serif;font-weight:400;font-size:1.15rem;color:#2f3a22}
+
+  footer{border-top:1px solid var(--line);padding:2.2rem 0 6rem;color:var(--muted);font-size:.85rem}
+  footer .wrap{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+  footer a{text-decoration:none}
+  footer a:hover{color:var(--ink)}
+
+  /* floating WA */
+  .fab{
+    position:fixed;right:22px;bottom:22px;z-index:60;width:62px;height:62px;border-radius:50%;
+    background:var(--wa);color:#fff;display:grid;place-items:center;text-decoration:none;
+    box-shadow:0 14px 34px -10px rgba(47,174,95,.7);transition:transform .4s var(--ease);
+  }
+  .fab svg{width:30px;height:30px}
+  .fab:hover{transform:scale(1.08) rotate(-6deg)}
+  .fab::before{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--wa);animation:pulse 2.6s ease-out infinite}
+  .fab-label{
+    position:absolute;right:76px;white-space:nowrap;background:var(--ink);color:var(--bg);font-size:.82rem;font-weight:500;
+    padding:.5rem .9rem;border-radius:999px;opacity:0;transform:translateX(8px);transition:.35s var(--ease);pointer-events:none
+  }
+  .fab:hover .fab-label{opacity:1;transform:none}
+
+  /* scroll reveal */
+  .rv{opacity:0;transform:translateY(34px);transition:opacity 1s var(--ease),transform 1s var(--ease)}
+  .rv.in{opacity:1;transform:none}
+  .feature.rv.in:nth-child(even){transform:translateY(2.4rem)}
+
+  @keyframes rise{to{transform:none}}
+  @keyframes fadeUp{to{opacity:1;transform:none}}
+  @keyframes fadeIn{to{opacity:1}}
+  @keyframes reveal{to{clip-path:inset(0 0 0 0 round 999px 999px 30px 30px)}}
+  @keyframes settle{to{transform:scale(1)}}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes grow{to{transform:scale(1)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.6);opacity:0}}
+  @keyframes morph{to{border-radius:58% 42% 38% 62% / 55% 61% 39% 45%;transform:translate(60px,-40px) rotate(20deg)}}
+
+  @media (max-width:980px){
+    .nav ul{display:none}
+    .hero-grid,.building-grid,.model-stage,.contact-grid{grid-template-columns:1fr}
+    .hero-visual{justify-self:center;margin-top:1rem;width:min(420px,86%)}
+    .branch{left:-60px;width:150px}
+    .seal{width:120px;height:120px;right:-20px;bottom:-24px}
+    .building .sec-head{position:static}
+    .facts ul{grid-template-columns:1fr 1fr}
+    .facts li:nth-child(2){border-right:0}
+    .facts li:nth-child(-n+2){border-bottom:1px solid var(--line)}
+    .step-list{grid-template-columns:1fr}
+    .models{border-radius:36px 36px 0 0}
+  }
+  @media (max-width:600px){
+    .features{grid-template-columns:1fr}
+    .feature:nth-child(even),.feature.rv.in:nth-child(even){transform:none}
+    .nav .btn span{display:none}
+    .tabs{width:100%;justify-content:space-between}
+    .tab{padding:.7rem 1rem;flex:1}
+    .channels a,.channels div{grid-template-columns:1fr auto}
+    .channels .k{grid-column:1/-1}
+    .fab-label{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+    .rv{opacity:1;transform:none}
+  }
+</style>
+<style>html,body{overflow-x:clip}</style></head>
+<body>
+
+<header id="top">
+  <div class="wrap nav">
+    <a class="brand" href="#inicio" aria-label="Residencial Oliva, inicio">
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <path d="M8 34 C14 24 18 16 30 6" stroke="#b9895c" stroke-width="1.4" fill="none"/>
+        <path d="M14 25 C8 22 6 16 7 12 C12 14 15 19 14 25Z" fill="#7d8b58"/>
+        <path d="M20 17 C20 11 23 7 27 5 C27 10 24 15 20 17Z" fill="#a9b48a"/>
+        <path d="M18 21 C23 20 28 22 31 26 C26 27 21 25 18 21Z" fill="#7d8b58"/>
+      </svg>
+      <div><span>Oliva</span><small>Jesús María</small></div>
+    </a>
+    <ul>
+      <li><a href="#edificio">El edificio</a></li>
+      <li><a href="#modelos">Modelos</a></li>
+      <li><a href="#separar">Cómo separar</a></li>
+      <li><a href="#contacto">Contacto</a></li>
+    </ul>
+    <a class="btn btn-wa" href="https://wa.me/51987555214?text=Hola%2C%20quisiera%20informaci%C3%B3n%20sobre%20Residencial%20Oliva." target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35M12.05 21.5h-.01a9.4 9.4 0 0 1-4.79-1.31l-.34-.2-3.56.93.95-3.47-.22-.36a9.4 9.4 0 0 1-1.44-5.01c0-5.2 4.23-9.43 9.44-9.43a9.38 9.38 0 0 1 9.43 9.44c0 5.2-4.23 9.43-9.43 9.43m8.02-17.45A11.27 11.27 0 0 0 12.05.73C5.8.73.72 5.8.72 12.05c0 2 .52 3.95 1.52 5.66L.62 23.27l5.7-1.5a11.3 11.3 0 0 0 5.41 1.38h.01c6.25 0 11.33-5.08 11.33-11.33 0-3.03-1.18-5.87-3.32-8.01"/></svg>
+      <span>Escríbenos</span>
+    </a>
+  </div>
+</header>
+
+<main>
+  <!-- HERO -->
+  <section class="hero" id="inicio">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow fade d1">Preventa · Jesús María, Lima</span>
+        <h1>
+          <span class="line"><span>Vive entre</span></span>
+          <span class="line"><span><em>madera, vidrio</em></span></span>
+          <span class="line"><span>y verde.</span></span>
+        </h1>
+        <p class="lead fade d2">Residencial Oliva es un nuevo edificio de departamentos en Jesús María. Departamentos de 1, 2 y 3 dormitorios con balcón, sala comedor integrada y vista a la ciudad.</p>
+        <div class="hero-ctas fade d3">
+          <a class="btn btn-wa" href="https://wa.me/51987555214?text=Hola%2C%20quisiera%20agendar%20una%20visita%20a%20la%20sala%20de%20ventas%20de%20Residencial%20Oliva." target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35M12.05 21.5h-.01a9.4 9.4 0 0 1-4.79-1.31l-.34-.2-3.56.93.95-3.47-.22-.36a9.4 9.4 0 0 1-1.44-5.01c0-5.2 4.23-9.43 9.44-9.43a9.38 9.38 0 0 1 9.43 9.44c0 5.2-4.23 9.43-9.43 9.43m8.02-17.45A11.27 11.27 0 0 0 12.05.73C5.8.73.72 5.8.72 12.05c0 2 .52 3.95 1.52 5.66L.62 23.27l5.7-1.5a11.3 11.3 0 0 0 5.41 1.38h.01c6.25 0 11.33-5.08 11.33-11.33 0-3.03-1.18-5.87-3.32-8.01"/></svg>
+            Agenda tu visita por WhatsApp
+          </a>
+          <a class="btn btn-ghost" href="#modelos">Ver modelos</a>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="arch-outline" aria-hidden="true"></div>
+        <div class="arch">
+          <img src="assets/photo-1.jpg" alt="La fachada del edificio Residencial Oliva al atardecer, con madera, vidrio y plantas en los balcones">
+          <span class="photo-cap">Av. Salaverry 2450</span>
+        </div>
+        <svg class="branch" viewBox="0 0 210 320" aria-hidden="true">
+          <path class="stem" d="M30 315 C70 240 95 160 175 20" stroke="#b9895c" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <path class="leaf" style="animation-delay:1.3s" d="M62 245 C40 225 10 222 0 230 C14 248 42 256 62 245Z" fill="#7d8b58"/>
+          <path class="leaf" style="animation-delay:1.45s" d="M80 205 C104 190 130 192 142 200 C126 216 98 218 80 205Z" fill="#a9b48a"/>
+          <path class="leaf" style="animation-delay:1.6s" d="M100 160 C78 138 50 132 38 138 C50 158 80 170 100 160Z" fill="#6b7a48"/>
+          <path class="leaf" style="animation-delay:1.75s" d="M122 120 C146 104 172 104 186 110 C172 128 142 132 122 120Z" fill="#7d8b58"/>
+          <path class="leaf" style="animation-delay:1.9s" d="M145 78 C126 56 102 48 88 52 C98 74 126 86 145 78Z" fill="#a9b48a"/>
+          <path class="leaf" style="animation-delay:2.05s" d="M175 20 C178 8 190 0 200 0 C198 12 188 22 175 20Z" fill="#7d8b58"/>
+        </svg>
+        <div class="seal" aria-hidden="true">
+          <svg class="ring" viewBox="0 0 150 150">
+            <defs><path id="circ" d="M75,75 m-58,0 a58,58 0 1,1 116,0 a58,58 0 1,1 -116,0"/></defs>
+            <text><textPath href="#circ">Venta directa &#xb7; Sin intermediarios &#xb7; Preventa &#xb7;</textPath></text>
+          </svg>
+          <svg class="core" viewBox="0 0 40 40">
+            <path d="M8 34 C14 24 18 16 30 6" stroke="#b9895c" stroke-width="1.4" fill="none"/>
+            <path d="M14 25 C8 22 6 16 7 12 C12 14 15 19 14 25Z" fill="#7d8b58"/>
+            <path d="M20 17 C20 11 23 7 27 5 C27 10 24 15 20 17Z" fill="#a9b48a"/>
+            <path d="M18 21 C23 20 28 22 31 26 C26 27 21 25 18 21Z" fill="#7d8b58"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FACTS -->
+  <div class="facts">
+    <ul class="wrap">
+      <li class="rv"><strong>3 modelos</strong><span>1, 2 y 3 dormitorios</span></li>
+      <li class="rv"><strong>45 – 100 m²</strong><span>Áreas por modelo</span></li>
+      <li class="rv"><strong>Azotea</strong><span>Terraza en la azotea</span></li>
+      <li class="rv"><strong>Directo</strong><span>Sin intermediarios</span></li>
+    </ul>
+  </div>
+
+  <!-- BUILDING -->
+  <section class="sec building" id="edificio">
+    <div class="blob" aria-hidden="true"></div>
+    <div class="wrap building-grid">
+      <div class="sec-head rv">
+        <span class="eyebrow">El edificio</span>
+        <h2>Un nuevo hogar en <em>Jesús María</em></h2>
+        <p>Una fachada de madera y vidrio, áreas verdes y una terraza en la azotea. Cada departamento tiene balcón, sala comedor integrada y vista a la ciudad.</p>
+      </div>
+      <ul class="features">
+        <li class="feature rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 20h18M5 20V11h14v9M5 14h14M9 14v6M15 14v6"/></svg></div>
+          <h3>Balcón</h3>
+          <p>Departamentos con balcón para tomar aire y disfrutar de la luz.</p>
+        </li>
+        <li class="feature rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 18h8v-5H3zM4 18v2M10 18v2M14 10h7M17.5 10v10M15 20h5"/></svg></div>
+          <h3>Sala comedor integrada</h3>
+          <p>Un solo ambiente amplio para compartir en familia.</p>
+        </li>
+        <li class="feature rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 21V12h4v9M9 21V6h5v15M16 21v-7h5v7M2 21h20"/></svg></div>
+          <h3>Vista a la ciudad</h3>
+          <p>Ventanales que se abren hacia Lima.</p>
+        </li>
+        <li class="feature rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 3h14v18H5zM9 3v18M13 3v18M5 9h14M5 15h14"/></svg></div>
+          <h3>Madera y vidrio</h3>
+          <p>Una fachada cálida y luminosa que se distingue en la avenida.</p>
+        </li>
+        <li class="feature rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 21V10M12 13c-4 0-6-3-6-7 4 0 6 3 6 7zM12 11c0-4 2-7 6-7 0 4-2 7-6 7z"/></svg></div>
+          <h3>Áreas verdes</h3>
+          <p>Plantas y vegetación que acompañan el día a día.</p>
+        </li>
+        <li class="feature rv">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 10h18M5 10l2-5h10l2 5M7 10v10M17 10v10M10 20h4M12 14v6"/></svg></div>
+          <h3>Terraza en la azotea</h3>
+          <p>Un espacio común en lo más alto del edificio.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- MODELS -->
+  <section class="sec models" id="modelos">
+    <div class="wrap">
+      <div class="models-top">
+        <div class="sec-head rv">
+          <span class="eyebrow">Modelos</span>
+          <h2>Elige tu <em>departamento</em></h2>
+        </div>
+        <div class="tabs rv" role="tablist" aria-label="Modelos de departamento">
+          <button class="tab" role="tab" aria-selected="true" aria-controls="model-panel" data-model="0">Modelo A</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="model-panel" data-model="1">Modelo B</button>
+          <button class="tab" role="tab" aria-selected="false" aria-controls="model-panel" data-model="2">Modelo C</button>
+        </div>
+      </div>
+
+      <div class="model-stage rv" id="model-panel" role="tabpanel" aria-live="polite">
+        <div>
+          <div class="model-photo">
+            <img id="model-img" src="assets/photo-2.jpg" alt="Modelo A: 1 dormitorio, 45 m²">
+          </div>
+          <div class="thumbs">
+            <button class="thumb active" data-model="0" aria-label="Ver Modelo A"><img src="assets/photo-2.jpg" alt></button>
+            <button class="thumb" data-model="1" aria-label="Ver Modelo B"><img src="assets/photo-3.jpg" alt></button>
+            <button class="thumb" data-model="2" aria-label="Ver Modelo C"><img src="assets/photo-4.jpg" alt></button>
+          </div>
+        </div>
+        <div class="model-info">
+          <div class="swap" id="model-text">
+            <span class="letter" id="m-letter">Modelo A</span>
+            <div class="area"><span id="m-area">45</span><sup>m²</sup></div>
+            <div class="rooms" id="m-rooms">1 dormitorio</div>
+          </div>
+          <ul>
+            <li>Balcón</li>
+            <li>Sala comedor integrada</li>
+            <li>Vista a la ciudad</li>
+          </ul>
+          <a class="btn btn-wa" id="m-cta" href="https://wa.me/51987555214?text=Hola%2C%20me%20interesa%20el%20Modelo%20A%20(1%20dormitorio%2C%2045%20m%C2%B2)%20de%20Residencial%20Oliva." target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35M12.05 21.5h-.01a9.4 9.4 0 0 1-4.79-1.31l-.34-.2-3.56.93.95-3.47-.22-.36a9.4 9.4 0 0 1-1.44-5.01c0-5.2 4.23-9.43 9.44-9.43a9.38 9.38 0 0 1 9.43 9.44c0 5.2-4.23 9.43-9.43 9.43m8.02-17.45A11.27 11.27 0 0 0 12.05.73C5.8.73.72 5.8.72 12.05c0 2 .52 3.95 1.52 5.66L.62 23.27l5.7-1.5a11.3 11.3 0 0 0 5.41 1.38h.01c6.25 0 11.33-5.08 11.33-11.33 0-3.03-1.18-5.87-3.32-8.01"/></svg>
+            <span id="m-cta-text">Consultar por el Modelo A</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEPS -->
+  <section class="steps" id="separar">
+    <div class="wrap" style="padding-bottom:clamp(5rem,10vw,8rem)">
+      <div class="steps-inner rv">
+        <span class="eyebrow">Preventa</span>
+        <h2>Separa tu departamento, directo con nosotros</h2>
+        <p>Vendemos los departamentos directamente, sin intermediarios. El proceso empieza con un mensaje.</p>
+        <ol class="step-list">
+          <li>
+            <h3>Escríbenos</h3>
+            <p>Envíanos un mensaje por WhatsApp y cuéntanos qué modelo te interesa.</p>
+          </li>
+          <li>
+            <h3>Visita la sala de ventas</h3>
+            <p>Agenda una visita y conoce el proyecto en persona.</p>
+          </li>
+          <li>
+            <h3>Separa en preventa</h3>
+            <p>Elige tu departamento y sepáralo directamente con nosotros.</p>
+          </li>
+        </ol>
+        <a class="btn btn-wa" href="https://wa.me/51987555214?text=Hola%2C%20quisiera%20separar%20un%20departamento%20en%20preventa%20en%20Residencial%20Oliva." target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.160-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35M12.05 21.5h-.01a9.4 9.4 0 0 1-4.79-1.31l-.34-.2-3.56.93.95-3.47-.22-.36a9.4 9.4 0 0 1-1.44-5.01c0-5.2 4.230-9.43 9.44-9.43a9.38 9.38 0 0 1 9.43 9.44c0 5.2-4.23 9.43-9.43 9.43m8.02-17.45A11.27 11.27 0 0 0 12.05.73C5.8.73.72 5.8.72 12.05c0 2 .52 3.95 1.52 5.66L.62 23.27l5.7-1.5a11.3 11.3 0 0 0 5.41 1.38h.01c6.25 0 11.33-5.08 11.33-11.33 0-3.03-1.18-5.87-3.32-8.01"/></svg>
+          Quiero separar mi departamento
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section class="sec contact" id="contacto">
+    <div class="wrap contact-grid">
+      <div class="rv">
+        <span class="eyebrow">Contacto</span>
+        <h2>Conversemos sobre tu <em>nuevo hogar</em></h2>
+        <p class="lead">Escríbenos por WhatsApp para resolver tus dudas y agendar tu visita a la sala de ventas. También puedes llamarnos al mismo número.</p>
+        <a class="btn btn-wa" href="https://wa.me/51987555214?text=Hola%2C%20quisiera%20agendar%20una%20visita%20a%20la%20sala%20de%20ventas%20de%20Residencial%20Oliva." target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.490-1.77-1.66-2.07-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35M12.05 21.5h-.01a9.4 9.4 0 0 1-4.79-1.31l-.34-.2-3.56.93.95-3.47-.22-.36a9.4 9.4 0 0 1-1.44-5.01c0-5.2 4.23-9.43 9.44-9.43a9.38 9.38 0 0 1 9.43 9.44c0 5.2-4.23 9.43-9.43 9.43m8.02-17.45A11.27 11.27 0 0 0 12.05.73C5.8.73.72 5.8.72 12.05c0 2 .52 3.95 1.52 5.66L.62 23.27l5.7-1.5a11.3 11.3 0 0 0 5.41 1.38h.01c6.25 0 11.33-5.08 11.33-11.33 0-3.03-1.18-5.87-3.32-8.01"/></svg>
+          Escribir por WhatsApp
+        </a>
+        <ul class="channels">
+          <li><a href="tel:+51987555214"><span class="k">Teléfono</span><span class="v">+51 987 555 214</span><span class="arr" aria-hidden="true">→</span></a></li>
+          <li><a href="mailto:ventas@residencialoliva.example.com"><span class="k">Correo</span><span class="v">ventas@residencialoliva.example.com</span><span class="arr" aria-hidden="true">→</span></a></li>
+          <li><a href="https://www.instagram.com/residencialoliva" target="_blank" rel="noopener"><span class="k">Instagram</span><span class="v">@residencialoliva</span><span class="arr" aria-hidden="true">→</span></a></li>
+          <li><a href="https://www.google.com/maps/search/?api=1&amp;query=Av.+Salaverry+2450,+Jes%C3%BAs+Mar%C3%ADa,+Lima" target="_blank" rel="noopener"><span class="k">Dirección</span><span class="v">Av. Salaverry 2450, Jesús María, Lima</span><span class="arr" aria-hidden="true">→</span></a></li>
+        </ul>
+      </div>
+      <div class="plate rv">
+        <img src="assets/logo.png" alt="Logo de Residencial Oliva, Jesús María" width="1536" height="1024">
+        <p><strong>Venta directa, sin intermediarios</strong>Departamentos en preventa</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© <span id="yr"></span> Residencial Oliva · Jesús María, Lima</span>
+    <a href="#inicio">Volver arriba ↑</a>
+  </div>
+</footer>
+
+<a class="fab" href="https://wa.me/51987555214?text=Hola%2C%20quisiera%20informaci%C3%B3n%20sobre%20Residencial%20Oliva." target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp">
+  <span class="fab-label">¿Agendamos tu visita?</span>
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.21 3.08c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35M12.05 21.5h-.01a9.4 9.4 0 0 1-4.79-1.31l-.34-.2-3.56.93.95-3.47-.22-.36a9.4 9.4 0 0 1-1.44-5.01c0-5.2 4.23-9.43 9.44-9.43a9.38 9.38 0 0 1 9.43 9.44c0 5.2-4.23 9.43-9.43 9.43m8.02-17.45A11.27 11.27 0 0 0 12.05.73C5.8.73.72 5.8.72 12.05c0 2 .52 3.95 1.52 5.66L.62 23.27l5.7-1.5a11.3 11.3 0 0 0 5.41 1.38h.01c6.25 0 11.33-5.08 11.33-11.33 0-3.03-1.18-5.87-3.32-8.01"/></svg>
+</a>
+
+<script>
+  document.getElementById('yr').textContent = new Date().getFullYear();
+
+  // header state
+  const header = document.querySelector('header');
+  const onScroll = () => header.classList.toggle('scrolled', window.scrollY > 30);
+  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+
+  // reveal on scroll
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const sibs = [...e.target.parentElement.children].filter(c => c.classList.contains('rv'));
+        e.target.style.transitionDelay = (Math.max(0, sibs.indexOf(e.target)) * 90) + 'ms';
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, {threshold:.15, rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.rv').forEach(el => io.observe(el));
+
+  // models
+  const models = [
+    {letter:'A', area:45, rooms:'1 dormitorio', img:'assets/photo-2.jpg'},
+    {letter:'B', area:70, rooms:'2 dormitorios', img:'assets/photo-3.jpg'},
+    {letter:'C', area:100, rooms:'3 dormitorios', img:'assets/photo-4.jpg'}
+  ];
+  models.forEach(m => { const i = new Image(); i.src = m.img; });
+
+  const tabs = document.querySelectorAll('.tab');
+  const thumbs = document.querySelectorAll('.thumb');
+  const img = document.getElementById('model-img');
+  const text = document.getElementById('model-text');
+  let current = 0, busy = false;
+
+  function setModel(i){
+    if (i === current || busy) return;
+    busy = true; current = i;
+    const m = models[i];
+    tabs.forEach((t,k) => { t.setAttribute('aria-selected', k === i); t.tabIndex = k === i ? 0 : -1; });
+    thumbs.forEach((t,k) => t.classList.toggle('active', k === i));
+    img.classList.add('out'); text.classList.add('out');
+    setTimeout(() => {
+      img.src = m.img;
+      img.alt = `Modelo ${m.letter}: ${m.rooms}, ${m.area} m²`;
+      document.getElementById('m-letter').textContent = 'Modelo ' + m.letter;
+      document.getElementById('m-area').textContent = m.area;
+      document.getElementById('m-rooms').textContent = m.rooms;
+      document.getElementById('m-cta-text').textContent = 'Consultar por el Modelo ' + m.letter;
+      const msg = `Hola, me interesa el Modelo ${m.letter} (${m.rooms}, ${m.area} m²) de Residencial Oliva.`;
+      document.getElementById('m-cta').href = 'https://wa.me/51987555214?text=' + encodeURIComponent(msg);
+      img.classList.remove('out'); text.classList.remove('out');
+      busy = false;
+    }, 380);
+  }
+  tabs.forEach((t,k) => {
+    t.tabIndex = k === 0 ? 0 : -1;
+    t.addEventListener('click', () => setModel(k));
+    t.addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const n = (k + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+        tabs[n].focus(); setModel(n);
+      }
+    });
+  });
+  thumbs.forEach((t,k) => t.addEventListener('click', () => setModel(k)));
+</script>
+<footer style="padding:1.25rem;font:13px/1.5 system-ui,sans-serif;text-align:center;opacity:.75;background:inherit"><a href="https://www.ventas314.com/" style="color:inherit">Página web creada con ventas314.com</a> · <a href="https://www.ventas314.com/reportar?sitio=residencial-oliva" style="color:inherit">Reportar</a> · <a href="https://www.ventas314.com/privacidad" style="color:inherit">Privacidad</a></footer></body>
+</html>

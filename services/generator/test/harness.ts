@@ -24,6 +24,7 @@ export function harness(model: Parameters<typeof fakeModel>[0] = {}) {
   const sendEmail = async (email: Email) => void emails.push(email);
   let id = 0;
   let draft = 0;
+  let file = 0;
   const base = {
     stores: memory.stores,
     now: () => NOW,
@@ -41,6 +42,7 @@ export function harness(model: Parameters<typeof fakeModel>[0] = {}) {
     urls,
     outputAllowed: async () => true,
     moderate: async () => [],
+    newFileId: () => `f${++file}`,
     writePage: writer.writePage,
     sendEmail,
   };

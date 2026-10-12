@@ -47,3 +47,61 @@ export async function uploadImages(apiUrl: string, logo: File | undefined, photo
   ]);
   return slots.uploadId;
 }
+
+/** What the owner says each picked photo shows, kept per file so taking one out keeps the others'. */
+const captions = new WeakMap<File, string>();
+
+/** The descriptions of the photos picked in `input`, in file order ("" for none). */
+export const captionsOf = (input: HTMLInputElement): string[] => [...(input.files ?? [])].map((file) => captions.get(file)?.trim() ?? '');
+
+export interface ThumbStrings {
+  remove: string;
+  /** Set: each photo gets a description field with this label and placeholder. */
+  caption?: { label: string; placeholder: string };
+}
+
+/**
+ * Thumbnails of the files picked in `input`, each with a button that takes it out of the input (and, for photos,
+ * a field for what it shows). Call it again after the input's files change.
+ */
+export function showThumbs(input: HTMLInputElement, list: HTMLElement, strings: ThumbStrings, onChange?: () => void): void {
+  for (const img of list.querySelectorAll('img')) URL.revokeObjectURL(img.src);
+  const files = [...(input.files ?? [])];
+  list.replaceChildren(
+    ...files.map((file, i) => {
+      const item = document.createElement('li');
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.alt = file.name;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.setAttribute('aria-label', `${strings.remove}: ${file.name}`);
+      remove.onclick = () => {
+        const transfer = new DataTransfer();
+        files.forEach((kept, j) => j !== i && transfer.items.add(kept));
+        input.files = transfer.files;
+        showThumbs(input, list, strings, onChange);
+        onChange?.();
+      };
+      const frame = document.createElement('div');
+      frame.className = 'thumb';
+      frame.append(img, remove);
+      item.append(frame);
+      if (strings.caption) item.append(captionField(strings.caption, captions.get(file) ?? '', (value) => captions.set(file, value)));
+      return item;
+    }),
+  );
+}
+
+/** A photo's description field (the form, Mi sitio → Tus fotos). */
+export function captionField(strings: { label: string; placeholder: string }, value: string, onInput: (value: string) => void): HTMLInputElement {
+  const field = document.createElement('input');
+  field.type = 'text';
+  field.maxLength = 100;
+  field.value = value;
+  field.placeholder = strings.placeholder;
+  field.setAttribute('aria-label', strings.label);
+  field.addEventListener('input', () => onInput(field.value));
+  return field;
+}

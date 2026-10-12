@@ -20,6 +20,7 @@ const Body = z.object({
   lang: z.string().max(5).optional(),
   aiImages: z.boolean().optional(),
   goal: z.string().max(20).optional(),
+  photoNotes: z.array(z.string().max(200)).max(6).optional(),
   uploadId: z.string().uuid().optional(),
   /** The owner's email (account.ts): links the site to "Mis sitios". Not an answer: never sent to a model. */
   ownerEmail: z.email().max(120),

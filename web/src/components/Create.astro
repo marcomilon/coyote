@@ -22,6 +22,8 @@ const clientStrings = {
   uploadLimited: c.photos.limited,
   tooManyPhotos: c.photos.tooMany,
   notImage: c.photos.notImage,
+  removePhoto: c.photos.remove,
+  caption: c.photos.caption,
   submit: c.submit,
   mySitePath: s.paths.mySite,
   question: s.questions,
@@ -108,10 +110,9 @@ const [readyBefore, readyAfter] = c.working.ready.text.split('{email}');---
         <fieldset>
           <legend class="q"><i>5</i>{c.photos.label}</legend>
           <p class="hint">{c.photos.hint}</p>
-          {/* Uploads hidden for now (remove `hidden` to show them again); the AI photos switch stays. */}
-          <div class="two" hidden>
-            <div><label class="sub" for="logo">{c.photos.logo}</label><input type="file" id="logo" name="logo" accept="image/*" /></div>
-            <div><label class="sub" for="photos">{c.photos.pics}</label><input type="file" id="photos" name="photos" accept="image/*" multiple /></div>
+          <div class="two">
+            <div><label class="sub" for="logo">{c.photos.logo}</label><input type="file" id="logo" name="logo" accept="image/*" /><ul class="thumbs" data-thumbs="logo"></ul></div>
+            <div><label class="sub" for="photos">{c.photos.pics}</label><input type="file" id="photos" name="photos" accept="image/*" multiple /><ul class="thumbs" data-thumbs="photos"></ul></div>
           </div>
           <p class="error" data-error="photos" role="alert"></p>
           <label class="toggle">

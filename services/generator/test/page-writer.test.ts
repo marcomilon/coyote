@@ -45,6 +45,17 @@ describe('checkPage', () => {
     expect(result.repairs.length).toBeGreaterThanOrEqual(5);
   });
 
+  it('removes images of files the site does not have (a photo the owner took out, a made-up name)', () => {
+    const page = doc('<img src="assets/photo-a.jpg"><img src="./assets/photo-gone.jpg"><picture><source srcset="assets/x.webp 2x"></picture><img src="data:image/png;base64,AA">');
+    const result = checkPage(page, { ...opts, assets: ['assets/photo-a.jpg'] });
+    expect(result.html).toContain('assets/photo-a.jpg');
+    expect(result.html).not.toContain('photo-gone');
+    expect(result.html).not.toContain('x.webp');
+    expect(result.html).toContain('data:image/png');
+    // Without the list, nothing is checked.
+    expect(checkPage(page, opts).html).toContain('photo-gone');
+  });
+
   it('rejects what it cannot repair: redirects, someone else\'s number or email, scam text', () => {
     const codes = (body: string) => checkPage(doc(body), opts).violations.map((v) => v.detail);
     expect(codes('<script>window.location = "https://evil.test"</script>')).not.toEqual([]);
@@ -133,6 +144,21 @@ describe('contact details on a written page', () => {
     const request: PageRequest = { answers: { businessName: 'Panadería Luna', about: 'Pan', lang: 'es', contact }, notes: [], photos: [] };
     expect(pagePrompt(request)).toContain('573001234567');
     expect(pagePrompt(request)).toContain('frontend-design skill');
+  });
+
+  it('names the logo apart from the photos of the business', () => {
+    const photo = (file: string, caption?: string) => ({ file, caption, bytes: new Uint8Array(), mediaType: 'image/jpeg' as const });
+    const request: PageRequest = { answers: { businessName: 'Luna', about: 'Pan', lang: 'es', contact }, notes: [], photos: [photo('assets/logo-a1.png'), photo('assets/photo-b2.jpg')] };
+    expect(pagePrompt(request)).toContain("The business's logo is at assets/logo-a1.png. There is a photo of the business at assets/photo-b2.jpg. ");
+    expect(pagePrompt({ ...request, photos: [photo('assets/logo-a1.png')] }, undefined, true)).toContain('There are no photos of the business: where the page needs images, make photos');
+  });
+
+  it('each photo goes to the page writer after its file name and what the owner says it shows', () => {
+    const photo = (file: string, caption?: string) => ({ file, caption, bytes: new Uint8Array([1]), mediaType: 'image/jpeg' as const });
+    const request: PageRequest = { answers: { businessName: 'Luna', about: 'Pan', lang: 'es', contact }, notes: [], photos: [photo('assets/photo-a.jpg', 'Pan de masa madre'), photo('assets/photo-b.jpg')] };
+    const content = pageParams(request, 'model', 'high').messages[0]!.content as { type: string; text?: string }[];
+    expect(content.map((block) => block.text ?? block.type)).toEqual(['assets/photo-a.jpg, the owner says: "Pan de masa madre"', 'image', 'assets/photo-b.jpg', 'image', expect.any(String)]);
+    expect(pagePrompt(request)).toContain('There are photos of the business at assets/photo-a.jpg ("Pan de masa madre"), assets/photo-b.jpg. ');
   });
 
   it('nudges each new site toward three different tones and a light or dark page, usually without a ticker strip', () => {

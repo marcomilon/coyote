@@ -44,8 +44,16 @@ export interface Job {
   error?: string;
   /** The site's images once moderated (`_media/<slug>/`), kept between the clarify and write stages. */
   media?: Media;
-  /** Files the requester uploaded before submitting (`_uploads/<uploadId>/`). */
+  /** Files the requester uploaded before submitting (`_uploads/<uploadId>/`). Edit jobs: photos added in Mi sitio. */
   uploadId?: string;
+  /** Edit jobs: the site's images the owner took out in Mi sitio. */
+  removePhotos?: string[];
+  /** Edit jobs: new descriptions of the site's photos, by file ("" clears one). */
+  captions?: Record<string, string>;
+  /** Edit jobs: what the photos added in Mi sitio show, in upload order. */
+  newCaptions?: string[];
+  /** Edit jobs: the photo change once moderated, kept between the clarify and write stages. */
+  photoChange?: { added: string[]; removed: string[]; described?: string[] };
   /** Create jobs: the owner's email (account.ts). Never sent to a model. */
   ownerEmail?: string;
   /** Edit jobs: the `at` of the chat note that follows this redesign (chat-notes.ts). */

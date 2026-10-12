@@ -15,6 +15,7 @@ const s = t(lang, vos);
 const m = s.mySite;
 const other = t(s.otherLang.code);
 const d = m.domain;
+const p = m.photos;
 // The Dominio tab is hidden (global.css) unless PUBLIC_DOMAIN_TAB=on, e.g. in web/.env.development.local, which only `npm run dev` reads.
 const domainTab = import.meta.env.PUBLIC_DOMAIN_TAB === 'on';
 const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, question: s.questions } };
@@ -69,6 +70,7 @@ const fields = [
       <div class="tabs" role="tablist" aria-label={m.tabs.label}>
         <button type="button" role="tab" id="tab-preview" aria-controls="panel-preview" aria-selected="true" data-tab="preview">{m.tabs.preview}</button>
         <button type="button" role="tab" id="tab-change" aria-controls="panel-change" aria-selected="false" tabindex="-1" data-tab="change">{m.tabs.change}</button>
+        <button type="button" role="tab" id="tab-photos" aria-controls="panel-photos" aria-selected="false" tabindex="-1" data-tab="photos">{m.tabs.photos}</button>
         <button type="button" role="tab" id="tab-domain" aria-controls="panel-domain" aria-selected="false" tabindex="-1" data-tab="domain">{m.tabs.domain}</button>
       </div>
       <!-- Under the tabs: the Celular/Computador switch, only on Vista previa. -->
@@ -104,6 +106,30 @@ const fields = [
         <div class="danger" hidden>
           <div class="line"><button class="linkbtn" type="button" data-delete>{m.delete}</button></div>
         </div>
+      </div>
+
+      {/* The owner's logo and photos: take some out, add new ones; saving starts a redesign that places them. */}
+      <div class="tabpanel photos-panel" role="tabpanel" id="panel-photos" aria-labelledby="tab-photos" data-panel="photos" hidden>
+        <p class="lead">{p.intro}</p>
+        <form data-photos-form novalidate>
+          <section>
+            <h3>{p.logo}</h3>
+            <ul class="thumbs current" data-current="logo"></ul>
+            <label class="sub" for="mp-logo" data-logo-label data-add={p.addLogo} data-change={p.changeLogo}>{p.addLogo}</label>
+            <input type="file" id="mp-logo" name="logo" accept="image/*" />
+            <ul class="thumbs" data-thumbs="logo"></ul>
+          </section>
+          <section>
+            <h3>{p.pics}</h3>
+            <p class="hint" data-no-photos>{p.none}</p>
+            <ul class="thumbs current" data-current="photos"></ul>
+            <label class="sub" for="mp-photos">{p.add}</label>
+            <input type="file" id="mp-photos" name="photos" accept="image/*" multiple />
+            <ul class="thumbs" data-thumbs="photos"></ul>
+          </section>
+          <p class="notice" data-kind="error" data-photos-error role="alert"></p>
+          <div><button class="btn" type="submit" data-photos-save disabled>{p.save}</button></div>
+        </form>
       </div>
 
       <div class="tabpanel domain" role="tabpanel" id="panel-domain" aria-labelledby="tab-domain" data-panel="domain" data-domain="loading" hidden>

@@ -22,14 +22,14 @@ export function sitesCsp(options: { formAction: string; frameAncestors: string[]
   ].join('; ');
 }
 
-/** Our app: own scripts only (Astro emits external files), the API, the draft iframe, direct S3 uploads. */
+/** Our app: own scripts only (Astro emits external files), the API, the draft iframe and its photos (Mi sitio), direct S3 uploads. */
 export function appCsp(options: { connectSrc: string[]; frameSrc: string[] }): string {
   return [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     'font-src https://fonts.gstatic.com',
-    "img-src 'self' data: blob:",
+    `img-src 'self' data: blob: ${options.frameSrc.join(' ')}`,
     `connect-src ${options.connectSrc.join(' ')}`,
     `frame-src ${options.frameSrc.join(' ')}`,
     "frame-ancestors 'none'",

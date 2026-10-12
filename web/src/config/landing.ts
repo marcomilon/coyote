@@ -88,20 +88,22 @@ export interface Testimonial {
 /** Real quotes, with the customer's permission. Each language lists its own customers. */
 export const TESTIMONIALS: Record<Lang, Testimonial[]> = TODO({
   es: [
+    { quote: 'Subimos el logo y las fotos de los modelos, y en minutos teníamos la página del proyecto para enviar por WhatsApp.', name: 'Carmen Salazar', business: 'Residencial Oliva · Lima, PE', country: 'PE', screenshot: '/ejemplos/residencial-oliva.jpg', avatar: null, site: 'residencial-oliva' },
     { quote: 'Ahora la gente me agenda por WhatsApp desde Google. Antes solo llegaban los del barrio.', name: 'Jorge Ruiz', business: 'Taller Ruiz · Guadalajara, MX', country: 'MX', screenshot: '/ejemplos/taller-ruiz.jpg', avatar: null, site: 'taller-ruiz' },
     { quote: 'Lo hice en la tarde, mientras horneaba. Mis clientas ya ven el menú del día.', name: 'Rosa Gómez', business: 'Panadería Rosa · Medellín, CO', country: 'CO', screenshot: '/ejemplos/panaderia-rosa.jpg', avatar: null, site: 'panaderia-rosa' },
     { quote: 'No sabía nada de páginas. Pedí los cambios como si le escribiera a una amiga.', name: 'Lucía Pérez', business: 'Salón Luna · Buenos Aires, AR', country: 'AR', screenshot: '/ejemplos/salon-luna.jpg', avatar: null, site: 'salon-luna' },
   ],
   pt: [
+    { quote: 'Enviamos o logo e as fotos dos modelos, e em minutos tínhamos o site do empreendimento para mandar pelo WhatsApp.', name: 'Carmen Salazar', business: 'Residencial Oliva · Lima, PE', country: 'PE', screenshot: '/ejemplos/residencial-oliva.jpg', avatar: null, site: 'residencial-oliva' },
     { quote: 'Agora o pessoal marca horário pelo WhatsApp direto do Google. Antes só vinha gente do bairro.', name: 'Jorge Ruiz', business: 'Oficina Ruiz · Curitiba, BR', country: 'BR', screenshot: '/ejemplos/taller-ruiz.jpg', avatar: null, site: 'taller-ruiz' },
     { quote: 'Fiz à tarde, enquanto assava o pão. Minhas clientes já veem o cardápio do dia.', name: 'Rosa Gomes', business: 'Padaria Rosa · Belo Horizonte, BR', country: 'BR', screenshot: '/ejemplos/panaderia-rosa.jpg', avatar: null, site: 'panaderia-rosa' },
     { quote: 'Eu não sabia nada de sites. Pedi as mudanças como se escrevesse para uma amiga.', name: 'Lúcia Pereira', business: 'Studio Lua · Porto Alegre, BR', country: 'BR', screenshot: '/ejemplos/salon-luna.jpg', avatar: null, site: 'salon-luna' },
   ],
 });
 
-/** Photos for the three hero phone examples (Taller, Panadería, Salón), in web/public; null shows a striped slot.
+/** Photos for the hero phone examples (Taller, Panadería, Salón, Inmobiliaria), in web/public; null shows a striped slot.
  * The hero photo of each example site (examples/sites/<slug>/assets), resized to 640px. */
-export const EXAMPLE_PHOTOS: (string | null)[] = ['/ejemplos/phone-taller-ruiz.jpg', '/ejemplos/phone-panaderia-rosa.jpg', '/ejemplos/phone-salon-luna.jpg'];
+export const EXAMPLE_PHOTOS: (string | null)[] = ['/ejemplos/phone-taller-ruiz.jpg', '/ejemplos/phone-panaderia-rosa.jpg', '/ejemplos/phone-salon-luna.jpg', '/ejemplos/phone-residencial-oliva.jpg'];
 
 export const WHATSAPP = {
   /** Support number, digits with country code (e.g. '5215500000000'). null hides every WhatsApp contact link. */

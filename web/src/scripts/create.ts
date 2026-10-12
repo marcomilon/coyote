@@ -6,7 +6,7 @@ import { api, apiUrl, sendAnswers, waitForJob, type JobView } from './jobs';
 import { fullNumber, setUpCountryPicker } from './phone';
 import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
 import { readSession } from './session';
-import { UploadLimitError, uploadImages } from './upload';
+import { captionsOf, showThumbs, UploadLimitError, uploadImages } from './upload';
 
 type State = 'form' | 'working' | 'questions' | 'message';
 /** `action`: a button back to the form, with the owner's answers filled in again. */
@@ -19,6 +19,8 @@ interface Strings {
   uploadLimited: string;
   tooManyPhotos: string;
   notImage: string;
+  removePhoto: string;
+  caption: { label: string; placeholder: string };
   submit: string;
   mySitePath: string;
   question: QuestionStrings & { invalid: string };
@@ -33,7 +35,7 @@ const root = document.getElementById('create') as HTMLElement;
 const strings = JSON.parse(root.dataset.strings ?? '{}') as Strings;
 const form = root.querySelector('form[data-form]') as HTMLFormElement;
 setUpCountryPicker(form.elements.namedItem('country') as HTMLSelectElement, form.elements.namedItem('whatsapp') as HTMLInputElement);
-const MAX_PHOTOS = 3; // as in services/generator/src/core/uploads.ts
+const MAX_PHOTOS = 6; // as in services/generator/src/core/uploads.ts
 const questionsForm = root.querySelector('form[data-questions]') as HTMLFormElement;
 const $ = <T extends Element>(selector: string) => root.querySelector(selector) as T;
 
@@ -61,6 +63,7 @@ for (const name of ['logo', 'photos']) {
       kept.forEach((file) => transfer.items.add(file));
       input.files = transfer.files;
     }
+    showThumbs(input, $(`[data-thumbs="${name}"]`), { remove: strings.removePhoto, ...(name === 'photos' && { caption: strings.caption }) });
   });
 }
 
@@ -243,7 +246,7 @@ form.addEventListener('submit', async (event) => {
   if (!apiUrl) return setErrors(['noApi']);
 
   const data = Object.fromEntries([...new FormData(form)].filter(([, value]) => typeof value === 'string')) as Record<string, string>;
-  const raw: Record<string, string | boolean | undefined> = {
+  const raw: Record<string, string | string[] | boolean | undefined> = {
     businessName: data.businessName ?? '',
     about: data.about ?? '',
     whatsapp: fullNumber(data.country ?? '', data.whatsapp ?? ''),
@@ -283,6 +286,8 @@ form.addEventListener('submit', async (event) => {
       button.textContent = strings.uploading;
       try {
         raw.uploadId = await uploadImages(apiUrl, logo, photos);
+        const notes = captionsOf(form.elements.namedItem('photos') as HTMLInputElement).slice(0, photos.length);
+        if (notes.some(Boolean)) raw.photoNotes = notes;
       } catch (error) {
         button.textContent = strings.submit;
         strings.errors.photos = error instanceof UploadLimitError ? strings.uploadLimited : strings.uploadFailed;

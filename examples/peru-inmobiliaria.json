@@ -1,0 +1,22 @@
+{
+  "form": {
+    "businessName": "Residencial Oliva",
+    "about": "Residencial Oliva es un nuevo edificio de departamentos en Jesús María, Lima, en preventa. Departamentos de 1, 2 y 3 dormitorios con balcón, sala comedor integrada y vista a la ciudad. Fachada con madera y vidrio, áreas verdes y terraza en la azotea.\n\nModelos:\n* Modelo A: 1 dormitorio, 45 m²\n* Modelo B: 2 dormitorios, 70 m²\n* Modelo C: 3 dormitorios, 100 m²",
+    "whatsapp": "+51 987 555 214",
+    "email": "ventas@residencialoliva.example.com",
+    "address": "Av. Salaverry 2450, Jesús María, Lima",
+    "instagram": "residencialoliva",
+    "lang": "es"
+  },
+  "details": "Vendemos los departamentos directamente, sin intermediarios. Separa tu departamento en preventa y agenda una visita a la sala de ventas por WhatsApp.",
+  "goal": "whatsapp",
+  "photos": {
+    "logo": "assets/inmobiliaria-lima/Oliva Residencial Branding Logo.png",
+    "photos": [
+      { "file": "assets/inmobiliaria-lima/fachada_edificio_lima.png", "caption": "La fachada del edificio Residencial Oliva al atardecer" },
+      { "file": "assets/inmobiliaria-lima/departamento_modelo_a.png", "caption": "Modelo A: 1 dormitorio, 45 m²" },
+      { "file": "assets/inmobiliaria-lima/departamento_modelo_b.png", "caption": "Modelo B: 2 dormitorios, 70 m²" },
+      { "file": "assets/inmobiliaria-lima/departamento_modelo_c.png", "caption": "Modelo C: 3 dormitorios, 100 m²" }
+    ]
+  }
+}

@@ -1,9 +1,11 @@
 // The CAPTCHA on the anonymous forms (create, sign-in link, report): Cloudflare Turnstile, rendered explicitly so
-// it stays invisible unless Cloudflare wants a click. The API checks the token (services/generator aws/turnstile.ts).
+// it stays invisible unless Cloudflare wants a click, and run only once the visitor starts using the form (or
+// submits it), never just for opening the page. The API checks the token (services/generator aws/turnstile.ts).
 // No site key in config.js (local builds, tests): no widget, and the forms send no token.
 
 interface Turnstile {
   render(container: HTMLElement, options: Record<string, unknown>): string | undefined;
+  execute(widgetId: string): void;
   getResponse(widgetId: string): string | undefined;
   reset(widgetId: string): void;
 }
@@ -38,7 +40,8 @@ export interface HumanCheck {
 }
 
 /**
- * Renders the widget in `container` (inside the form) and starts the check at once. When a submit waits on a check
+ * Renders the widget in `container` (inside the form); the check starts on the form's first focus or on submit,
+ * whichever comes first. When a submit waits on a check
  * Cloudflare wants a click for, the container's `.human-hint` shows and the page scrolls to it.
  */
 export function humanCheck(container: HTMLElement | null, lang: string): HumanCheck {
@@ -47,11 +50,13 @@ export function humanCheck(container: HTMLElement | null, lang: string): HumanCh
   const hint = container.querySelector<HTMLElement>('.human-hint');
   const box = container.appendChild(document.createElement('div'));
   let interactive = false;
+  let started = false;
   const widget = loadTurnstile().then((turnstile) => {
     const id = turnstile?.render(box, {
       sitekey: siteKey,
       language: lang === 'pt' ? 'pt-br' : 'es',
       appearance: 'interaction-only',
+      execution: 'execute',
       // Our app is always light; Turnstile's default follows the device and draws a dark box on a dark-mode phone.
       theme: 'light',
       'refresh-expired': 'auto',
@@ -66,10 +71,17 @@ export function humanCheck(container: HTMLElement | null, lang: string): HumanCh
     });
     return turnstile && id !== undefined ? { turnstile, id } : undefined;
   });
+  const start = () => {
+    if (started) return;
+    started = true;
+    void widget.then((w) => w?.turnstile.execute(w.id));
+  };
+  container.closest('form')?.addEventListener('focusin', start, { once: true });
   return {
     async token() {
       const w = await widget;
       if (!w) return undefined;
+      start();
       const until = Date.now() + WAIT_MS;
       let shown = false;
       for (;;) {
@@ -88,6 +100,7 @@ export function humanCheck(container: HTMLElement | null, lang: string): HumanCh
       }
     },
     reset() {
+      started = false;
       void widget.then((w) => w?.turnstile.reset(w.id));
     },
   };

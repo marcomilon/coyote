@@ -3,7 +3,7 @@
  * nudge), side by side. It uses production's request (pagePrompt), API call (anthropicWritePage) and page checks
  * (checkPage), and never touches the stack: no sites, no emails, no rate limit.
  *   npm run opus:sites -w services/generator -- --only colombia-arepas --skills none,frontend-design,hallmark --look on,off
- *     [--images on,off] [--goal off,on] [--repeat 2] [--model opus|haiku] [--effort high] [--concurrency 6] [--out out/design/<name>]
+ *     [--images on,off] [--goal off,on] [--repeat 2] [--model opus|haiku|<claude model ID>] [--effort high] [--concurrency 6] [--out out/design/<name>]
  * Businesses: examples/<id>.json at the repo root, or an id from bakeoff-businesses.ts.
  * Skills: none, frontend-design (bundled), a path to a SKILL.md, or a name: the stack's skills bucket
  * (infra/cdk-outputs.json), else ~/.claude/skills/<name>/SKILL.md.
@@ -144,7 +144,7 @@ interface Result {
   error?: string;
 }
 
-const model = pageModel({}, values.model);
+const model = pageModel(values.model!.startsWith('claude-') ? { PAGE_MODEL: values.model } : {}, values.model);
 const effort = values.effort as PageEffort;
 const businesses = values.only!.split(',').map((s) => business(s.trim()));
 const skills = await Promise.all(values.skills!.split(',').map((s) => skill(s.trim())));

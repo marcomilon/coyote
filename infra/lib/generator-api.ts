@@ -181,8 +181,11 @@ export class GeneratorApi extends Construct {
     // Not a secret: it only keeps raw IPs out of the tables. The stack ID is unique per deployment.
     const ipSalt = Fn.select(2, Fn.split('/', stack.stackId));
     const submit = fn('Submit', 'submit', {
-      environment: { ...environment, GENERATE_FUNCTION_NAME: generate.functionName, RATE_LIMIT_PER_DAY: String(props.rateLimitPerDay), IP_HASH_SALT: ipSalt, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn },
+      environment: { ...environment, GENERATE_FUNCTION_NAME: generate.functionName, RATE_LIMIT_PER_DAY: String(props.rateLimitPerDay), IP_HASH_SALT: ipSalt, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn, PAGE_MODE_PARAMETER, PAGE_MODEL_PARAMETER },
     });
+    // The free-draft check follows the writer's tier (models.ts), so submit reads the same two switches (aws/page-tier.ts).
+    pageMode.grantRead(submit);
+    pageModel.grantRead(submit);
     // Takes the magic link off a finished job, so it needs write access to jobs.
     const status = fn('Status', 'status', { memorySize: 256, environment: { ...environment, IP_HASH_SALT: ipSalt } });
     const withInvalidation = { ...environment, SITES_DISTRIBUTION_ID: props.sitesDistribution.distributionId };
@@ -193,10 +196,14 @@ export class GeneratorApi extends Construct {
       retryAttempts: 0, // a retry would pay for the model calls twice; a stuck reply reads as failed
     });
     // Mi sitio and the chat: the draft, contact edits, free-text edits (started here, run by generate), undo, delete, chat messages.
-    const owner = fn('Owner', 'owner', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, GENERATE_FUNCTION_NAME: generate.functionName, CHAT_FUNCTION_NAME: chat.functionName } });
+    const owner = fn('Owner', 'owner', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, GENERATE_FUNCTION_NAME: generate.functionName, CHAT_FUNCTION_NAME: chat.functionName, PAGE_MODE_PARAMETER, PAGE_MODEL_PARAMETER } });
+    // Redesigns left (paid-writes.ts) follow the writer's tier too.
+    pageMode.grantRead(owner);
+    pageModel.grantRead(owner);
 
-    // Data access, least privilege per function. generate and jobFailed: the free draft per email (free-draft.ts).
-    for (const f of [submit, generate, jobFailed]) props.rateLimitTable.grantReadWriteData(f);
+    // Data access, least privilege per function. generate and jobFailed: the free draft per email (free-draft.ts);
+    // submit, generate and chat: the model calls per email (email-usage.ts).
+    for (const f of [submit, generate, jobFailed, chat]) props.rateLimitTable.grantReadWriteData(f);
     props.blocklistTable.grantReadData(submit);
     for (const f of [submit, generate, jobFailed, owner, status]) props.jobsTable.grantReadWriteData(f);
     for (const f of [submit, generate, jobFailed, owner, chat]) props.sitesTable.grantReadWriteData(f);

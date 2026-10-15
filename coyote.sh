@@ -19,7 +19,8 @@ Commands:
   abuse-report                   Requests, rejections, and new sites of the last 24 h
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
-  free-draft <email>             Give an email its one free draft back (a second business, or testing)
+  free-draft <email>             Give an email its free draft and its 3 free designs back (a second business, or testing)
+  usage <email>                  An email's model calls, paid and free, and their cost: all time and this month
   view <slug>                    Copy a site's current draft to out/view/<slug>/ and open it in the browser
   page-mode [design|template]    Show or switch how pages are made, for the whole stack from the next job: design, Opus
                                  writes each page (about $0.50); template, Haiku fills a template Opus designed (a few cents).
@@ -413,7 +414,7 @@ case "$command" in
   status) cmd_status ;;
   deploy) cmd_deploy "$@" ;;
   destroy) cmd_destroy ;;
-  abuse-report | unpublish | restore | refill-all | domains | free-draft) cmd_admin "$command" "$@" ;;
+  abuse-report | unpublish | restore | refill-all | domains | free-draft | usage) cmd_admin "$command" "$@" ;;
   domain-register) cmd_domain_register "$@" ;;
   captcha) cmd_captcha "$@" ;;
   email) cmd_email "$@" ;;

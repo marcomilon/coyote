@@ -1,6 +1,8 @@
 import type { Answers } from './answers';
 import type { Usage } from './bedrock';
 import type { Media } from './content';
+import type { UsageCount } from './email-usage';
+import type { ModelTier } from './models';
 import type { Note, Question } from './questions';
 
 /**
@@ -35,10 +37,14 @@ export interface Job {
   notes?: Note[];
   screening?: { decision: string; category: string; confidence: number; clarity?: string; offers?: boolean; reason: string };
   /** unclear: no real business described; the owner was asked to describe it again (not a policy rejection). */
-  /** limit: the owner's email already used its free draft (free-draft.ts). */
+  /** limit: the owner's email already used its free draft (free-draft.ts) or its paid writes (paid-writes.ts). */
   rejectedBy?: 'brand' | 'prescreen' | 'guardrail' | 'policy' | 'image' | 'unclear' | 'limit';
   /** Create jobs: this job used the email's free draft (given back if the job fails). */
   freeDraft?: boolean;
+  /** The tier of the model that wrote the page (models.ts): only a paid write uses the free draft. */
+  tier?: ModelTier;
+  /** A paid-tier write: the email hash whose paid write it used (paid-writes.ts; given back if the job fails). */
+  paidWrite?: string;
   rejectDetail?: string;
   usage: Usage[];
   draftUrl?: string;
@@ -171,6 +177,10 @@ export interface Stores {
   putOnce(key: string, ttl: number): Promise<boolean>;
   /** Adds one to a counter and resolves to the new value. */
   increment(key: string, ttl: number): Promise<number>;
+  /** Adds model calls to a usage counter (email-usage.ts). */
+  addUsage(key: string, count: UsageCount, ttl: number): Promise<void>;
+  /** A usage counter (zeros when unseen). */
+  getUsage(key: string): Promise<UsageCount>;
   /** Atomic: resolves to false when the slug is already taken. */
   claimSlug(site: SiteRecord): Promise<boolean>;
   /** Frees a slug that is still only claimed (no draft yet) by this job. */

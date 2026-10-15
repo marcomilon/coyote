@@ -187,7 +187,7 @@ describe('template mode in the generate job', () => {
     expect(message).toContain(`  página (${haiku}): $0.02`);
     expect(message).toContain('  fotos (2 × stability.stable-image-core-v1:1): $0.08'); // the hero and the side photo
     expect(message).toMatch(/^Costo: \$0\.13 \+ desconocido$/m); // questions, pick and fill on Haiku, 2 photos; the fake pre-screen has no price
-    expect(message).toContain(`Plantilla: bold, llenada por ${haiku} · fotos IA on (dueño: on)`);
+    expect(message).toContain(`Plantilla: bold, llenada por ${haiku} (gratis) · fotos IA on (dueño: on)`);
     expect(message).not.toContain('opus');
   });
 

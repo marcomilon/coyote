@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { callWithRetry, GuardrailBlocked, ModelOutputError, type CallTool, type Usage } from './bedrock';
 import { Contact } from './content';
 import { loadDraft, ownerText, saveDraft, type DraftDeps, type SiteDoc } from './drafts';
+import { countUsage } from './email-usage';
 import { publicJob, type ChatMessage, type SiteRecord } from './jobs';
 import { CHAT_TTL_SECONDS, noteRedesignDone } from './chat-notes';
 import { applyContact, day, inTwoDays, previewUrl, runningEdit, type ContactInput, type OwnerDeps } from './owner';
@@ -183,6 +184,12 @@ function givenByOwner(contact: ContactInput, said: string): ContactInput {
 
 /** Runs one pending reply: screen the request, ask Haiku, apply its changes, check the page, save a new draft. */
 export async function runChatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatOutcome> {
+  const result = await chatTurn(slug, at, deps);
+  if (result.outcome !== 'SKIPPED' && result.usage.length > 0) await countUsage(deps.stores, (await deps.stores.getSite(slug))?.ownerEmailId, result.usage, deps.now());
+  return result;
+}
+
+async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatOutcome> {
   const { stores } = deps;
   const history = await stores.listChat(slug, 0, HISTORY + 2);
   const pending = history.find((m) => m.at === at);

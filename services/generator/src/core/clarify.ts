@@ -1,11 +1,13 @@
 import { z } from 'zod';
 import { GuardrailBlocked, type CallTool } from './bedrock';
+import { countUsage } from './email-usage';
 import { releaseNewSite } from './generate-job';
 import { announceRejection, type Announce } from './notices';
 import type { Stores } from './jobs';
 import { isOurExample } from './example-about';
 import { isRejected, isUnclear, prescreen } from './prescreen';
 import { applyAnswers, type Note } from './questions';
+import { emailId } from './token';
 
 export interface AnswersDeps {
   /** Notices for the admin (notices.ts). */
@@ -62,6 +64,7 @@ export async function submitAnswers(jobId: string, body: unknown, deps: AnswersD
     try {
       const screening = await prescreen(answers, { callTool: deps.callTool, modelId: deps.prescreenModelId }, job.instruction, [...(job.notes ?? []), ...notes]);
       usage.push(screening.usage);
+      await countUsage(stores, job.ownerEmail && emailId(job.ownerEmail), [screening.usage], deps.now());
       if (isRejected(screening)) return reject('prescreen', screening.category);
       if (mustAnswer && isUnclear(screening)) return required;
     } catch (error) {

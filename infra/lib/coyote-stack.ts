@@ -20,7 +20,7 @@ import {
   aws_sns as sns,
 } from 'aws-cdk-lib';
 import type { Construct } from 'constructs';
-import { DEFAULT_MODEL_ID, DEFAULT_PRESCREEN_MODEL_ID } from '../../services/generator/src/core/models';
+import { DEFAULT_MODEL_ID, DEFAULT_PRESCREEN_MODEL_ID, hasTier } from '../../services/generator/src/core/models';
 import { createUrls } from '../../services/generator/src/core/urls';
 import { DEFAULT_PAGE_SKILL } from '../../services/generator/src/core/frontend-design';
 import { EXAMPLE_SITES } from '../../services/generator/src/core/examples';
@@ -89,6 +89,11 @@ export class CoyoteStack extends Stack {
     super(scope, id, props);
 
     Tags.of(this).add('project', 'coyote');
+
+    // Every model belongs to a tier (models.ts MODELS): paid or free decides what the owner pays for.
+    for (const id of [props.modelId, props.prescreenModelId]) {
+      if (id && !hasTier(id)) throw new Error(`Model ${id} has no tier: add it to MODELS in services/generator/src/core/models.ts`);
+    }
 
     const removalPolicy = RemovalPolicy.DESTROY;
 

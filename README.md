@@ -38,7 +38,8 @@ All commands use the AWS profile `coyote` (override with `COYOTE_AWS_PROFILE`).
 | Investigate an alarm | `./coyote.sh abuse-report`: requests per visitor (hashed IP), rejections with the layer that stopped them, and the newest drafts. Open them and look at them. |
 | See what the page writer made | `./coyote.sh view <slug>`: copies the site's current draft to `out/view/<slug>/` and opens it. Works for any site, published or not. |
 | Take a site down for good | `./coyote.sh unpublish <slug>`. Deletes the pages and blocklists the slug. |
-| An owner needs a second site | Each email gets one free draft, even if they delete it. `./coyote.sh free-draft <email>` gives it back. |
+| An owner needs a second site | Each email gets one free draft, even if they delete it. `./coyote.sh free-draft <email>` gives it back, with its 3 free designs. |
+| How much an email has used | `./coyote.sh usage <email>`: its model calls, paid and free (model tiers), and their cost, all time and this month. |
 | Bring back a quarantined site | `./coyote.sh restore <slug>`. Three distinct visitors reporting a site quarantine it automatically; each report emails the admin. |
 | See how the stack is set up | `./coyote.sh status`: stack state, URLs, the page writer's model, skill (and the ones available), look nudge, and the Bedrock models. |
 | Switch the page writer | `./coyote.sh page-model haiku` while testing the workflow (cheap, plain designs), `./coyote.sh page-model opus` for real designs, `./coyote.sh page-model` to see which is on. Applies to the whole stack from the next job and survives deploys. |

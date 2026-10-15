@@ -508,6 +508,9 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .mysite .ticket { margin: 0; }
 .linkbtn { background: none; border: 0; padding: .3rem; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; color: var(--ink); min-height: 44px; }
 .notice { font-weight: 600; margin-top: 1rem; min-height: 1.5rem; }
+.mysite .banner { margin-top: 16px; padding: 16px 20px; background: var(--paper-light); border: 2px solid var(--ink); border-left: 10px solid var(--azul); border-radius: 10px; }
+.mysite .banner strong { display: block; font-size: 18px; }
+.mysite .banner p { margin-top: 4px; }
 .notice[data-kind='error'] { color: var(--rojo); }
 .danger { margin-top: 3rem; border-top: 3px dashed var(--ink); padding-top: 1.6rem; display: grid; gap: 1.2rem; }
 .danger[hidden] { display: none; }

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { snsAnnounce } from '../aws/notices';
+import { pageTier } from '../aws/page-tier';
 import { turnstile } from '../aws/turnstile';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { callTool } from '../core/bedrock';
@@ -47,6 +48,7 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event
     startGenerate,
     announce,
     verifyHuman,
+    pageTier: () => pageTier(),
     now: Date.now,
     newId: randomUUID,
   });

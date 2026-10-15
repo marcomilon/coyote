@@ -274,6 +274,23 @@ describe('one free draft per email', () => {
     expect((await submit({ ...body, ownerEmail: 'otra@correo.com' }, '5.6.7.8', t.submitDeps)).status).toBe(202);
   });
 
+  it('a free-tier writer (models.ts) uses no free draft', async () => {
+    const t = harness();
+    const deps = { ...t.generateDeps, pageModel: 'claude-haiku-4-5' };
+    const submitDeps = { ...t.submitDeps, pageTier: async () => 'free' as const };
+    await submit(body, '1.2.3.4', submitDeps);
+    expect(await runGenerateJob('job-1', deps)).toMatchObject({ outcome: 'DONE' });
+    expect(t.jobs.get('job-1')).toMatchObject({ tier: 'free' });
+    expect(t.jobs.get('job-1')!.freeDraft).toBeUndefined();
+
+    expect(await submit({ ...body, businessName: 'Florería Sol' }, '5.6.7.8', submitDeps)).toMatchObject({ status: 202 });
+    expect(await runGenerateJob('job-2', deps)).toMatchObject({ outcome: 'DONE' });
+    // Back on Opus, the email still has its free draft.
+    expect(await submit({ ...body, businessName: 'Panadería Sol' }, '5.6.7.8', t.submitDeps)).toMatchObject({ status: 202 });
+    expect(await runGenerateJob('job-3', t.generateDeps)).toMatchObject({ outcome: 'DONE' });
+    expect(t.jobs.get('job-3')).toMatchObject({ tier: 'paid', freeDraft: true });
+  });
+
   it('two sites sent at once: only the first to reach the page writer gets it', async () => {
     const t = harness();
     await submit(body, '1.2.3.4', t.submitDeps);
@@ -402,7 +419,7 @@ describe('the admin notice for new sites', () => {
     expect(message).toContain('  página (claude-opus-5-5): $0.64'); // 10k × $4 + 30k × $20 per million
     expect(message).toContain('  fotos (1 × stability.stable-image-core-v1:1): $0.04');
     expect(message).toMatch(/^Costo: \$0\.68 \+ desconocido$/m); // the fake models of the other steps have no price
-    expect(message).toContain('Redactor: claude-opus-5-5, esfuerzo high · skill none · look off · fotos IA on (dueño: on)');
+    expect(message).toContain('Redactor: claude-opus-5-5 (pago), esfuerzo high · skill none · look off · fotos IA on (dueño: on)');
   });
 
   it('a failed notice never fails the job', async () => {

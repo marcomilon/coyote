@@ -6,6 +6,8 @@ import { cleanContact, type ContactField } from './answers';
 import { Contact } from './content';
 import { deleteDraft, draftPrefix, loadDraft, mediaPrefix, ownerText, refreshPreview, saveDraft, sourcePrefix, type SiteDoc } from './drafts';
 import { JOB_TTL_SECONDS, publicJob, type Job, type SiteRecord, type Stores } from './jobs';
+import type { ModelTier } from './models';
+import { paidWritesLeft } from './paid-writes';
 import { checkPage, contactMissing, replaceContact } from './page-check';
 import { editTexts, ownerTextsAfter, pageTexts, type TextEdit } from './page-texts';
 import { checkTexts } from './policy';
@@ -25,6 +27,8 @@ export interface OwnerDeps {
   startGenerate(jobId: string): Promise<void>;
   /** Invokes the chat Lambda for a Coyote reply that is waiting (chat.ts). */
   startChat(slug: string, at: number): Promise<void>;
+  /** The tier of the model the next page write would use (models.ts). Undefined: paid. */
+  pageTier?(): Promise<ModelTier>;
   now(): number;
   newId(): string;
   newDraftId?: () => string;
@@ -63,9 +67,18 @@ export async function authenticate(
 export const previewUrl = (site: SiteRecord, urls: Urls) => (site.previewId ? urls.draftUrl(site.previewId) : undefined);
 
 /** What "Mi sitio" shows. Never the token hash. */
-export async function ownerView(site: SiteRecord, { stores, urls }: Pick<OwnerDeps, 'stores' | 'urls'>) {
+/** Paid-tier page writes the site's owner has left; undefined when page writes are free-tier now (no limit). */
+async function designsLeft(site: SiteRecord, deps: Pick<OwnerDeps, 'stores' | 'pageTier'>): Promise<number | undefined> {
+  if (!site.ownerEmailId || (await deps.pageTier?.()) === 'free') return undefined;
+  return paidWritesLeft(deps.stores, site.ownerEmailId);
+}
+
+export async function ownerView(site: SiteRecord, deps: Pick<OwnerDeps, 'stores' | 'urls' | 'pageTier'>) {
+  const { stores, urls } = deps;
   const doc = site.currentDraftId ? await loadDraft(site.slug, site.currentDraftId, stores) : undefined;
   return {
+    // 0: no redesigns left; Mi sitio shows a banner and its redesign buttons get 402.
+    designsLeft: await designsLeft(site, deps),
     slug: site.slug,
     status: site.status,
     draftUrl: site.currentDraftId ? urls.draftUrl(site.currentDraftId) : undefined,
@@ -112,6 +125,8 @@ export type EditResult =
   | { status: 200; missing: string[] }
   | { status: 202; jobId: string }
   | { status: 400; fields: string[] }
+  /** The owner's email used up its paid writes (paid-writes.ts). */
+  | { status: 402 }
   | { status: 409; error?: 'busy' | 'stale' }
   | { status: 422 }
   | { status: 429 };
@@ -146,6 +161,8 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   // One redesign at a time: a second one would start from the page the first is about to replace. The same for
   // texts: the redesign would drop them.
   if ((redesign || texts) && (await runningEdit(site, stores, now))) return { status: 409, error: 'busy' };
+  // A paid-tier redesign needs one of the email's paid writes left (the claim itself is in the generate job).
+  if (redesign && !replaceMade && (await designsLeft(site, deps)) === 0) return { status: 402 };
   // A swap calls no model (uploads have their own daily cap), so it doesn't count as one of the day's redesigns.
   if (redesign && !replaceMade && !(await stores.hitRateLimit(`edits#${site.slug}#${day(now)}`, EDITS_PER_DAY, inTwoDays(now)))) return { status: 429 };
 

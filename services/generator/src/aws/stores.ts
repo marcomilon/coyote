@@ -137,6 +137,23 @@ export function createStores(config: StoreConfig): Stores {
       return Number(Attributes?.count ?? 0);
     },
 
+    async addUsage(key, count, ttl) {
+      await db.send(
+        new UpdateCommand({
+          TableName: config.rateLimitTable,
+          Key: { ip: key },
+          UpdateExpression: 'SET #ttl = if_not_exists(#ttl, :ttl) ADD paid :paid, free :free, microUsd :microUsd',
+          ExpressionAttributeNames: { '#ttl': 'ttl' },
+          ExpressionAttributeValues: { ':paid': count.paid, ':free': count.free, ':microUsd': count.microUsd, ':ttl': ttl },
+        }),
+      );
+    },
+
+    async getUsage(key) {
+      const { Item } = await db.send(new GetCommand({ TableName: config.rateLimitTable, Key: { ip: key } }));
+      return { paid: Number(Item?.paid ?? 0), free: Number(Item?.free ?? 0), microUsd: Number(Item?.microUsd ?? 0) };
+    },
+
     async claimSlug(site) {
       try {
         await db.send(

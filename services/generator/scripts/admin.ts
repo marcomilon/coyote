@@ -5,14 +5,18 @@
  *   abuse-report        who did what in the last 24 h
  *   refill-all          finish every site's current draft again (after a page-check or domain change); no model call
  *   domains             the domains registered for owners (Mi sitio → Dominio)
- *   free-draft <email>  give an email its free draft back (support: a second business; testing)
+ *   free-draft <email>  give an email its free draft and its 3 free designs back (support: a second business; testing)
+ *   usage <email>       the email's model calls by tier (paid/free) and their cost: all time and this month
  */
 import { readFileSync } from 'node:fs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, paginateScan } from '@aws-sdk/lib-dynamodb';
 import { createStores } from '../src/aws/stores';
 import { refillDraft } from '../src/core/drafts';
+import { usageOf, type UsageCount } from '../src/core/email-usage';
 import { returnFreeDraft } from '../src/core/free-draft';
+import { PAID_WRITES_PER_EMAIL, paidWritesLeft, resetPaidWrites } from '../src/core/paid-writes';
+import { emailId } from '../src/core/token';
 import type { DomainRecord, Job, SiteRecord } from '../src/core/jobs';
 import { createUrls } from '../src/core/urls';
 
@@ -109,7 +113,18 @@ switch (command) {
   case 'free-draft': {
     if (!slug?.includes('@')) throw new Error('usage: free-draft <email>');
     await returnFreeDraft(stores, slug);
-    console.log(`${slug}: may create a new free draft.`);
+    await resetPaidWrites(stores, slug);
+    console.log(`${slug}: may create a new free draft, with ${PAID_WRITES_PER_EMAIL} free designs.`);
+    break;
+  }
+  case 'usage': {
+    if (!slug?.includes('@')) throw new Error('usage: usage <email>');
+    const { all, month, monthName } = await usageOf(stores, emailId(slug), Date.now());
+    const line = (label: string, c: UsageCount) => `  ${label.padEnd(10)} ${String(c.paid).padStart(5)} paid  ${String(c.free).padStart(5)} free  $${(c.microUsd / 1_000_000).toFixed(2)}`;
+    console.log(`${slug.trim().toLowerCase()}: model calls`);
+    console.log(line('all time', all));
+    console.log(line(monthName, month));
+    console.log(`  free designs left: ${await paidWritesLeft(stores, emailId(slug))} of ${PAID_WRITES_PER_EMAIL}`);
     break;
   }
   case 'domains': {
@@ -122,6 +137,6 @@ switch (command) {
     break;
   }
   default:
-    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | refill-all | domains');
+    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | refill-all | domains | free-draft <email> | usage <email>');
     process.exit(1);
 }

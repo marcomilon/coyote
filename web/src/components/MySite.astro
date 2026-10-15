@@ -49,6 +49,11 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </a>
       </header>
+      {/* The owner's email used its free designs (paid-writes.ts): redesigns are closed, text and contact edits are not. */}
+      <aside class="banner" data-designs-out role="status" hidden>
+        <strong>{m.designsOut.title}</strong>
+        <p>{m.designsOut.text}</p>
+      </aside>
       {/* For an owner who came from the form or the "lista" email (not from Mis páginas web): how to come back later. */}
       <details class="later" data-later hidden>
         <summary>{m.recover.later}</summary>

@@ -132,6 +132,8 @@ const es = {
       note: 'También puedes usar el botón del correo «Tu página web está lista».',
       action: 'Ir a Mis páginas web',
     },
+    // Shown once the owner's email used its paid writes (services/generator/src/core/paid-writes.ts: 3).
+    designsOut: { title: 'Usaste tus 3 diseños gratis', text: 'Fueron tu primer diseño y 2 rediseños. Puedes seguir cambiando tus textos y tus datos de contacto, y poner tus fotos en lugar de las creadas con IA.' },
     tabs: { label: 'Mi página web', preview: 'Vista previa', change: 'Actualiza tu página web', texts: 'Tus textos', photos: 'Tus fotos', domain: 'Activa tu página web' },
     photos: {
       intro: 'Sube el logo y las fotos de tu negocio y las ponemos en tu página web. Si faltan imágenes, las creamos con IA.',
@@ -161,6 +163,7 @@ const es = {
       notImage: 'Ese archivo no es una imagen. Elige una foto (JPG o PNG).',
       failed: 'No pudimos subir las fotos. Inténtalo de nuevo.',
       limited: 'Llegaste al límite de cambios de hoy. Inténtalo mañana.',
+      noDesigns: 'Ya usaste tus 3 diseños gratis, y agregar o quitar fotos rediseña la página. Puedes cambiar las fotos creadas con IA por las tuyas.',
     },
     texts: {
       intro: 'Cambia cualquier texto de tu página web aquí mismo. El diseño queda igual.',
@@ -265,6 +268,7 @@ const es = {
     busy: 'Espera a que termine el cambio anterior.',
     limit: 'Llegaste al límite de mensajes de hoy. Puedes seguir mañana.',
     editLimit: 'Llegaste al límite de rediseños de hoy. Puedes pedir más mañana.',
+    noDesigns: 'Ya usaste tus 3 diseños gratis, así que no puedo rediseñar tu página web. Sí puedo cambiar textos y datos de contacto.',
     error: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.',
     noToken: { title: 'Falta tu enlace', text: 'Abre esta página escaneando el código que aparece junto a tu página web.' },
     badToken: { title: 'Este enlace no es válido', text: 'Puede estar vencido o incompleto. Escanea el código de nuevo.' },
@@ -399,6 +403,7 @@ const esVos: DeepPartial<typeof es> = {
       note: 'También podés usar el botón del correo «Tu página web está lista».',
     },
     limited: { text: 'Abriste esta página muchas veces hoy. Volvé mañana: tu página web sigue ahí.' },
+    designsOut: { text: 'Fueron tu primer diseño y 2 rediseños. Podés seguir cambiando tus textos y tus datos de contacto, y poner tus fotos en lugar de las creadas con IA.' },
     tabs: { change: 'Actualizá tu página web', domain: 'Activá tu página web' },
     photos: {
       intro: 'Subí el logo y las fotos de tu negocio y las ponemos en tu página web. Si faltan imágenes, las creamos con IA.',
@@ -412,6 +417,7 @@ const esVos: DeepPartial<typeof es> = {
       notImage: 'Ese archivo no es una imagen. Elegí una foto (JPG o PNG).',
       failed: 'No pudimos subir las fotos. Intentalo de nuevo.',
       limited: 'Llegaste al límite de cambios de hoy. Intentalo mañana.',
+      noDesigns: 'Ya usaste tus 3 diseños gratis, y agregar o quitar fotos rediseña la página. Podés cambiar las fotos creadas con IA por las tuyas.',
     },
     texts: {
       intro: 'Cambiá cualquier texto de tu página web acá mismo. El diseño queda igual.',
@@ -611,6 +617,7 @@ const pt: typeof es = {
       note: 'Você também pode usar o botão do e-mail «Seu site está pronto».',
       action: 'Ir para Meus sites',
     },
+    designsOut: { title: 'Você usou seus 3 designs grátis', text: 'Foram seu primeiro design e 2 redesenhos. Você ainda pode mudar seus textos e seus contatos, e colocar suas fotos no lugar das criadas com IA.' },
     tabs: { label: 'Meu site', preview: 'Pré-visualização', change: 'Atualize seu site', texts: 'Seus textos', photos: 'Suas fotos', domain: 'Ative seu site' },
     photos: {
       intro: 'Envie o logo e as fotos do seu negócio e nós colocamos no seu site. Se faltarem imagens, criamos com IA.',
@@ -640,6 +647,7 @@ const pt: typeof es = {
       notImage: 'Esse arquivo não é uma imagem. Escolha uma foto (JPG ou PNG).',
       failed: 'Não foi possível enviar as fotos. Tente de novo.',
       limited: 'Você chegou ao limite de mudanças de hoje. Tente amanhã.',
+      noDesigns: 'Você já usou seus 3 designs grátis, e adicionar ou tirar fotos redesenha a página. Você pode trocar as fotos criadas com IA pelas suas.',
     },
     texts: {
       intro: 'Mude qualquer texto do seu site aqui mesmo. O design continua igual.',
@@ -744,6 +752,7 @@ const pt: typeof es = {
     busy: 'Espere a mudança anterior terminar.',
     limit: 'Você chegou ao limite de mensagens de hoje. Amanhã pode continuar.',
     editLimit: 'Você chegou ao limite de redesenhos de hoje. Amanhã pode pedir mais.',
+    noDesigns: 'Você já usou seus 3 designs grátis, então não posso redesenhar seu site. Ainda posso mudar textos e contatos.',
     error: 'Não foi possível enviar. Confira a conexão e tente de novo.',
     noToken: { title: 'Falta o seu link', text: 'Abra esta página apontando a câmera para o código que aparece ao lado do seu site.' },
     badToken: { title: 'Este link não é válido', text: 'Pode ter vencido ou estar incompleto. Aponte a câmera para o código de novo.' },

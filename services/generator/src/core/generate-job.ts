@@ -1,5 +1,7 @@
 import { issueLogin, linkSite } from './account';
+import { countUsage } from './email-usage';
 import { claimFreeDraft, returnFreeDraft } from './free-draft';
+import { claimPaidWrite, returnPaidWrite } from './paid-writes';
 import { noteRedesignDone } from './chat-notes';
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
 import type { Media } from './content';
@@ -8,13 +10,14 @@ import { voiceOf } from './i18n';
 import { imageMaker, imageRatio, madeRatio, type GenerateImage } from './images';
 import type { Job, Stores } from './jobs';
 import { checkPage } from './page-check';
-import { DEFAULT_PAGE_MODEL, DEFAULT_PAGE_SKILL, NO_SKILL, parsePage, pickLook, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type WritePage } from './page-writer';
+import { DEFAULT_PAGE_SKILL, NO_SKILL, parsePage, pickLook, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type WritePage } from './page-writer';
 import { PolicyRejection, type Violation } from './policy';
 import { isRejected, prescreen } from './prescreen';
 import { planSite } from './site-writer';
 import { writeTemplatePage, type TemplateLibrary } from './template-writer';
 import { readyEmail, type SendEmail } from './mail';
-import { issueToken, TOKEN_TTL_SECONDS } from './token';
+import { emailId, issueToken, TOKEN_TTL_SECONDS } from './token';
+import { modelTier, writerModel } from './models';
 import { mergeMedia, processUploads } from './uploads';
 import type { Urls } from './urls';
 import { announceEdit, announceFailure, announceNewSite, announceRejection, type Announce, type OwnerTextsCount, type PageWriterStatus } from './notices';
@@ -255,13 +258,23 @@ async function fillCheckedPage(request: PageRequest, media: Media, current: Site
  * (the page writer failing included). A new site that never got a draft gives its slug back; an edit never touches the slug.
  */
 export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Promise<GenerateOutcome> {
+  // This run's model calls, counted for the owner's email whichever way the job ends.
+  const run: { owner?: string; usage: Usage[] } = { usage: [] };
+  try {
+    return await generate(jobId, deps, run);
+  } finally {
+    await countUsage(deps.stores, run.owner, run.usage, deps.now());
+  }
+}
+
+async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: string; usage: Usage[] }): Promise<GenerateOutcome> {
   const { stores, urls } = deps;
   const job = await stores.getJob(jobId);
   if (!job || job.status !== 'PENDING' || !job.slug) return { outcome: 'SKIPPED' };
   const slug = job.slug;
   const kind = job.kind ?? 'create';
   const stage = job.stage ?? 'clarify';
-  const usage: Usage[] = [];
+  const usage = run.usage;
   const tokens = () => ({ tokensIn: usage.reduce((n, u) => n + u.inputTokens, 0), tokensOut: usage.reduce((n, u) => n + u.outputTokens, 0) });
   const finish = async (patch: Partial<Job>, draftId?: string) => {
     await stores.updateJob(jobId, { usage: [...job.usage, ...usage], ...patch });
@@ -270,6 +283,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
   };
 
   let site = await stores.getSite(slug);
+  run.owner = job.ownerEmail ? emailId(job.ownerEmail) : site?.ownerEmailId;
   try {
     if (!site) throw new Error(`site ${slug} is gone`);
     let media: Media = job.media ?? { photos: [] };
@@ -335,8 +349,14 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       await stores.updateJob(jobId, { stage: 'write' });
     }
 
-    // A new site uses the email's free draft, claimed atomically right before the page model runs.
-    if (kind === 'create' && job.ownerEmail && !job.freeDraft) {
+    // A paid-tier writer (models.ts) uses the new site's free draft, claimed atomically right before it runs.
+    // Swapping in the owner's photos calls no model.
+    const tier = current && photoChange?.replaced?.length ? 'free' : modelTier(writerModel(deps.pageMode, deps.pageModel, deps.modelId));
+    if (job.tier !== tier) {
+      job.tier = tier;
+      await stores.updateJob(jobId, { tier });
+    }
+    if (kind === 'create' && tier === 'paid' && job.ownerEmail && !job.freeDraft) {
       if (!(await claimFreeDraft(stores, job.ownerEmail, deps.now()))) {
         await releaseNewSite(job, deps);
         await finish({ status: 'REJECTED', rejectedBy: 'limit' });
@@ -344,6 +364,17 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
       }
       job.freeDraft = true;
       await stores.updateJob(jobId, { freeDraft: true });
+    }
+    // Every paid-tier write, new site or redesign, uses one of the email's paid writes (paid-writes.ts).
+    if (tier === 'paid' && run.owner && !job.paidWrite) {
+      if (!(await claimPaidWrite(stores, run.owner, deps.now()))) {
+        await releaseNewSite(job, deps);
+        if (job.freeDraft && job.ownerEmail) await returnFreeDraft(stores, job.ownerEmail);
+        await finish({ status: 'REJECTED', rejectedBy: 'limit' });
+        return { outcome: 'REJECTED', ...tokens() };
+      }
+      job.paidWrite = run.owner;
+      await stores.updateJob(jobId, { paidWrite: run.owner });
     }
 
     // Opus writes the page (a new site), or changes the current one (an edit).
@@ -441,6 +472,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     } else {
       console.error('generate failed', { jobId, error });
       if (job.freeDraft && job.ownerEmail) await returnFreeDraft(stores, job.ownerEmail);
+      if (job.paidWrite) await returnPaidWrite(stores, job.paidWrite);
       await finish({ status: 'FAILED', error: String(error).slice(0, 500) });
       await announceFailure(deps.announce, job, String(error), usage);
       return { outcome: 'FAILED', ...tokens() };
@@ -453,7 +485,8 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
 function pageWriterStatus(job: Job, deps: GenerateJobDeps, template?: string): PageWriterStatus {
   return {
     ...(deps.pageMode === 'template' && template && { template }),
-    model: deps.pageMode === 'template' ? deps.modelId : (deps.pageModel ?? DEFAULT_PAGE_MODEL),
+    model: writerModel(deps.pageMode, deps.pageModel, deps.modelId),
+    tier: job.tier ?? 'paid',
     effort: deps.pageEffort ?? 'high',
     skill: deps.pageSkill === undefined ? DEFAULT_PAGE_SKILL.name : (deps.pageSkill?.name ?? NO_SKILL),
     look: deps.pageLook !== false,
@@ -487,6 +520,7 @@ export async function recordGenerateCrash(jobId: string, errorMessage: string | 
   const error = (errorMessage ?? 'generate crashed').slice(0, 500);
   await releaseNewSite(job, deps);
   if (job.freeDraft && job.ownerEmail) await returnFreeDraft(stores, job.ownerEmail);
+  if (job.paidWrite) await returnPaidWrite(stores, job.paidWrite);
   await stores.updateJob(jobId, { status: 'FAILED', error });
   await noteRedesignDone(stores, job, 'FAILED');
   await announceFailure(deps.announce, job, error, [], /timed out/i.test(error));

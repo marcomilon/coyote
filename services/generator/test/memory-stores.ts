@@ -1,3 +1,4 @@
+import type { UsageCount } from '../src/core/email-usage';
 import type { Account, AccountToken, ChatMessage, DomainRecord, Job, SiteRecord, Stores } from '../src/core/jobs';
 
 /** In-memory Stores for tests. Exposes its state for assertions. */
@@ -5,6 +6,7 @@ export function memoryStores() {
   const jobs = new Map<string, Job>();
   const sites = new Map<string, SiteRecord>();
   const counters = new Map<string, number>();
+  const usageCounts = new Map<string, UsageCount>();
   const blocked = new Set<string>();
   const objects = new Map<string, string>();
   const invalidated: string[] = [];
@@ -40,6 +42,11 @@ export function memoryStores() {
       counters.set(key, (counters.get(key) ?? 0) + 1);
       return counters.get(key)!;
     },
+    async addUsage(key, count) {
+      const now = usageCounts.get(key) ?? { paid: 0, free: 0, microUsd: 0 };
+      usageCounts.set(key, { paid: now.paid + count.paid, free: now.free + count.free, microUsd: now.microUsd + count.microUsd });
+    },
+    getUsage: async (key) => usageCounts.get(key) ?? { paid: 0, free: 0, microUsd: 0 },
     async claimSlug(site) {
       if (sites.has(site.slug)) return false;
       sites.set(site.slug, site);

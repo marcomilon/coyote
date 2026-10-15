@@ -29,7 +29,7 @@ import { normalizeAnswers, PAGE_GOALS, type Answers, type PageGoal } from '../sr
 import { outputAllowed, stabilityImage } from '../src/core/bedrock';
 import { ownerText } from '../src/core/drafts';
 import { imageMaker, legibleWords } from '../src/core/images';
-import { IMAGE_PRICE, imageModelId, usageCost } from '../src/core/models';
+import { hasTier, IMAGE_PRICE, imageModelId, modelTier, usageCost } from '../src/core/models';
 import { checkPage } from '../src/core/page-check';
 import { anthropicWritePage, DEFAULT_PAGE_SKILL, NO_SKILL, pageModel, pagePrompt, parsePage, pickLook, skillText, TONES, type Look, type PageEffort, type PagePhoto, type PageSkill } from '../src/core/page-writer';
 import type { Note } from '../src/core/questions';
@@ -199,7 +199,7 @@ const jobs = businesses.flatMap((b) =>
 /** One look nudge per business and repeat number, shared by its pages. */
 const drawn = new Map<string, Look>();
 const lookFor = (b: Business, n: number) => drawn.get(`${b.id}/${n}`) ?? drawn.set(`${b.id}/${n}`, pickLook()).get(`${b.id}/${n}`)!;
-console.log(`${jobs.length} pages with ${model} (effort ${effort}) → ${outDir}`);
+console.log(`${jobs.length} pages with ${model} (${hasTier(model) ? `${modelTier(model)} tier` : 'no tier yet: add it to MODELS in models.ts'}, effort ${effort}) → ${outDir}`);
 
 async function run({ b, s, look, images, goal, tone, n }: (typeof jobs)[number]): Promise<Result> {
   const skillName = s?.name ?? NO_SKILL;

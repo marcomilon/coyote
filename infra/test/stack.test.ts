@@ -71,11 +71,16 @@ describe('CoyoteStack, domainless', () => {
     template.hasResourceProperties('AWS::Lambda::Function', { Timeout: 600, Environment: { Variables: Match.objectLike({ ANTHROPIC_SECRET_NAME: 'coyote/anthropic-api-key' }) } });
   });
 
-  it('keeps the page-model switch in SSM, starting on Opus, readable only by the generate Lambda', () => {
+  it('keeps the page-model switch in SSM, starting on Opus, readable only by generate, submit and owner (its tier)', () => {
     template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-model', Value: 'opus' });
     template.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PAGE_MODEL_PARAMETER: '/coyote/page-model' }) } });
     const readers = Object.keys(template.findResources('AWS::IAM::Policy')).filter((id) => JSON.stringify(template.findResources('AWS::IAM::Policy')[id]).includes('GeneratorApiPageModel'));
-    expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))).toEqual(['GeneratorApiGenerate']);
+    expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, '')).sort()).toEqual(['GeneratorApiGenerate', 'GeneratorApiOwner', 'GeneratorApiSubmit']);
+  });
+
+  it('refuses a model with no tier', () => {
+    expect(() => synth({ modelId: 'us.anthropic.claude-unknown-v1:0' })).toThrow(/has no tier/);
+    expect(() => synth({ prescreenModelId: 'us.amazon.nova-unknown-v1:0' })).toThrow(/has no tier/);
   });
 
   it('lets only the domains Lambda read the registrar key and the domain-register switch, which starts off', () => {

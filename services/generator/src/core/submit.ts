@@ -6,7 +6,10 @@ import { passesCaptcha, TOKEN_MAX, type VerifyHuman } from './captcha';
 import { JOB_TTL_SECONDS, type Job, type Stores } from './jobs';
 import { announceRejection, type Announce } from './notices';
 import { isOurExample } from './example-about';
+import { countUsage } from './email-usage';
+import { emailId } from './token';
 import { hasFreeDraftLeft } from './free-draft';
+import type { ModelTier } from './models';
 import { isRejected, isUnclear, prescreen } from './prescreen';
 import { hashIp, rateLimitKey } from './ratelimit';
 import { rejectSlug, slugify, withSuffix } from './slug';
@@ -41,6 +44,8 @@ export interface SubmitDeps {
   announce?: Announce;
   /** The CAPTCHA (captcha.ts). Undefined: no check. */
   verifyHuman?: VerifyHuman;
+  /** The tier of the model that will write the page (models.ts). Undefined: paid. A free write skips the free-draft check. */
+  pageTier?(): Promise<ModelTier>;
   /** Starts the generate Lambda asynchronously. */
   startGenerate(jobId: string): Promise<void>;
   now(): number;
@@ -51,7 +56,7 @@ export type SubmitResult =
   | { status: 202; jobId: string }
   | { status: 400; fields: string[] }
   | { status: 403 }
-  /** The email already used its free draft (free-draft.ts). */
+  /** The email already used its free draft (free-draft.ts) and a paid-tier model writes pages. */
   | { status: 409 }
   /** unclear: the description names no real business; the owner is asked to describe it again. */
   | { status: 422; unclear?: true }
@@ -82,7 +87,7 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
   }
 
   if (!(await passesCaptcha(deps.verifyHuman, token, ip))) return { status: 403 };
-  if (!(await hasFreeDraftLeft(stores, ownerEmail))) return { status: 409 };
+  if ((await deps.pageTier?.()) !== 'free' && !(await hasFreeDraftLeft(stores, ownerEmail))) return { status: 409 };
   // Our own example, copied back: no model call, no count.
   if (isOurExample(answers.about)) return { status: 422, unclear: true };
 
@@ -114,6 +119,7 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
   try {
     const screening = await prescreen(answers, deps);
     job.usage.push(screening.usage);
+    await countUsage(stores, emailId(ownerEmail), [screening.usage], now);
     job.screening = {
       decision: screening.decision,
       category: screening.category,

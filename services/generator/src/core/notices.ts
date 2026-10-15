@@ -5,7 +5,7 @@
  */
 import type { Usage } from './bedrock';
 import type { Job } from './jobs';
-import { usageCost } from './models';
+import { usageCost, type ModelTier } from './models';
 
 export type Announce = (subject: string, message: string) => Promise<void>;
 
@@ -27,6 +27,7 @@ export interface PageWriterStatus {
   /** Template mode: the template the page was filled from (`model` filled it). */
   template?: string;
   model: string;
+  tier: ModelTier;
   effort: string;
   skill: string;
   look: boolean;
@@ -58,8 +59,10 @@ function costLines(usage: Usage[]): string[] {
   ];
 }
 
+const TIER: Record<ModelTier, string> = { paid: 'pago', free: 'gratis' };
+
 const statusLine = (s: PageWriterStatus) =>
-  `${s.template ? `Plantilla: ${s.template}, llenada por ${s.model}` : `Redactor: ${s.model}, esfuerzo ${s.effort} · skill ${s.skill} · look ${s.look ? 'on' : 'off'}`} · fotos IA ${s.images ? 'on' : 'off'} (dueño: ${s.ownerImages ? 'on' : 'off'})`;
+  `${s.template ? `Plantilla: ${s.template}, llenada por ${s.model} (${TIER[s.tier]})` : `Redactor: ${s.model} (${TIER[s.tier]}), esfuerzo ${s.effort} · skill ${s.skill} · look ${s.look ? 'on' : 'off'}`} · fotos IA ${s.images ? 'on' : 'off'} (dueño: ${s.ownerImages ? 'on' : 'off'})`;
 
 /** A new site's first draft is ready. */
 export function announceNewSite(announce: Announce | undefined, job: Job, slug: string, draftUrl: string, usage: Usage[], status?: PageWriterStatus): Promise<void> {

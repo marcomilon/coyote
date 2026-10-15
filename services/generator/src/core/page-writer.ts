@@ -5,6 +5,7 @@ import type { Usage } from './bedrock';
 import type { Contact } from './content';
 import { DEFAULT_PAGE_SKILL } from './frontend-design';
 import { MAX_IMAGES } from './images';
+import { DEFAULT_PAGE_MODEL, pageModel } from './models';
 import { countryOf } from './phones';
 import type { Note } from './questions';
 
@@ -14,19 +15,7 @@ import type { Note } from './questions';
  * checks run on it afterwards (page-check.ts), not as rules in the prompt, because rules made the designs worse.
  */
 
-/**
- * The page writer's models, by the name `./coyote.sh page-model` sets (the SSM parameter PAGE_MODEL_PARAMETER).
- * Haiku 4.5 is for testing the workflow cheaply; the designs are Opus's. Not on Bedrock: the account cannot use
- * Opus 5.5 there.
- */
-export const PAGE_MODELS = { opus: 'claude-opus-5-5', haiku: 'claude-haiku-4-5' } as const;
-export const DEFAULT_PAGE_MODEL = PAGE_MODELS.opus;
-
-/** The model ID: PAGE_MODEL overrides it, then the switch's setting, then Opus (also for an unknown setting). */
-export function pageModel(env: Record<string, string | undefined> = process.env, setting?: string): string {
-  if (env.PAGE_MODEL) return env.PAGE_MODEL;
-  return Object.hasOwn(PAGE_MODELS, setting ?? '') ? PAGE_MODELS[setting as keyof typeof PAGE_MODELS] : DEFAULT_PAGE_MODEL;
-}
+export { DEFAULT_PAGE_MODEL, PAGE_MODELS, pageModel } from './models';
 
 /**
  * The skill sent as the system prompt, switched by `./coyote.sh page-skill` (SSM PAGE_SKILL_PARAMETER names a

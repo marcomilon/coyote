@@ -45,6 +45,7 @@ export interface ChatStrings {
   busy: string;
   limit: string;
   editLimit: string;
+  noDesigns: string;
   error: string;
   noToken: Note;
   badToken: Note;
@@ -250,7 +251,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
         return void (await followRedesign(body.jobId));
       }
       redesigning = false;
-      localNote(status === 429 ? strings.editLimit : status === 422 ? strings.rejected : status === 409 ? strings.busy : strings.failed, 'failed');
+      localNote(status === 402 ? strings.noDesigns : status === 429 ? strings.editLimit : status === 422 ? strings.rejected : status === 409 ? strings.busy : strings.failed, 'failed');
     } catch {
       redesigning = false;
       localNote(strings.error, 'failed');

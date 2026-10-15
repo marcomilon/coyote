@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
+import { pageTier } from '../aws/page-tier';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { outputAllowed } from '../core/bedrock';
 import { emitMetrics } from '../core/metrics';
@@ -21,11 +22,12 @@ const deps: OwnerDeps = {
   startChat: async (slug, at) => {
     await lambda.send(new InvokeCommand({ FunctionName: process.env.CHAT_FUNCTION_NAME, InvocationType: 'Event', Payload: Buffer.from(JSON.stringify({ slug, at })) }));
   },
+  pageTier: () => pageTier(),
   now: Date.now,
   newId: randomUUID,
 };
 
-const ERRORS: Record<number, string> = { 400: 'invalid', 409: 'not_available', 422: 'rejected', 429: 'rate_limited' };
+const ERRORS: Record<number, string> = { 400: 'invalid', 402: 'no_designs', 409: 'not_available', 422: 'rejected', 429: 'rate_limited' };
 
 // GET /me · POST /me/edit · POST /me/undo · DELETE /me · GET /me/chat · POST /me/chat. The magic-link token is the credential.
 export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event) => {

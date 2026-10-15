@@ -21,6 +21,8 @@ interface View {
   /** Photos the page writer made that the page shows. */
   made?: { file: string; url: string }[];
   texts?: PageText[];
+  /** Free designs (paid-tier page writes) the owner has left; undefined when there is no limit. */
+  designsLeft?: number;
 }
 /** As services/generator/src/core/page-texts.ts sends it. */
 interface PageText {
@@ -84,6 +86,7 @@ interface PhotoStrings {
   notImage: string;
   failed: string;
   limited: string;
+  noDesigns: string;
   made: { replace: string; other: string; keep: string; save: string; started: string };
 }
 
@@ -100,6 +103,11 @@ function showMessage(message: Message, recover = false) {
   $('[data-message-text]').textContent = message.text;
   $<HTMLElement>('[data-recover]').hidden = !recover;
   show('message');
+}
+
+/** The banner for an owner whose free designs are used up (a 402 from a redesign shows it too). */
+function showDesignsOut(out: boolean) {
+  $<HTMLElement>('[data-designs-out]').hidden = !out;
 }
 
 function notice(text: string) {
@@ -129,6 +137,7 @@ function fill(view: View) {
   showPhotos(view.images);
   showMade(view.made);
   showTexts(view.texts);
+  showDesignsOut(view.designsLeft === 0);
   $<HTMLButtonElement>('[data-delete]').onclick = async () => {
     if (window.prompt(`${strings.deleteConfirm} ${view.slug}`) !== view.slug) return;
     const { status } = await api('/me', 'DELETE');
@@ -295,7 +304,10 @@ photosForm.onsubmit = async (event) => {
       showPhotos(images);
       notice(strings.photos.started);
       showTab('preview');
-    } else photoError(status === 409 ? strings.photos.busy : status === 429 ? strings.photos.limited : strings.photos.failed);
+    } else {
+      if (status === 402) showDesignsOut(true);
+      photoError(status === 402 ? strings.photos.noDesigns : status === 409 ? strings.photos.busy : status === 429 ? strings.photos.limited : strings.photos.failed);
+    }
   } catch (error) {
     photoError(error instanceof UploadLimitError ? strings.photos.limited : strings.photos.failed);
   } finally {

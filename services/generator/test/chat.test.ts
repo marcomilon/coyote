@@ -40,7 +40,7 @@ describe('chat', () => {
     const page = t.objects.get('_draft/draft2/index.html')!;
     expect(page).toContain('Abrimos también los domingos.');
     expect(page).toContain('https://wa.me/573001234567'); // the real number is back
-    expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!).requests).toEqual(['abrimos también los domingos']);
+    expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!)).toMatchObject({ requests: ['abrimos también los domingos'], ownerTexts: [`${ABOUT} Abrimos también los domingos.`] });
     expect(t.writer.requests).toHaveLength(1); // no page writer call
   });
 

@@ -172,6 +172,13 @@ describe('contact details on a written page', () => {
     expect(pagePrompt({ answers, notes: [], photos: [], look })).toContain(`go with whichever of these suits the business best: ${look.tones.join(', ').replace(/, ([^,]+)$/, ', or $1')}, on a dark background.`);
     expect(pagePrompt({ answers, notes: [], photos: [], look: { ...look, noTicker: true } })).toContain('on a dark background, without a scrolling ticker or marquee strip.');
     expect(pagePrompt({ answers, notes: [], photos: [], current: '<html></html>', instruction: 'x' })).not.toContain('For the look');
+    expect(pagePrompt({ answers, notes: [], photos: [], current: '<html></html>', instruction: 'x' })).not.toContain('wrote these texts');
+    expect(pagePrompt({ answers, notes: [], photos: [], current: '<html></html>', instruction: 'x', keepPhotos: ['assets/photo-a.jpg'] })).toContain(
+      "Keep the owner's photos that the page shows now (assets/photo-a.jpg) on the page, unless the change asks otherwise.",
+    );
+    expect(pagePrompt({ answers, notes: [], photos: [], current: '<html></html>', instruction: 'x', keep: ['Pan de barrio', 'Abrimos a las 7.'] })).toContain(
+      'The owner wrote these texts themselves; keep them word for word unless the change asks otherwise:\n- Pan de barrio\n- Abrimos a las 7.',
+    );
   });
 
   it('asks for the language of the business\'s country, from its WhatsApp number', () => {

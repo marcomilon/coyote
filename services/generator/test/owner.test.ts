@@ -76,6 +76,52 @@ describe('edits', () => {
     expect(t.site().currentDraftId).toBe('draft1');
   });
 
+  it("Tus textos: the page's texts, changed in place into a new draft with no model call", async () => {
+    const t = await withDraft();
+    const calls = t.calls.length;
+    const texts = (await ownerView(t.site(), t.ownerDeps)).texts!;
+    expect(texts.slice(0, 2)).toEqual([
+      { id: 0, text: 'Panadería Luna', kind: 'title' },
+      { id: 1, text: 'Panadería Luna', group: 'Panadería Luna', role: 'headline' },
+    ]);
+    const about = texts.find((x) => x.text.startsWith('Panadería de masa madre'))!;
+    expect(await editSite(t.site(), { texts: [{ id: about.id, from: about.text, to: 'Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.' }] }, t.ownerDeps)).toEqual({ status: 200, missing: [] });
+    expect(t.calls.length).toBe(calls);
+    expect(t.site()).toMatchObject({ currentDraftId: 'draft2' });
+    expect(t.objects.get('_draft/draft2/index.html')).toContain('<p>Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.</p>');
+    // The number the owner typed stays allowed on later renders.
+    expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!).requests).toEqual(['Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.']);
+
+    expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!).ownerTexts).toEqual(['Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.']);
+
+    // A redesign gets them in its request, and puts them back when the new page rewords them.
+    const notices: string[] = [];
+    t.writer.options.page = (request) => request.current!.replace('Pan de masa madre y café, Chapinero.', 'Pan de masa madre y buen café en Chapinero.');
+    expect(await editSite(t.site(), { instruction: 'hazla más moderna' }, t.ownerDeps)).toMatchObject({ status: 202 });
+    await runGenerateJob('job-2', { ...t.generateDeps, announce: async (_: string, message: string) => void notices.push(message) });
+    expect(t.writer.requests.at(-1)!.keep).toEqual(['Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.']);
+    expect(t.objects.get('_draft/draft3/index.html')).toContain('<p>Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.</p>');
+    expect(notices.at(-1)).toContain('Textos del dueño: 0 mantenidos, 1 devueltos, 0 perdidos');
+    t.writer.options.page = undefined;
+
+    // A list read before that change is stale; texts with contact details change through the chat.
+    expect(await editSite(t.site(), { texts: [{ id: about.id, from: about.text, to: 'Otra cosa' }] }, t.ownerDeps)).toEqual({ status: 409, error: 'stale' });
+    const whatsapp = (await ownerView(t.site(), t.ownerDeps)).texts!.find((x) => x.text === 'WhatsApp')!;
+    expect(whatsapp.locked).toBeUndefined();
+    expect(await editSite(t.site(), { texts: [{ id: 0, from: 'Panadería Luna', to: '' }] }, t.ownerDeps)).toMatchObject({ status: 400 });
+    expect(t.site().currentDraftId).toBe('draft3');
+  });
+
+  it('Tus textos: refuses text the content policy or the guardrail rejects, and waits for a running redesign', async () => {
+    const t = await withDraft();
+    const change = (to: string) => ({ texts: [{ id: 1, from: 'Panadería Luna', to }] });
+    expect(await editSite(t.site(), change('Ingresa tu PIN en la entrada'), t.ownerDeps)).toEqual({ status: 422 });
+    expect(await editSite(t.site(), change('Panadería Sol'), { ...t.ownerDeps, outputAllowed: async () => false })).toEqual({ status: 422 });
+    expect(await editSite(t.site(), { instruction: 'cambia los colores a verde' }, t.ownerDeps)).toMatchObject({ status: 202 });
+    expect(await editSite(t.site(), change('Panadería Sol'), t.ownerDeps)).toEqual({ status: 409, error: 'busy' });
+    expect(t.site().currentDraftId).toBe('draft1');
+  });
+
   it('a free-text change starts an edit job: screened, then the page writer changes the current page, then a new draft', async () => {
     const t = await withDraft();
     const result = await editSite(t.site(), { instruction: 'cambia el horario del sábado a 9–13' }, t.ownerDeps);

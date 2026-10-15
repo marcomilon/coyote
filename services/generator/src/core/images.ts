@@ -41,6 +41,33 @@ export interface ImageDeps {
  * (and in English), so a photo with legible words is refused. `made` collects the files (for Media.generated).
  * Every result says how many photos are left: a refused scene uses one up too, a failed image model call doesn't.
  */
+/** Width over height of a made photo, from its name (`gen-<id>-16x9.jpg`). Undefined for names without it. */
+export function madeRatio(file: string): number | undefined {
+  const match = /gen-[0-9a-f]+-(\d+)x(\d+)\./.exec(file);
+  return match ? Number(match[1]) / Number(match[2]) : undefined;
+}
+
+/** Width over height of a PNG or JPEG, from its header. Undefined for anything else. */
+export function imageRatio(bytes: Uint8Array): number | undefined {
+  const u16 = (i: number) => (bytes[i]! << 8) | bytes[i + 1]!;
+  const u32 = (i: number) => u16(i) * 65536 + u16(i + 2);
+  if (bytes.length > 24 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return u32(16) / u32(20) || undefined;
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return undefined;
+  let i = 2;
+  while (i + 9 < bytes.length) {
+    if (bytes[i] !== 0xff) return undefined;
+    const marker = bytes[i + 1]!;
+    if (marker === 0xff) {
+      i++; // fill byte
+      continue;
+    }
+    // A start-of-frame segment holds the size: precision, height, width.
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return u16(i + 7) / u16(i + 5) || undefined;
+    i += 2 + u16(i + 2);
+  }
+  return undefined;
+}
+
 export function imageMaker(prefix: string, deps: ImageDeps, made: string[] = []): MakeImage {
   let started = 0;
   return async ({ description, aspect }) => {
@@ -52,7 +79,8 @@ export function imageMaker(prefix: string, deps: ImageDeps, made: string[] = [])
       throw error;
     });
     if (!bytes) return { error: 'the image model refused the scene', left };
-    const file = `assets/gen-${randomUUID().slice(0, 8)}.jpg`;
+    // The shape goes in the name, so a redesign can tell which owner's photo fits its place (madeRatio).
+    const file = `assets/gen-${randomUUID().slice(0, 8)}-${aspect.replace(':', 'x')}.jpg`;
     const key = `${prefix}${file}`;
     await deps.stores.putAsset(key, bytes, 'image/jpeg');
     if ((await deps.moderate(key)).length > 0) {

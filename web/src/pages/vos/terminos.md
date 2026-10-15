@@ -13,7 +13,7 @@ Al crear una página web con ventas314.com aceptás estas reglas.
 
 Una página web para tu negocio, generado a partir de tus respuestas y alojado por nosotros. El servicio se ofrece tal cual, sin garantía de disponibilidad. Los textos se generan con inteligencia artificial: revisá tu página web antes de publicarla y corregí lo que haga falta desde Mi página web.
 
-Desde Mi página web también podés registrar un dominio propio. Se registra a tu nombre, por un año y sin renovación automática: vos sos el titular. Al registrarlo aceptás las reglas del registrador (Porkbun) y del registro del dominio. Tenés que confirmar el correo que te envía el registro; si no lo hacés en 15 días, el dominio se suspende.
+Desde Mi página web también podés registrar un dominio para tu página web. Lo registramos nosotros, a nuestro nombre, por un año y sin renovación automática, y lo usamos solo para tu página web. Si lo pedís, te lo pasamos a tu nombre sin costo mientras esté pagado; para llevarlo a otro registrador hay que esperar 60 días desde que se registró. El dominio sigue las reglas del registrador (Porkbun) y del registro del dominio.
 
 ## Qué no se permite
 

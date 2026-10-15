@@ -7,6 +7,7 @@ import { Contact } from './content';
 import { deleteDraft, draftPrefix, loadDraft, mediaPrefix, ownerText, refreshPreview, saveDraft, sourcePrefix, type SiteDoc } from './drafts';
 import { JOB_TTL_SECONDS, publicJob, type Job, type SiteRecord, type Stores } from './jobs';
 import { checkPage, contactMissing, replaceContact } from './page-check';
+import { editTexts, ownerTextsAfter, pageTexts, type TextEdit } from './page-texts';
 import { checkTexts } from './policy';
 import { parseToken, secretMatches } from './token';
 import type { Urls } from './urls';
@@ -75,6 +76,10 @@ export async function ownerView(site: SiteRecord, { stores, urls }: Pick<OwnerDe
     contact: doc?.answers.contact,
     // The logo and the owner's photos, from the current draft (Mi sitio → Fotos).
     images: doc && site.currentDraftId ? siteImages(doc, urls.draftUrl(site.currentDraftId)) : undefined,
+    // The photos the page writer made that the page shows (Tus fotos: the owner can put their own in their place).
+    made: doc && site.currentDraftId ? (doc.media.generated ?? []).filter((file) => doc.page.includes(file)).map((file) => ({ file, url: urls.draftUrl(site.currentDraftId!) + file })) : undefined,
+    // Every text on the page, for Mi sitio → Tus textos.
+    texts: doc ? pageTexts(doc.page, doc.answers.contact) : undefined,
   };
 }
 
@@ -88,12 +93,16 @@ const EditBody = z
   .object({
     instruction: z.string().trim().min(3).max(1000).optional(),
     contact: ContactInput.optional(),
+    /** Texts changed in Mi sitio → Tus textos: each entry's place, the text it had, and the new text. */
+    texts: z.array(z.object({ id: z.number().int().min(0), from: z.string().max(5000), to: z.string().trim().min(1).max(5000) }).strict()).min(1).max(300).optional(),
     /** Photos added in Mi sitio (POST /uploads), and the site's images to take out. */
     uploadId: z.string().uuid().optional(),
     removePhotos: z.array(z.string().max(100)).max(7).optional(),
     /** New descriptions of the site's photos, by file ("" clears one); what the added photos show, in upload order. */
     captions: z.record(z.string().max(100), z.string().trim().max(100)).optional(),
     newCaptions: z.array(z.string().trim().max(100)).max(6).optional(),
+    /** Made photos the uploaded photos replace, in upload order: a swap in the page, no redesign. */
+    replaceMade: z.array(z.string().max(100)).min(1).max(6).optional(),
     /** The chat reply whose "Rediseñar" button started this edit (its `at`). */
     from: z.number().int().positive().optional(),
   })
@@ -103,7 +112,7 @@ export type EditResult =
   | { status: 200; missing: string[] }
   | { status: 202; jobId: string }
   | { status: 400; fields: string[] }
-  | { status: 409; error?: 'busy' }
+  | { status: 409; error?: 'busy' | 'stale' }
   | { status: 422 }
   | { status: 429 };
 
@@ -123,25 +132,39 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   if (!site.currentDraftId) return { status: 409 };
   const parsed = EditBody.safeParse(body ?? {});
   if (!parsed.success) return { status: 400, fields: [...new Set(parsed.error.issues.map((i) => i.path.join('.') || 'body'))] };
-  const { instruction, contact, from, uploadId } = parsed.data;
+  const { instruction, contact, texts, from, uploadId, replaceMade } = parsed.data;
+  // A swap: only photos in place of made ones, nothing else.
+  if (replaceMade && (!uploadId || instruction || parsed.data.removePhotos?.length || parsed.data.captions)) return { status: 400, fields: ['replaceMade'] };
   const removePhotos = parsed.data.removePhotos?.length ? parsed.data.removePhotos : undefined;
   const captions = parsed.data.captions && Object.keys(parsed.data.captions).length > 0 ? parsed.data.captions : undefined;
   const newCaptions = uploadId && parsed.data.newCaptions?.some(Boolean) ? parsed.data.newCaptions : undefined;
   // A redesign: a change request, or photos added, taken out, or described.
   const redesign = Boolean(instruction || uploadId || removePhotos || captions);
-  if (!redesign && !contact) return { status: 400, fields: ['instruction'] };
+  if (!redesign && !contact && !texts) return { status: 400, fields: ['instruction'] };
 
   const now = deps.now();
-  // One redesign at a time: a second one would start from the page the first is about to replace.
-  if (redesign && (await runningEdit(site, stores, now))) return { status: 409, error: 'busy' };
-  if (redesign && !(await stores.hitRateLimit(`edits#${site.slug}#${day(now)}`, EDITS_PER_DAY, inTwoDays(now)))) return { status: 429 };
+  // One redesign at a time: a second one would start from the page the first is about to replace. The same for
+  // texts: the redesign would drop them.
+  if ((redesign || texts) && (await runningEdit(site, stores, now))) return { status: 409, error: 'busy' };
+  // A swap calls no model (uploads have their own daily cap), so it doesn't count as one of the day's redesigns.
+  if (redesign && !replaceMade && !(await stores.hitRateLimit(`edits#${site.slug}#${day(now)}`, EDITS_PER_DAY, inTwoDays(now)))) return { status: 429 };
 
   let current = await loadDraft(site.slug, site.currentDraftId, stores);
   const images = [current.media.logo, ...current.media.photos];
   if (removePhotos?.some((file) => !images.includes(file))) return { status: 400, fields: ['removePhotos'] };
   if (captions && Object.keys(captions).some((file) => !current.media.photos.includes(file))) return { status: 400, fields: ['captions'] };
+  if (replaceMade?.some((file) => !current.media.generated?.includes(file) || !current.page.includes(file))) return { status: 400, fields: ['replaceMade'] };
 
   let missing: string[] = [];
+  if (texts) {
+    const changed = await applyTexts(current, texts, deps);
+    if ('status' in changed) return changed;
+    if (changed.doc.page !== current.page) {
+      await saveDraft(site, changed.doc, deps);
+      site = (await stores.getSite(site.slug)) ?? site;
+      current = changed.doc;
+    }
+  }
   if (contact) {
     const changed = await applyContact(current, contact, deps);
     if ('status' in changed) return changed;
@@ -170,6 +193,7 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
     ...(removePhotos && { removePhotos }),
     ...(captions && { captions }),
     ...(newCaptions && { newCaptions }),
+    ...(replaceMade && { replaceMade }),
     slug: site.slug,
     usage: [],
     chatAt: await noteRedesign(stores, site.slug, jobId, voiceOf(current.answers), now),
@@ -207,6 +231,34 @@ export async function applyContact(
   if (checkPage(page, { contact: checked.data, ownerText: ownerText(doc), businessName: doc.answers.businessName, lang: doc.answers.lang, homeUrl: '', reportUrl: '', privacyUrl: '' }).violations.length > 0) return { status: 422 };
   // Saved either way; the owner is told when the page still shows the old detail (it can be changed in the chat).
   return { doc, missing: contactMissing(page, current.answers.contact, checked.data) };
+}
+
+const PHONE_OR_EMAIL = /\d[\d\s().-]{5,}\d|@/;
+
+/**
+ * Texts the owner wrote in Tus textos, with no model call: each one replaces the old text where it stands. The
+ * page checks and the output guardrail run on the result. Resolves to the changed record, not saved yet.
+ */
+export async function applyTexts(
+  current: SiteDoc,
+  edits: TextEdit[],
+  deps: Pick<OwnerDeps, 'outputAllowed'>,
+): Promise<{ doc: SiteDoc } | { status: 400; fields: string[] } | { status: 409; error: 'stale' } | { status: 422 }> {
+  const edited = editTexts(current.page, edits, current.answers.contact);
+  if ('problem' in edited) return edited.problem === 'stale' ? { status: 409, error: 'stale' } : { status: 400, fields: ['texts'] };
+  if (edited.page === current.page) return { doc: current };
+  // Numbers and emails the owner typed are theirs, as in a chat request.
+  const typed = edits.map((e) => e.to).filter((text) => PHONE_OR_EMAIL.test(text)).join('\n').slice(0, 1000);
+  const ownerTexts = ownerTextsAfter(current.page, edited.page, current.answers.contact, current.ownerTexts);
+  const doc: SiteDoc = { ...current, page: edited.page, ownerTexts, ...(typed && { requests: [...(current.requests ?? []), typed] }) };
+  const { contact, businessName, lang } = doc.answers;
+  const options = { contact, businessName, lang, homeUrl: '', reportUrl: '', privacyUrl: '' };
+  const checked = checkPage(doc.page, { ...options, ownerText: ownerText(doc) });
+  if (checked.violations.length > 0) return { status: 422 };
+  const before = new Set(checkPage(current.page, { ...options, ownerText: ownerText(current) }).texts);
+  const added = checked.texts.filter((text) => !before.has(text));
+  if (added.length > 0 && !(await deps.outputAllowed(added.join('\n')))) return { status: 422 };
+  return { doc };
 }
 
 /** "Deshacer": back to the previous version. The newer one is deleted. */

@@ -3,7 +3,6 @@ import Layout from '../layouts/Layout.astro';
 import AccountBar from './AccountBar.astro';
 import ChatThread from './ChatThread.astro';
 import { t, type Lang } from '../i18n/strings';
-import { countries, countryLabel } from '../scripts/phone';
 
 interface Props {
   lang: Lang;
@@ -16,18 +15,10 @@ const m = s.mySite;
 const other = t(s.otherLang.code);
 const d = m.domain;
 const p = m.photos;
+const x = m.texts;
 // The Dominio tab is hidden (global.css) unless PUBLIC_DOMAIN_TAB=on, e.g. in web/.env.development.local, which only `npm run dev` reads.
 const domainTab = import.meta.env.PUBLIC_DOMAIN_TAB === 'on';
 const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, question: s.questions } };
-const field = (name: string, label: string, type = 'text', autocomplete = 'off', max = 60) => ({ name, label, type, autocomplete, max });
-const fields = [
-  field('firstName', d.contact.firstName, 'text', 'given-name'),
-  field('lastName', d.contact.lastName, 'text', 'family-name'),
-  field('email', d.contact.email, 'email', 'email', 200),
-  field('address', d.contact.address, 'text', 'address-line1', 120),
-  field('city', d.contact.city, 'text', 'address-level2'),
-  field('postalCode', d.contact.postalCode, 'text', 'postal-code', 12),
-];
 ---
 
 <Layout lang={lang} vos={vos} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig noindex>
@@ -71,6 +62,7 @@ const fields = [
       <div class="tabs" role="tablist" aria-label={m.tabs.label}>
         <button type="button" role="tab" id="tab-preview" aria-controls="panel-preview" aria-selected="true" data-tab="preview">{m.tabs.preview}</button>
         <button type="button" role="tab" id="tab-change" aria-controls="panel-change" aria-selected="false" tabindex="-1" data-tab="change">{m.tabs.change}</button>
+        <button type="button" role="tab" id="tab-texts" aria-controls="panel-texts" aria-selected="false" tabindex="-1" data-tab="texts">{m.tabs.texts}</button>
         <button type="button" role="tab" id="tab-photos" aria-controls="panel-photos" aria-selected="false" tabindex="-1" data-tab="photos">{m.tabs.photos}</button>
         <button type="button" role="tab" id="tab-domain" aria-controls="panel-domain" aria-selected="false" tabindex="-1" data-tab="domain">{m.tabs.domain}</button>
       </div>
@@ -109,6 +101,19 @@ const fields = [
         </div>
       </div>
 
+      {/* Every text on the page, changed in place (no redesign). Filled by my-site.ts from GET /me. */}
+      <div class="tabpanel texts-panel" role="tabpanel" id="panel-texts" aria-labelledby="tab-texts" data-panel="texts" hidden>
+        <p class="lead">{x.intro}</p>
+        <p class="hint" data-texts-none hidden>{x.none}</p>
+        <form data-texts-form novalidate>
+          <div data-texts></div>
+          <div class="texts-save">
+            <p class="notice" data-kind="error" data-texts-error role="alert"></p>
+            <button class="btn" type="submit" data-texts-save disabled>{x.save}</button>
+          </div>
+        </form>
+      </div>
+
       {/* The owner's logo and photos: take some out, add new ones; saving starts a redesign that places them. */}
       <div class="tabpanel photos-panel" role="tabpanel" id="panel-photos" aria-labelledby="tab-photos" data-panel="photos" hidden>
         <p class="lead">{p.intro}</p>
@@ -131,14 +136,50 @@ const fields = [
           <p class="notice" data-kind="error" data-photos-error role="alert"></p>
           <div><button class="btn" type="submit" data-photos-save disabled>{p.save}</button></div>
         </form>
+        {/* The photos the page writer made: each can be swapped for one of the owner's, in the same place (no redesign). */}
+        <section class="made-photos" data-made-section hidden>
+          <h3>{p.made.title}</h3>
+          <p class="hint">{p.made.intro}</p>
+          <ul class="thumbs current" data-made></ul>
+          <p class="notice" data-kind="error" data-made-error role="alert"></p>
+          <div><button class="btn" type="button" data-made-save disabled>{p.made.save}</button></div>
+        </section>
       </div>
 
       <div class="tabpanel domain" role="tabpanel" id="panel-domain" aria-labelledby="tab-domain" data-panel="domain" data-domain="loading" hidden>
-        <section class="panel domain-owned" data-domain-view="owned">
-          <h2 data-domain-name></h2>
-          <p data-domain-status></p>
-          <p class="hint">{d.verify}</p>
-          <p class="hint">{d.later}</p>
+        <section class="ticket domain-owned" data-domain-view="owned">
+          {/* A browser at the new address, stamped with a check. */}
+          <svg class="domain-art" viewBox="0 0 260 165" width="260" height="165" aria-hidden="true">
+            <g class="window">
+              <rect x="20" y="18" width="190" height="124" rx="10" fill="var(--ink)" transform="translate(7 7)" />
+              <rect x="20" y="18" width="190" height="124" rx="10" fill="#fffaf0" stroke="var(--ink)" stroke-width="5" />
+              <path d="M30 18h170a10 10 0 0 1 10 10v20H20V28a10 10 0 0 1 10-10z" fill="var(--azul)" stroke="var(--ink)" stroke-width="5" stroke-linejoin="round" />
+              <circle cx="37" cy="33" r="4.5" fill="var(--rojo)" stroke="var(--ink)" stroke-width="2.5" />
+              <circle cx="51" cy="33" r="4.5" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="2.5" />
+              <circle cx="65" cy="33" r="4.5" fill="var(--verde)" stroke="var(--ink)" stroke-width="2.5" />
+              <rect x="34" y="60" width="162" height="22" rx="11" fill="var(--paper)" stroke="var(--ink)" stroke-width="4" />
+              <circle cx="48" cy="71" r="6" fill="var(--celeste)" stroke="var(--ink)" stroke-width="2.5" />
+              <path d="M42 71h12M48 65c-3 4-3 8 0 12M48 65c3 4 3 8 0 12" fill="none" stroke="var(--ink)" stroke-width="1.6" />
+              <path d="M62 71h74" stroke="var(--ink)" stroke-width="5" stroke-linecap="round" />
+              <rect x="34" y="94" width="66" height="36" rx="5" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="3.5" />
+              <path d="M40 124l14-14 10 9 8-6 22 11" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linejoin="round" />
+              <g stroke="var(--ink)" stroke-width="4" stroke-linecap="round" opacity=".55">
+                <path d="M112 100h60M112 112h46M112 124h54" />
+              </g>
+            </g>
+            <g class="seal">
+              <circle cx="214" cy="126" r="27" fill="var(--ink)" transform="translate(5 5)" />
+              <circle cx="214" cy="126" r="27" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="5" />
+              <path d="M201 127l9 9 17-18" fill="none" stroke="var(--ink)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+            </g>
+            <path class="spark" d="M240 8l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="var(--amarillo)" stroke="var(--ink)" stroke-width="3.5" stroke-linejoin="round" />
+            <path class="spark" d="M8 104l2.5 6 6 2.5-6 2.5-2.5 6-2.5-6-6-2.5 6-2.5z" fill="var(--rojo)" stroke="var(--ink)" stroke-width="3" stroke-linejoin="round" />
+          </svg>
+          <header>
+            <h2 data-domain-name></h2>
+          </header>
+          <p class="lead" data-domain-status></p>
+          <p class="next">{d.later}</p>
         </section>
 
         <section data-domain-view="search">
@@ -147,7 +188,10 @@ const fields = [
           <form class="domain-search" data-domain-search role="search">
             <label class="sub" for="domain-q">{d.searchLabel}</label>
             <div class="domain-row">
-              <input type="text" id="domain-q" name="q" maxlength="70" autocomplete="off" autocapitalize="none" spellcheck="false" required />
+              <span class="domain-input">
+                <input type="text" id="domain-q" name="q" maxlength="63" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" required />
+                <span class="suffix" aria-hidden="true">.com</span>
+              </span>
               <button class="btn small" type="submit">{d.searchButton}</button>
             </div>
           </form>
@@ -156,45 +200,15 @@ const fields = [
           <ul class="domain-results" data-domain-results aria-live="polite"></ul>
         </section>
 
-        <form class="panel domain-contact" data-domain-view="contact" data-domain-contact novalidate>
-          <h2 data-domain-chosen></h2>
-          <p class="hint">{d.contact.intro}</p>
-          <div class="domain-fields">
-            {fields.slice(0, 3).map((f) => (
-              <div>
-                <label class="sub" for={`dc-${f.name}`}>{f.label}</label>
-                <input type={f.type} id={`dc-${f.name}`} name={f.name} maxlength={f.max} autocomplete={f.autocomplete} required data-field={f.name} />
-              </div>
-            ))}
-            <div>
-              <label class="sub" for="dc-country">{d.contact.country}</label>
-              <select id="dc-country" name="country" required data-field="country" data-fallback={lang === 'pt' ? 'BR' : ''}>
-                <option value="">{d.contact.countryPick}</option>
-                {countries(lang).map((country) => <option value={country.iso}>{countryLabel(country, lang)}</option>)}
-              </select>
-            </div>
-            <div>
-              <label class="sub" for="dc-phone">{d.contact.phone}</label>
-              <input type="tel" id="dc-phone" name="phone" maxlength="24" autocomplete="tel-national" inputmode="tel" required data-field="phone" />
-            </div>
-            <div>
-              <label class="sub" for="dc-state">{d.contact.state}</label>
-              <select id="dc-state" name="state" required data-field="state" autocomplete="address-level1"></select>
-            </div>
-            {fields.slice(3).map((f) => (
-              <div>
-                <label class="sub" for={`dc-${f.name}`}>{f.label}</label>
-                <input type={f.type} id={`dc-${f.name}`} name={f.name} maxlength={f.max} autocomplete={f.autocomplete} required data-field={f.name} />
-              </div>
-            ))}
-          </div>
-          <p class="hint" data-domain-paid></p>
-          <p class="hint" data-domain-public hidden>{d.contact.public}</p>
-          <label class="agree"><input type="checkbox" name="agree" required /> {d.contact.agree}</label>
+        <form class="ticket domain-confirm" data-domain-view="confirm" data-domain-confirm>
+          <header>
+            <h2 data-domain-chosen></h2>
+          </header>
+          <p class="lead">{d.confirm.intro}</p>
           <p class="notice" data-kind="error" data-domain-error role="alert"></p>
-          <div class="domain-actions">
-            <button class="btn" type="submit" data-domain-submit>{d.contact.submit}</button>
-            <button class="linkbtn" type="button" data-domain-back>{d.contact.back}</button>
+          <div class="submit-row">
+            <button class="btn" type="submit" data-domain-submit>{d.confirm.submit}</button>
+            <button class="linkbtn" type="button" data-domain-back>{d.confirm.back}</button>
           </div>
         </form>
       </div>

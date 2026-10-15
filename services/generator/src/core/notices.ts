@@ -89,12 +89,20 @@ function photoLine(change: Job['photoChange']): string | undefined {
     change.added.length > 0 && `${change.added.length} ${change.added.length === 1 ? 'nueva' : 'nuevas'}`,
     change.removed.length > 0 && `${change.removed.length} ${change.removed.length === 1 ? 'quitada' : 'quitadas'}`,
     change.described?.length && `${change.described.length} ${change.described.length === 1 ? 'descripción' : 'descripciones'}`,
+    change.replaced?.length && `${change.replaced.length} en lugar de ${change.replaced.length === 1 ? 'una creada' : 'creadas'} con IA, sin rediseño`,
   ].filter(Boolean);
   return parts.length > 0 ? `Fotos: ${parts.join(', ')}` : undefined;
 }
 
 /** An owner's change the page writer made (Rediseñar from Mi sitio or the chat, or a photo change): the new draft and its cost. */
-export function announceEdit(announce: Announce | undefined, job: Job, slug: string, draftUrl: string, usage: Usage[], status?: PageWriterStatus): Promise<void> {
+/** What a redesign did with the texts the owner wrote (page-texts.ts `restoreTexts`), or with the owner's photos (`restorePhotos`). */
+export interface OwnerTextsCount {
+  kept: number;
+  restored: number;
+  lost: number;
+}
+
+export function announceEdit(announce: Announce | undefined, job: Job, slug: string, draftUrl: string, usage: Usage[], status?: PageWriterStatus, texts?: OwnerTextsCount, photoCount?: OwnerTextsCount): Promise<void> {
   const { businessName, lang } = job.answers;
   const total = [...job.usage, ...usage];
   const photos = photoLine(job.photoChange);
@@ -105,6 +113,8 @@ export function announceEdit(announce: Announce | undefined, job: Job, slug: str
     `Borrador: ${draftUrl}`,
     ...(job.instruction ? [`Pedido: ${job.instruction}`] : []),
     ...(photos ? [photos] : []),
+    ...(texts ? [`Textos del dueño: ${texts.kept} mantenidos, ${texts.restored} devueltos, ${texts.lost} perdidos`] : []),
+    ...(photoCount ? [`Fotos del dueño: ${photoCount.kept} mantenidas, ${photoCount.restored} devueltas, ${photoCount.lost} perdidas`] : []),
     ...costLines(total),
     ...(status ? [statusLine(status)] : []),
     tokenLine(total),

@@ -24,7 +24,7 @@ Tudo fica hospedado na Amazon Web Services, que também envia os nossos e-mails.
 
 Para barrar robôs, os formulários de criar um site, pedir o link de acesso e denunciar um site passam pelo Cloudflare Turnstile, que verifica o seu navegador e o seu endereço IP para confirmar que você é uma pessoa. Ele não usa cookies de publicidade nem segue você em outros sites.
 
-Se você registrar um domínio em Meu site, o seu nome, e-mail, telefone e endereço vão para a Porkbun, a registradora do domínio, e para o registro do domínio (por exemplo, o do .mx ou do .co). São os dados do titular exigidos pelas regras dos domínios. Com a proteção de privacidade, eles não aparecem nas consultas públicas quando a terminação permite. Não os usamos para mais nada e os apagamos assim que a registradora os recebe.
+Se você registrar um domínio em Meu site, nós o registramos com os nossos dados: os seus dados pessoais não vão para a registradora do domínio. Se depois você pedir o domínio no seu nome, nesse momento os seus dados vão para a Porkbun, a registradora, e para o registro do domínio.
 
 ## Os sites que criamos
 

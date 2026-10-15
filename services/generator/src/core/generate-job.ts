@@ -5,7 +5,7 @@ import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './
 import type { Media } from './content';
 import { loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
 import { voiceOf } from './i18n';
-import { imageMaker, type GenerateImage } from './images';
+import { imageMaker, imageRatio, madeRatio, type GenerateImage } from './images';
 import type { Job, Stores } from './jobs';
 import { checkPage } from './page-check';
 import { DEFAULT_PAGE_MODEL, DEFAULT_PAGE_SKILL, NO_SKILL, parsePage, pickLook, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type WritePage } from './page-writer';
@@ -17,7 +17,9 @@ import { readyEmail, type SendEmail } from './mail';
 import { issueToken, TOKEN_TTL_SECONDS } from './token';
 import { mergeMedia, processUploads } from './uploads';
 import type { Urls } from './urls';
-import { announceEdit, announceFailure, announceNewSite, announceRejection, type Announce, type PageWriterStatus } from './notices';
+import { announceEdit, announceFailure, announceNewSite, announceRejection, type Announce, type OwnerTextsCount, type PageWriterStatus } from './notices';
+import { escapeHtml } from './html';
+import { restoreTexts } from './page-texts';
 
 export interface GenerateJobDeps {
   stores: Stores;
@@ -116,7 +118,7 @@ export function photoInstruction({ added, removed, described = [] }: { added: st
 
 const LOWER: Record<PageEffort, PageEffort> = { max: 'xhigh', xhigh: 'high', high: 'medium', medium: 'low', low: 'low' };
 
-type PageResult = { page: string; made: string[]; template?: SiteDoc['template'] } | { problem: 'failed' | 'policy' | 'guardrail'; detail: string; violations?: Violation[] };
+type PageResult = { page: string; made: string[]; template?: SiteDoc['template']; ownerTexts?: string[] } | { problem: 'failed' | 'policy' | 'guardrail'; detail: string; violations?: Violation[] };
 
 /** Asks the page writer for a page and runs the page checks and the output guardrail on it. */
 async function writeCheckedPage(request: PageRequest, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
@@ -155,6 +157,73 @@ async function checkWrittenPage(page: string, made: string[], request: Pick<Page
   return { page, made };
 }
 
+/**
+ * Each made photo's file gives way to the owner's photo in the page (img src, srcset, CSS backgrounds), and an
+ * image showing it takes the photo's description as its alt text when the owner gave one.
+ */
+export function swapMadePhotos(page: string, swaps: { made: string; photo: string }[], captions: Record<string, string> = {}): string {
+  let out = page;
+  for (const { made, photo } of swaps) {
+    out = out.split(made).join(photo);
+    const caption = captions[photo];
+    if (caption) out = out.replace(new RegExp(`<img\\b[^>]*${photo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^>]*>`, 'g'), (tag) => tag.replace(/\balt\s*=\s*("[^"]*"|'[^']*')/i, `alt="${escapeHtml(caption)}"`));
+  }
+  return out;
+}
+
+const ABOUT_PHOTOS = /\b(fotos?|im[aá]gen(es)?|photos?|imagens?|logo)\b/i;
+const MADE_FILE = /assets\/gen-[\w-]+\.\w+/g;
+
+/** Two shapes close enough that one photo fills the other's frame without a bad crop (4:3 into 3:2 or 1:1, not into 16:9 from portrait). */
+const SAME_SHAPE = 1.35;
+
+/**
+ * After a redesign: the owner's photos the page showed, and the owner didn't take out, that the new page left out
+ * go back in place of photos the page writer made of a similar shape (this redesign's first). `ratios`: width over
+ * height of the owner's photos; one with no known shape stays out. A request about photos is left to the writer.
+ * `lost`: left out with no made photo of its shape to replace.
+ */
+export function restorePhotos(before: string, after: string, photos: string[], made: string[], instruction: string, ratios: Record<string, number>, captions: Record<string, string> = {}) {
+  const shown = photos.filter((file) => before.includes(file));
+  const missing = shown.filter((file) => !after.includes(file));
+  const none = { page: after, kept: shown.length - missing.length, restored: [] as string[], lost: missing };
+  if (missing.length === 0 || ABOUT_PHOTOS.test(instruction)) return none;
+  const free = [...new Set([...made, ...(after.match(MADE_FILE) ?? [])])].filter((file) => after.includes(file));
+  const swaps: { made: string; photo: string }[] = [];
+  for (const photo of missing) {
+    const ratio = ratios[photo];
+    const fit = ratio && free.find((file) => {
+      const frame = madeRatio(file);
+      return frame !== undefined && Math.max(frame, ratio) / Math.min(frame, ratio) <= SAME_SHAPE;
+    });
+    if (!fit) continue;
+    free.splice(free.indexOf(fit), 1);
+    swaps.push({ made: fit, photo });
+  }
+  const restored = swaps.map((s) => s.photo);
+  return { page: swapMadePhotos(after, swaps, captions), kept: none.kept, restored, lost: missing.filter((file) => !restored.includes(file)) };
+}
+
+/** Width over height of the owner's photos, read from their files. */
+async function photoRatios(slug: string, files: string[], stores: GenerateJobDeps['stores']): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const file of files) {
+    const bytes = await stores.getBytes(`${mediaPrefix(slug)}${file}`).catch(() => undefined);
+    const ratio = bytes && imageRatio(bytes);
+    if (ratio) out[file] = ratio;
+  }
+  return out;
+}
+
+/** A swap of made photos for the owner's: the same page with the new files, the usual checks, and the template's record of its photos. */
+async function swapCheckedPage(current: SiteDoc, swaps: { made: string; photo: string }[], media: Media, request: PageRequest, requests: string[], slug: string, deps: GenerateJobDeps): Promise<PageResult> {
+  const checked = await checkWrittenPage(swapMadePhotos(current.page, swaps, media.captions), [], request, requests, slug, deps);
+  if ('problem' in checked || !current.template) return checked;
+  const photoFor = new Map(swaps.map((s) => [s.made, s.photo]));
+  const images = Object.fromEntries(Object.entries(current.template.fill.images).map(([slot, choice]) => [slot, choice.file && photoFor.has(choice.file) ? { ...choice, file: photoFor.get(choice.file) } : choice]));
+  return { ...checked, template: { ...current.template, fill: { ...current.template.fill, images } } };
+}
+
 /** Template mode: the cheap model picks a template and writes its words; then the same checks as a written page. */
 async function fillCheckedPage(request: PageRequest, media: Media, current: SiteDoc | undefined, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
   if (!deps.templates) return { problem: 'failed', detail: 'template mode without a template library' };
@@ -165,7 +234,7 @@ async function fillCheckedPage(request: PageRequest, media: Media, current: Site
   let written;
   try {
     written = await writeTemplatePage(
-      { answers, notes: request.notes, media, photos: request.photos, ...(current?.template && { current: current.template }), ...(request.instruction && { instruction: request.instruction }), ...(makeImage && { makeImage }) },
+      { answers, notes: request.notes, media, photos: request.photos, ...(current?.template && { current: current.template }), ...(request.instruction && { instruction: request.instruction }), ...(request.keep && { keep: request.keep }), ...(makeImage && { makeImage }) },
       { callTool: deps.callTool, modelId: deps.modelId, templates: deps.templates },
     );
   } catch (error) {
@@ -235,7 +304,8 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
         const removed = (job.removePhotos ?? []).filter((file) => file === current!.media.logo || current!.media.photos.includes(file));
         media = mergeMedia(current.media, processed.media, removed, job.captions);
         const described = Object.keys(job.captions ?? {}).filter((file) => media.photos.includes(file));
-        photoChange = { added: [processed.media.logo, ...processed.media.photos].filter((f): f is string => !!f), removed, ...(described.length > 0 && { described }) };
+        const replaced = job.replaceMade?.slice(0, processed.media.photos.length);
+        photoChange = { added: [processed.media.logo, ...processed.media.photos].filter((f): f is string => !!f), removed, ...(described.length > 0 && { described }), ...(replaced?.length && { replaced }) };
         await stores.updateJob(jobId, { media, photoChange });
       }
     } else if (stage === 'clarify' && job.uploadId) {
@@ -279,15 +349,49 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     // Opus writes the page (a new site), or changes the current one (an edit).
     const photos = await pagePhotos(slug, media, stores);
     const goal = job.answers.goal && { goal: job.answers.goal };
+    const keep = current?.ownerTexts?.length ? current.ownerTexts : undefined;
+    // The owner's photos the page shows (taken-out ones are no longer in media).
+    const keepPhotos = current ? media.photos.filter((file) => current!.page.includes(file)) : [];
     const request = current
-      ? { answers: job.answers, notes, photos, ...goal, current: current.page, instruction }
+      ? { answers: job.answers, notes, photos, ...goal, current: current.page, instruction, ...(keep && { keep }), ...(keepPhotos.length > 0 && { keepPhotos }) }
       : { answers: job.answers, notes, photos, ...goal, ...(deps.pageLook !== false && { look: pickLook(deps.random) }) };
     const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
-    const written = deps.pageMode === 'template' ? await fillCheckedPage(request, media, current, requests, slug, deps, usage) : await writeCheckedPage(request, requests, slug, deps, usage);
+    // The owner's photos in place of made ones: swapped in the page, with no page writer.
+    const swaps = current && photoChange?.replaced?.length ? photoChange.replaced.map((made, i) => ({ made, photo: photoChange!.added[i]! })) : undefined;
+    const written = swaps
+      ? await swapCheckedPage(current!, swaps, media, request, requests, slug, deps)
+      : deps.pageMode === 'template'
+        ? await fillCheckedPage(request, media, current, requests, slug, deps, usage)
+        : await writeCheckedPage(request, requests, slug, deps, usage);
     if ('problem' in written) {
       if (written.problem === 'policy') throw new PolicyRejection(written.violations!);
       if (written.problem === 'guardrail') throw new GuardrailBlocked();
       throw new Error(`page writer failed: ${written.detail}`);
+    }
+    // The texts the owner wrote: the ones the new page reworded go back (unless the request asked for it).
+    let ownerTexts: OwnerTextsCount | undefined;
+    if (current && keep) {
+      let restored = restoreTexts(current.page, written.page, keep, job.instruction ?? '', job.answers.contact);
+      // Texts that passed on the earlier page; checked again all the same.
+      if (restored.restored.length > 0 && 'problem' in (await checkWrittenPage(restored.page, written.made, request, requests, slug, deps))) {
+        console.warn('owner texts not restored', { slug });
+        restored = { page: written.page, kept: restored.kept.filter((text) => !restored.restored.includes(text)), restored: [], lost: [...restored.lost, ...restored.restored] };
+      }
+      written.page = restored.page;
+      written.ownerTexts = restored.kept;
+      ownerTexts = { kept: restored.kept.length - restored.restored.length, restored: restored.restored.length, lost: restored.lost.length };
+    }
+    // The owner's photos: the ones the new page left out go back in place of made photos.
+    let ownerPhotos: OwnerTextsCount | undefined;
+    if (current && keepPhotos.length > 0 && !swaps) {
+      const ratios = await photoRatios(slug, keepPhotos.filter((file) => !written.page.includes(file)), stores);
+      let back = restorePhotos(current.page, written.page, keepPhotos, written.made, job.instruction ?? '', ratios, media.captions);
+      if (back.restored.length > 0 && 'problem' in (await checkWrittenPage(back.page, written.made, request, requests, slug, deps))) {
+        console.warn('owner photos not restored', { slug });
+        back = { page: written.page, kept: back.kept, restored: [], lost: [...back.lost, ...back.restored] };
+      }
+      written.page = back.page;
+      ownerPhotos = { kept: back.kept, restored: back.restored.length, lost: back.lost.length };
     }
     // The made photos the page uses, with the earlier ones it still uses (an edit keeps its page's photos).
     const generated = [...new Set([...(media.generated ?? []), ...written.made])].filter((file) => written.page.includes(file)).slice(-8);
@@ -297,7 +401,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     const { photoNotes: _notes, ...answers } = job.answers;
     // The template and its words, for the next template redesign (an Opus edit keeps the earlier ones).
     const template = written.template ?? current?.template;
-    const doc: SiteDoc = { ...(current ? { ...current, requests } : { answers }), notes, media, page: written.page, ...(template && { template }) };
+    const doc: SiteDoc = { ...(current ? { ...current, requests } : { answers }), notes, media, page: written.page, ...(template && { template }), ...(written.ownerTexts && { ownerTexts: written.ownerTexts }) };
 
     const draftId = await saveDraft(site, doc, deps);
     site = (await stores.getSite(slug)) ?? site;
@@ -324,7 +428,7 @@ export async function runGenerateJob(jobId: string, deps: GenerateJobDeps): Prom
     await finish({ status: 'DONE', draftUrl: urls.draftUrl(draftId), previewUrl, media, ownerToken }, draftId);
     if (ownerToken && job.ownerEmail) await sendReady(job, slug, deps);
     if (ownerToken) await announceNewSite(deps.announce, job, slug, deps.urls.draftUrl(draftId), usage, pageWriterStatus(job, deps, doc.template?.id));
-    else if (kind === 'edit') await announceEdit(deps.announce, { ...job, photoChange }, slug, deps.urls.draftUrl(draftId), usage, pageWriterStatus(job, deps, written.template?.id));
+    else if (kind === 'edit') await announceEdit(deps.announce, { ...job, photoChange }, slug, deps.urls.draftUrl(draftId), usage, pageWriterStatus(job, deps, written.template?.id), ownerTexts, ownerPhotos);
     return { outcome: 'DONE', ...tokens() };
   } catch (error) {
     await releaseNewSite(job, deps);

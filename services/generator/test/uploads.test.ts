@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
-import { editSite } from '../src/core/owner';
+import { editSite, ownerView } from '../src/core/owner';
 import { submit } from '../src/core/submit';
 import { createUploads, mergeMedia, processUploads } from '../src/core/uploads';
-import { photoInstruction } from '../src/core/generate-job';
+import { photoInstruction, restorePhotos } from '../src/core/generate-job';
+import { imageRatio, madeRatio } from '../src/core/images';
+
+/** The start of a PNG: signature and header with its size. */
+function png(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(33);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+  new DataView(bytes.buffer).setUint32(16, width);
+  new DataView(bytes.buffer).setUint32(20, height);
+  return bytes;
+}
 import { memoryStores } from './memory-stores';
 import { body as formBody, harness } from './harness';
 
@@ -139,6 +149,75 @@ describe('uploads in a generation', () => {
     expect(request.photos.map((p) => p.file)).toEqual(['assets/photo-f2.jpg', 'assets/photo-f3.jpg']);
     expect(request.instruction).toContain('The owner took out assets/photo-f1.jpg');
     expect(t.objects.get('_draft/draft2/assets/photo-f2.jpg')).toBe('new');
+  });
+
+  it('a made photo swapped for the owner\'s in Tus fotos: moderated, put in its place, no page writer', async () => {
+    const t = setup();
+    await submit({ ...t.body, uploadId: undefined }, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    // A page with a made photo.
+    const doc = JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!);
+    doc.media.generated = ['assets/gen-abc.jpg'];
+    doc.page = doc.page.replace('</main>', '<img src="assets/gen-abc.jpg" alt="Pan en el horno"><div style="background:url(assets/gen-abc.jpg)"></div></main>');
+    t.objects.set('_src/panaderia-luna/draft1.json', JSON.stringify(doc));
+    t.objects.set('_media/panaderia-luna/assets/gen-abc.jpg', 'made');
+    const site = () => t.sites.get('panaderia-luna')!;
+    expect((await ownerView(site(), t.ownerDeps)).made).toEqual([{ file: 'assets/gen-abc.jpg', url: expect.stringContaining('assets/gen-abc.jpg') }]);
+
+    t.objects.set(`_uploads/${UPLOAD}/photo-1.jpg`, 'mine');
+    expect(await editSite(site(), { uploadId: UPLOAD, replaceMade: ['assets/gen-zzz.jpg'] }, t.ownerDeps)).toEqual({ status: 400, fields: ['replaceMade'] });
+    expect(await editSite(site(), { uploadId: UPLOAD, replaceMade: ['assets/gen-abc.jpg'], instruction: 'más grande' }, t.ownerDeps)).toEqual({ status: 400, fields: ['replaceMade'] });
+    expect(await editSite(site(), { uploadId: UPLOAD, replaceMade: ['assets/gen-abc.jpg'], newCaptions: ['Nuestro horno de leña'] }, t.ownerDeps)).toMatchObject({ status: 202 });
+    const writes = t.writer.requests.length;
+    const notices: string[] = [];
+    await runGenerateJob('job-2', { ...t.generateDeps, announce: async (_, message) => void notices.push(message) });
+
+    expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE' });
+    expect(t.writer.requests).toHaveLength(writes); // no page writer
+    const page = t.objects.get('_draft/draft2/index.html')!;
+    expect(page).not.toContain('gen-abc');
+    expect(page).toContain('<img src="assets/photo-f1.jpg" alt="Nuestro horno de leña">');
+    expect(page).toContain('url(assets/photo-f1.jpg)');
+    expect(t.objects.get('_draft/draft2/assets/photo-f1.jpg')).toBe('mine');
+    const saved = JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!);
+    expect(saved.media).toMatchObject({ photos: ['assets/photo-f1.jpg'], captions: { 'assets/photo-f1.jpg': 'Nuestro horno de leña' } });
+    expect(saved.media.generated).toBeUndefined();
+    expect(notices[0]).toContain('Fotos: 1 nueva, 1 en lugar de una creada con IA, sin rediseño');
+
+    // A redesign is told to keep the owner's photo, and gets it back when it puts a made photo of its shape in its place.
+    t.stores.getBytes = async () => png(1200, 900); // the owner's photo: 4:3
+    t.writer.options.page = (request) => request.current!.split('assets/photo-f1.jpg').join('assets/gen-0a1b2c3d-3x2.jpg');
+    expect(await editSite(site(), { instruction: 'hazla más moderna' }, t.ownerDeps)).toMatchObject({ status: 202 });
+    await runGenerateJob('job-3', { ...t.generateDeps, announce: async (_, message) => void notices.push(message) });
+    expect(t.writer.requests.at(-1)!.keepPhotos).toEqual(['assets/photo-f1.jpg']);
+    expect(t.objects.get('_draft/draft3/index.html')).toContain('<img src="assets/photo-f1.jpg" alt="Nuestro horno de leña">');
+    expect(notices.at(-1)).toContain('Fotos del dueño: 0 mantenidas, 1 devueltas, 0 perdidas');
+  });
+
+  it('restorePhotos: puts back left-out owner photos in place of made ones of a similar shape, unless the request is about photos', () => {
+    const before = '<img src="assets/photo-a.jpg"><img src="assets/photo-b.jpg"><img src="assets/photo-c.jpg">';
+    const after = '<img src="assets/gen-0001-16x9.jpg"><img src="assets/gen-0002-1x1.jpg"><img src="assets/photo-b.jpg">';
+    const photos = ['assets/photo-a.jpg', 'assets/photo-b.jpg', 'assets/photo-c.jpg'];
+    // a: portrait 3:4, fits the square, not the wide one; c: unknown shape, stays out.
+    const ratios = { 'assets/photo-a.jpg': 0.75, 'assets/photo-b.jpg': 1.5 };
+    expect(restorePhotos(before, after, photos, [], 'más moderna', ratios)).toEqual({
+      page: '<img src="assets/gen-0001-16x9.jpg"><img src="assets/photo-a.jpg"><img src="assets/photo-b.jpg">',
+      kept: 1,
+      restored: ['assets/photo-a.jpg'],
+      lost: ['assets/photo-c.jpg'],
+    });
+    expect(restorePhotos(before, after, photos, [], 'quita la primera foto', ratios)).toMatchObject({ page: after, restored: [] });
+    // Only a wide frame: the portrait photo stays out rather than be cropped.
+    expect(restorePhotos(before, '<img src="assets/gen-0001-16x9.jpg">', ['assets/photo-a.jpg'], [], '', ratios)).toMatchObject({ restored: [], lost: ['assets/photo-a.jpg'] });
+  });
+
+  it('reads the shape of a PNG or JPEG, and of a made photo from its name', () => {
+    expect(imageRatio(png(1200, 900))).toBe(4 / 3);
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x03, 0x20, 0x02, 0x58, 0x03]);
+    expect(imageRatio(jpeg)).toBe(600 / 800);
+    expect(imageRatio(new TextEncoder().encode('not an image'))).toBeUndefined();
+    expect(madeRatio('assets/gen-0a1b2c3d-16x9.jpg')).toBe(16 / 9);
+    expect(madeRatio('assets/gen-0a1b2c3d.jpg')).toBeUndefined();
   });
 
   it('a flagged photo added in Mi sitio rejects the change and keeps the site', async () => {

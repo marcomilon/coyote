@@ -1,5 +1,4 @@
 import type { Answers } from './answers';
-import type { RegistrantContact } from './domains';
 import type { Usage } from './bedrock';
 import type { Media } from './content';
 import type { Note, Question } from './questions';
@@ -58,8 +57,10 @@ export interface Job {
   captions?: Record<string, string>;
   /** Edit jobs: what the photos added in Mi sitio show, in upload order. */
   newCaptions?: string[];
+  /** Edit jobs: made photos (`assets/gen-…`) the owner's uploaded photos replace, in upload order, with no page writer. */
+  replaceMade?: string[];
   /** Edit jobs: the photo change once moderated, kept between the clarify and write stages. */
-  photoChange?: { added: string[]; removed: string[]; described?: string[] };
+  photoChange?: { added: string[]; removed: string[]; described?: string[]; replaced?: string[] };
   /** Create jobs: the owner's email (account.ts). Never sent to a model. */
   ownerEmail?: string;
   /** Edit jobs: the `at` of the chat note that follows this redesign (chat-notes.ts). */
@@ -95,25 +96,24 @@ export interface SiteRecord {
 
 /**
  * A domain registered for a site (domains.ts). registering: claimed, the registrar not yet called back.
- * contacts_pending: registered and paid, the owner not yet its contact. Kept when the site is deleted.
+ * setup_pending: registered and paid, auto-renew not yet off. Coyote is the registrant. Kept when the site is deleted.
  */
 export interface DomainRecord {
   domain: string;
   slug: string;
-  status: 'registering' | 'contacts_pending' | 'registered';
+  status: 'registering' | 'setup_pending' | 'registered';
   /** ms since epoch */
   createdAt: number;
   registeredAt?: number;
   /** ms since epoch */
   expiresAt?: number;
   priceCents: number;
-  ownerEmail: string;
-  /** The registrant, kept only until the registrar has it. */
-  contact?: RegistrantContact;
+  /** The owner's account email, to reach them about the domain. */
+  ownerEmail?: string;
 }
 
-/** Fields to change; `contact: null` removes the contact. */
-export type DomainPatch = Partial<Omit<DomainRecord, 'domain' | 'contact'>> & { domain: string; contact?: null };
+/** Fields to change. */
+export type DomainPatch = Partial<Omit<DomainRecord, 'domain'>> & { domain: string };
 
 /** The sites linked to one email (account.ts). */
 export interface Account {

@@ -41,7 +41,7 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event
         case 201:
           return json(201, { domain: result.domain });
         case 400:
-          return json(400, { error: 'invalid', fields: result.fields });
+          return json(400, { error: 'invalid' });
         case 403:
           return json(403, { error: 'closed' });
         case 409:

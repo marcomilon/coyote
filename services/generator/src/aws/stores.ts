@@ -483,18 +483,8 @@ export function createStores(config: StoreConfig): Stores {
       }
     },
 
-    async saveDomain({ domain, contact, ...fields }) {
-      const set = setExpression(fields);
-      const remove = contact === null ? ' REMOVE #contact' : '';
-      await db.send(
-        new UpdateCommand({
-          TableName: config.domainsTable,
-          Key: { domain },
-          UpdateExpression: set.UpdateExpression + remove,
-          ExpressionAttributeNames: { ...set.ExpressionAttributeNames, ...(remove ? { '#contact': 'contact' } : {}) },
-          ExpressionAttributeValues: set.ExpressionAttributeValues,
-        }),
-      );
+    async saveDomain({ domain, ...fields }) {
+      await db.send(new UpdateCommand({ TableName: config.domainsTable, Key: { domain }, ...setExpression(fields) }));
     },
 
     async getDomain(domain) {

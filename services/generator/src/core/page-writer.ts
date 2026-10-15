@@ -102,6 +102,10 @@ export interface PageRequest {
   /** Edits: the current page and the owner's change request. */
   current?: string;
   instruction?: string;
+  /** Edits: texts on the current page that the owner wrote. */
+  keep?: string[];
+  /** Edits: the owner's photos the current page shows. */
+  keepPhotos?: string[];
 }
 
 /** Photo shapes the image model makes: only ones Stable Image Core accepts (it has no 4:3 or 3:4). */
@@ -183,7 +187,7 @@ function contactLines(contact: Contact): string {
  * The request, worded like the chat request that gave the best designs. Keep it that way: no tags, notes, or
  * rules. Safety is the checks on the finished page (page-check.ts), not the prompt.
  */
-export function pagePrompt({ answers, notes, photos, look, goal, current, instruction }: PageRequest, skill: string | null = DEFAULT_PAGE_SKILL.name, images = false): string {
+export function pagePrompt({ answers, notes, photos, look, goal, current, instruction, keep, keepPhotos }: PageRequest, skill: string | null = DEFAULT_PAGE_SKILL.name, images = false): string {
   const details = notes.map((n) => `  - ${n.question} ${n.answer}`).join('\n');
   const business = [
     `- Name: ${answers.businessName}`,
@@ -215,7 +219,7 @@ ${current}
 
 The owner asks for this change: ${instruction}
 
-${photosLine}Keep everything else as it is, and don't invent facts the owner didn't give. Reply with the complete HTML file.`;
+${keep?.length ? `The owner wrote these texts themselves; keep them word for word unless the change asks otherwise:\n${keep.map((text) => `- ${text}`).join('\n')}\n\n` : ''}${photosLine}${keepPhotos?.length ? `Keep the owner's photos that the page shows now (${keepPhotos.join(', ')}) on the page, unless the change asks otherwise. ` : ''}Keep everything else as it is, and don't invent facts the owner didn't give. Reply with the complete HTML file.`;
   }
 
   const goalLine = goal

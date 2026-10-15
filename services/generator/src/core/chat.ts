@@ -8,6 +8,7 @@ import { CHAT_TTL_SECONDS, noteRedesignDone } from './chat-notes';
 import { applyContact, day, inTwoDays, previewUrl, runningEdit, type ContactInput, type OwnerDeps } from './owner';
 import { checkPage } from './page-check';
 import { applyChanges, elide, type Change } from './page-outline';
+import { ownerTextsAfter } from './page-texts';
 import { isRejected, prescreen } from './prescreen';
 
 /**
@@ -245,7 +246,12 @@ export async function runChatTurn(slug: string, at: number, deps: ChatDeps): Pro
       return await answer('REPLIED', { text: result.reply });
     }
 
-    let next: SiteDoc = { ...doc, page: edited ?? doc.page, requests: [...(doc.requests ?? []), request.text] };
+    let next: SiteDoc = {
+      ...doc,
+      page: edited ?? doc.page,
+      requests: [...(doc.requests ?? []), request.text],
+      ...(edited !== undefined && { ownerTexts: ownerTextsAfter(doc.page, edited, doc.answers.contact, doc.ownerTexts) }),
+    };
     if (Object.keys(contact).length > 0) {
       const changed = await applyContact(next, contact, deps);
       if ('status' in changed) return await answer('REPLIED', { text: changed.status === 422 ? say.refused : say.contact });

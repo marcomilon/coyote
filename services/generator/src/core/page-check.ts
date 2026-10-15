@@ -321,6 +321,17 @@ function addressPattern(address: string): RegExp | undefined {
   return new RegExp(`(?<![\\p{L}\\p{N}])${words.map(word).join(between)}(?![\\p{L}\\p{N}])`, 'giu');
 }
 
+/** Whether a text shows one of the owner's contact details (their numbers in any formatting, email, address, social handles). */
+export function showsContact(text: string, contact: Contact): boolean {
+  for (const field of ['whatsapp', 'phone'] as const) {
+    const n = contact[field];
+    if (n && [n, ...localForms(n)].some((form) => form.length >= 7 && numberPattern(form).test(text))) return true;
+  }
+  const lower = text.toLowerCase();
+  if ((['email', 'instagram', 'facebook'] as const).some((field) => contact[field] && lower.includes(contact[field]!.toLowerCase()))) return true;
+  return !!contact.address && !!addressPattern(contact.address)?.test(text);
+}
+
 /** Contact details that changed but aren't on the page after the swap (the page wrote the old one some other way). */
 export function contactMissing(page: string, before: Contact, after: Contact): (keyof Contact)[] {
   const fields = ['whatsapp', 'phone', 'email', 'address', 'instagram', 'facebook'] as const;

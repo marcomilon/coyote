@@ -28,6 +28,8 @@ export const SiteDoc = z.object({
   page: z.string().max(500_000),
   /** The owner's edit requests on the written page, so the numbers and emails they gave stay allowed. */
   requests: z.array(z.string().max(1000)).optional(),
+  /** The texts on the page the owner wrote (Tus textos, the chat): a redesign keeps them (page-texts.ts). */
+  ownerTexts: z.array(z.string().max(5000)).max(200).optional(),
   /** Template mode: the template and the words written for it, for the next template redesign. */
   template: z.object({ id: z.string().max(60), fill: StoredFill }).optional(),
 });

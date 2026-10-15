@@ -40,7 +40,7 @@ describe('make_image', () => {
     const { d, saved, prompts } = deps();
     const made: string[] = [];
     const result = await imageMaker('_media/luna/', d, made)({ description: 'Warm bread on a wooden table', aspect: '3:2' });
-    expect(result).toMatchObject({ file: expect.stringMatching(/^assets\/gen-[0-9a-f]{8}\.jpg$/) });
+    expect(result).toMatchObject({ file: expect.stringMatching(/^assets\/gen-[0-9a-f]{8}-3x2\.jpg$/) });
     expect(made).toEqual(['file' in result && result.file]);
     expect([...saved.keys()]).toEqual([`_media/luna/${made[0]}`]);
     expect(prompts).toEqual([['Warm bread on a wooden table', IMAGE_NEGATIVE, '3:2']]);

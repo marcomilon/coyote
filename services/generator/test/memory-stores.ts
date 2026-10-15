@@ -157,12 +157,10 @@ export function memoryStores() {
       const site = sites.get(slug);
       if (site?.domain === domain) sites.set(slug, { ...site, domain: undefined });
     },
-    async saveDomain({ domain, contact, ...fields }) {
+    async saveDomain({ domain, ...fields }) {
       const record = domains.get(domain);
       if (!record) throw new Error('no such domain');
-      const next = { ...record, ...fields };
-      if (contact === null) delete next.contact;
-      domains.set(domain, next);
+      domains.set(domain, { ...record, ...fields });
     },
     getDomain: async (domain) => structuredClone(domains.get(domain)),
   };

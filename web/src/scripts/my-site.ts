@@ -1,8 +1,8 @@
 // "Mi sitio": the owner's page. The magic-link token arrives in the URL hash (owner-token.ts keeps it and takes it
 // out of the address) and is sent as a Bearer token.
-// Four tabs: the current draft; the chat that changes it (texts, contact details, undo, a redesign), with the
-// QR that opens the same chat on the owner's phone; the owner's logo and photos; and the owner's own domain
-// (domain.ts). The preview follows every change live. And delete.
+// Five tabs: the current draft; the chat that changes it (texts, contact details, undo, a redesign), with the
+// QR that opens the same chat on the owner's phone; every text on the page, to change directly; the owner's logo
+// and photos; and the owner's own domain (domain.ts). The preview follows every change live. And delete.
 import { loadAccount } from './account';
 import { api as apiCall, apiUrl } from './jobs';
 import { startChat, type ChatStrings } from './chat-thread';
@@ -18,6 +18,19 @@ interface View {
   previewUrl?: string;
   businessName?: string;
   images?: { logo?: SiteImage; photos: SiteImage[] };
+  /** Photos the page writer made that the page shows. */
+  made?: { file: string; url: string }[];
+  texts?: PageText[];
+}
+/** As services/generator/src/core/page-texts.ts sends it. */
+interface PageText {
+  id: number;
+  text: string;
+  group?: string;
+  kind?: 'title' | 'description';
+  role?: string;
+  card?: number;
+  locked?: true;
 }
 interface SiteImage {
   file: string;
@@ -39,7 +52,25 @@ interface Strings {
   chat: ChatStrings;
   domain: DomainStrings;
   photos: PhotoStrings;
+  texts: TextStrings;
   lang: string;
+}
+interface TextStrings {
+  top: string;
+  search: string;
+  title: string;
+  description: string;
+  roles: Record<string, string>;
+  locked: string;
+  save: string;
+  saving: string;
+  saved: string;
+  empty: string;
+  stale: string;
+  busy: string;
+  rejected: string;
+  failed: string;
+  limited: string;
 }
 interface PhotoStrings {
   caption: { label: string; placeholder: string };
@@ -53,6 +84,7 @@ interface PhotoStrings {
   notImage: string;
   failed: string;
   limited: string;
+  made: { replace: string; other: string; keep: string; save: string; started: string };
 }
 
 const root = document.getElementById('mysite') as HTMLElement;
@@ -95,6 +127,8 @@ function fill(view: View) {
   showChatHandoff();
   showLater(view.slug);
   showPhotos(view.images);
+  showMade(view.made);
+  showTexts(view.texts);
   $<HTMLButtonElement>('[data-delete]').onclick = async () => {
     if (window.prompt(`${strings.deleteConfirm} ${view.slug}`) !== view.slug) return;
     const { status } = await api('/me', 'DELETE');
@@ -137,8 +171,13 @@ function startSiteChat() {
       if (first) return;
       $<HTMLIFrameElement>('.device iframe').src = current;
       notice(strings.qr.updated);
-      // A redesign may have changed the photos.
-      void api<View>('/me').then(({ status, body }) => status === 200 && showPhotos(body.images));
+      // A redesign may have changed the photos, and any change the texts.
+      void api<View>('/me').then(({ status, body }) => {
+        if (status !== 200) return;
+        showPhotos(body.images);
+        if (chosen.size === 0) showMade(body.made);
+        if (!textsDirty()) showTexts(body.texts);
+      });
     },
     // Mi sitio checks the token itself (GET /me) and shows its own message.
     onNote() {},
@@ -262,6 +301,218 @@ photosForm.onsubmit = async (event) => {
   } finally {
     save.textContent = strings.photos.save;
     photosChanged();
+  }
+};
+
+// Tus textos: every text on the page as a field, grouped under the page's headings; the title and description
+// (how search engines show the page) last. Saving sends only the changed ones, with the text each had.
+const textsForm = $<HTMLFormElement>('[data-texts-form]');
+/** The texts as loaded, by id, and the fields showing them. */
+let shownTexts = new Map<number, { text: string; field: HTMLTextAreaElement }>();
+
+const textsDirty = () => [...shownTexts.values()].some(({ text, field }) => field.value.trim() !== text);
+const textsError = (text: string) => ($('[data-texts-error]').textContent = text);
+
+function showTexts(texts: PageText[] | undefined) {
+  const x = strings.texts;
+  shownTexts = new Map();
+  const groups = new Map<string, HTMLFieldSetElement>();
+  // Texts of one card (a numbered point, a service, a contact card) go in one box, as on the page.
+  const cards = new Map<number, HTMLDivElement>();
+  const groupOf = (name: string) => {
+    let set = groups.get(name);
+    if (!set) {
+      set = document.createElement('fieldset');
+      const legend = document.createElement('legend');
+      legend.textContent = name;
+      set.append(legend);
+      groups.set(name, set);
+    }
+    return set;
+  };
+  for (const entry of texts ?? []) {
+    const name = entry.kind ? x.search : (entry.group ?? x.top);
+    const wrap = document.createElement('div');
+    wrap.className = 'field';
+    const field = document.createElement('textarea');
+    field.id = `text-${entry.id}`;
+    field.value = entry.text;
+    field.rows = Math.min(6, Math.ceil(entry.text.length / 60));
+    field.maxLength = 5000;
+    field.oninput = textsChanged;
+    // What the text is on the page: a heading, a button, a menu entry…
+    const label = document.createElement('label');
+    label.className = 'sub';
+    label.htmlFor = field.id;
+    label.textContent = entry.kind ? x[entry.kind] : (x.roles[entry.role ?? 'text'] ?? x.roles.text!);
+    wrap.append(label, field);
+    if (entry.locked) {
+      field.readOnly = true;
+      const hint = document.createElement('p');
+      hint.className = 'hint';
+      hint.textContent = x.locked;
+      wrap.append(hint);
+    }
+    if (entry.card === undefined) groupOf(name).append(wrap);
+    else {
+      let card = cards.get(entry.card);
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'text-card';
+        cards.set(entry.card, card);
+        groupOf(name).append(card);
+      }
+      card.append(wrap);
+    }
+    shownTexts.set(entry.id, { text: entry.text, field });
+  }
+  // How search engines show the page goes last.
+  const search = groups.get(x.search);
+  groups.delete(x.search);
+  $('[data-texts]').replaceChildren(...groups.values(), ...(search ? [search] : []));
+  $<HTMLElement>('[data-texts-none]').hidden = shownTexts.size > 0;
+  textsForm.hidden = shownTexts.size === 0;
+  textsError('');
+  textsChanged();
+}
+
+function textsChanged() {
+  $<HTMLButtonElement>('[data-texts-save]').disabled = !textsDirty();
+}
+
+textsForm.onsubmit = async (event) => {
+  event.preventDefault();
+  const x = strings.texts;
+  const changed = [...shownTexts].filter(([, { text, field }]) => field.value.trim() !== text).map(([id, { text, field }]) => ({ id, from: text, to: field.value.trim() }));
+  if (changed.length === 0) return;
+  if (changed.some(({ to }) => !to)) return textsError(x.empty);
+  const save = $<HTMLButtonElement>('[data-texts-save]');
+  save.disabled = true;
+  save.textContent = x.saving;
+  textsError('');
+  try {
+    const { status, body } = await api<View & { error?: string }>('/me/edit', 'POST', { texts: changed });
+    if (status === 200) {
+      $<HTMLIFrameElement>('.device iframe').src = body.draftUrl!;
+      showTexts(body.texts);
+      notice(x.saved);
+      return;
+    }
+    if (status === 409 && body.error === 'stale') {
+      const fresh = await api<View>('/me');
+      if (fresh.status === 200) showTexts(fresh.body.texts);
+      return textsError(x.stale);
+    }
+    textsError(status === 409 ? x.busy : status === 422 ? x.rejected : status === 429 ? x.limited : x.failed);
+  } catch {
+    textsError(x.failed);
+  } finally {
+    save.textContent = x.save;
+    textsChanged();
+  }
+};
+
+// Fotos creadas con IA: each made photo, with a button to pick one of the owner's photos for its place. Saving
+// uploads them and swaps them in (a short job: the photos are checked, no redesign).
+/** The owner's photo picked for each made photo, by the made photo's file. */
+const chosen = new Map<string, { file: File; caption: string }>();
+
+function madeError(text: string) {
+  $('[data-made-error]').textContent = text;
+}
+
+function showMade(made: View['made']) {
+  chosen.clear();
+  madeError('');
+  const list = $('[data-made]');
+  for (const img of list.querySelectorAll<HTMLImageElement>('img[data-picked]')) URL.revokeObjectURL(img.src);
+  $<HTMLElement>('[data-made-section]').hidden = !made?.length;
+  list.replaceChildren(
+    ...(made ?? []).map(({ file, url }, i) => {
+      const li = document.createElement('li');
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = '';
+      const frame = document.createElement('div');
+      frame.className = 'thumb';
+      frame.append(img);
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.id = `made-${i}`;
+      input.hidden = true;
+      const pick = document.createElement('label');
+      pick.className = 'linkbtn';
+      pick.htmlFor = input.id;
+      pick.textContent = strings.photos.made.replace;
+      const keep = document.createElement('button');
+      keep.type = 'button';
+      keep.className = 'linkbtn';
+      keep.textContent = strings.photos.made.keep;
+      keep.hidden = true;
+      const caption = captionField(strings.photos.caption, '', (value) => {
+        const pickedNow = chosen.get(file);
+        if (pickedNow) pickedNow.caption = value.trim();
+      });
+      caption.hidden = true;
+      const reset = () => {
+        if (img.dataset.picked) URL.revokeObjectURL(img.src);
+        delete img.dataset.picked;
+        img.src = url;
+        chosen.delete(file);
+        li.removeAttribute('data-chosen');
+        pick.textContent = strings.photos.made.replace;
+        keep.hidden = caption.hidden = true;
+        input.value = '';
+        madeChanged();
+      };
+      input.onchange = () => {
+        const picked = input.files?.[0];
+        if (!picked) return;
+        if (!picked.type.startsWith('image/')) return madeError(strings.photos.notImage);
+        if (img.dataset.picked) URL.revokeObjectURL(img.src);
+        img.src = URL.createObjectURL(picked);
+        img.dataset.picked = 'yes';
+        chosen.set(file, { file: picked, caption: caption.value.trim() });
+        li.setAttribute('data-chosen', '');
+        pick.textContent = strings.photos.made.other;
+        keep.hidden = caption.hidden = false;
+        madeChanged();
+      };
+      keep.onclick = reset;
+      li.append(frame, input, pick, caption, keep);
+      return li;
+    }),
+  );
+  madeChanged();
+}
+
+function madeChanged() {
+  const total = (images?.photos.length ?? 0) + chosen.size;
+  madeError(total > MAX_PHOTOS ? strings.photos.tooMany : '');
+  $<HTMLButtonElement>('[data-made-save]').disabled = chosen.size === 0 || total > MAX_PHOTOS;
+}
+
+$<HTMLButtonElement>('[data-made-save]').onclick = async () => {
+  const save = $<HTMLButtonElement>('[data-made-save]');
+  const picks = [...chosen];
+  save.disabled = true;
+  save.textContent = strings.photos.saving;
+  madeError('');
+  try {
+    const uploadId = await uploadImages(apiUrl, undefined, picks.map(([, pick]) => pick.file));
+    const newCaptions = picks.map(([, pick]) => pick.caption);
+    const { status } = await api('/me/edit', 'POST', { uploadId, replaceMade: picks.map(([made]) => made), ...(newCaptions.some(Boolean) && { newCaptions }) });
+    if (status === 202) {
+      chosen.clear(); // the finished swap's view replaces the list
+      notice(strings.photos.made.started);
+      showTab('preview');
+    } else madeError(status === 409 ? strings.photos.busy : status === 429 ? strings.photos.limited : strings.photos.failed);
+  } catch (error) {
+    madeError(error instanceof UploadLimitError ? strings.photos.limited : strings.photos.failed);
+  } finally {
+    save.textContent = strings.photos.made.save;
+    madeChanged();
   }
 };
 

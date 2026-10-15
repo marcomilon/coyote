@@ -1,7 +1,6 @@
-// Mi sitio → Dominio: search a name under every TLD we sell, then register one with the owner as registrant
-// (GET /me/domain, GET /me/domain/check, POST /me/domain; core/domains.ts). Loaded the first time the tab opens.
-import { REGIONS } from '../../../services/generator/src/core/regions';
-import { fullNumber, setUpCountryPicker } from './phone';
+// Mi sitio → Dominio: search a .com name, then register it; Coyote is the
+// registrant, so the owner only confirms (GET /me/domain, GET /me/domain/check, POST /me/domain; core/domains.ts).
+// Loaded the first time the tab opens.
 
 interface Quote {
   domain: string;
@@ -16,32 +15,44 @@ interface DomainView {
 interface Page {
   domain?: DomainView;
   registerOpen: boolean;
-  tlds: { tld: string; priceCents: number; renewalCents: number }[];
-  email?: string;
 }
 export interface DomainStrings {
   status: Record<Quote['status'], string>;
-  price: string;
   choose: string;
   invalid: string;
   limited: string;
-  contact: { title: string; paid: string; working: string; submit: string; fieldError: string; statePick: string };
+  confirm: { title: string; working: string; submit: string };
   owned: Record<DomainView['status'], string>;
   errors: Record<string, string>;
 }
-type Api = <T>(path: string, method?: string, body?: unknown) => Promise<{ status: number; body: T }>;
+/**
+ * What may go before ".com": a-z, 0-9 and "-", at most 63. A pasted address keeps only its name ("https://www.Luna.com/x"
+ * → "luna"), accents are dropped ("ñandú" → "nandu"), spaces become "-", and anything else (".", "_", "@"…) is left out.
+ */
+export function domainLabel(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/^\s*https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/[/?#].*$/, '')
+    .replace(/\.com$/, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .slice(0, 63);
+}
 
-const usd = (cents: number, lang: string) => new Intl.NumberFormat(lang, { style: 'currency', currency: 'USD', currencyDisplay: 'narrowSymbol' }).format(cents / 100).replace(/^\$/, 'US$');
+type Api = <T>(path: string, method?: string, body?: unknown) => Promise<{ status: number; body: T }>;
 
 export function startDomainTab(panel: HTMLElement, { api, strings, lang, slug }: { api: Api; strings: DomainStrings; lang: string; slug: string }) {
   const $ = <T extends Element>(selector: string) => panel.querySelector(selector) as T;
-  const view = (name: 'loading' | 'owned' | 'search' | 'contact') => (panel.dataset.domain = name);
+  const view = (name: 'loading' | 'owned' | 'search' | 'confirm') => (panel.dataset.domain = name);
   const searchForm = $<HTMLFormElement>('[data-domain-search]');
-  const contactForm = $<HTMLFormElement>('[data-domain-contact]');
+  const confirmForm = $<HTMLFormElement>('[data-domain-confirm]');
   const results = $<HTMLUListElement>('[data-domain-results]');
   const searchError = $<HTMLElement>('[data-domain-search-error]');
-  const contactError = $<HTMLElement>('[data-domain-error]');
-  const input = (name: string) => contactForm.elements.namedItem(name) as HTMLInputElement;
+  const confirmError = $<HTMLElement>('[data-domain-error]');
   let page: Page;
   let chosen: Quote | undefined;
 
@@ -55,7 +66,6 @@ export function startDomainTab(panel: HTMLElement, { api, strings, lang, slug }:
   function renderQuotes(quotes: Quote[]) {
     results.replaceChildren(
       ...quotes.map((quote) => {
-        const tld = page.tlds.find((t) => quote.domain.endsWith(`.${t.tld}`));
         const item = document.createElement('li');
         item.dataset.status = quote.status;
         const name = document.createElement('strong');
@@ -65,25 +75,33 @@ export function startDomainTab(panel: HTMLElement, { api, strings, lang, slug }:
         state.textContent = strings.status[quote.status];
         item.append(name, state);
         if (quote.status === 'available' && quote.priceCents) {
-          const price = document.createElement('span');
-          price.className = 'price';
-          price.textContent = strings.price.replace('{price}', usd(quote.priceCents, lang)).replace('{renewal}', usd(tld?.renewalCents ?? quote.priceCents, lang));
           const choose = document.createElement('button');
           choose.type = 'button';
           choose.className = 'btn small blue';
           choose.textContent = strings.choose;
           choose.disabled = !page.registerOpen;
-          choose.onclick = () => openContact(quote);
-          item.append(price, choose);
+          choose.onclick = () => openConfirm(quote);
+          item.append(choose);
         }
         return item;
       }),
     );
   }
 
+  // The box ends in a fixed ".com", so it takes only what goes before it, cleaned as it is typed or pasted.
+  const searchInput = searchForm.elements.namedItem('q') as HTMLInputElement;
+  searchInput.addEventListener('input', () => {
+    const before = searchInput.value;
+    const clean = domainLabel(before);
+    if (clean === before) return;
+    const caret = Math.max(0, (searchInput.selectionStart ?? before.length) - (before.length - clean.length));
+    searchInput.value = clean;
+    searchInput.setSelectionRange(caret, caret);
+  });
+
   searchForm.onsubmit = async (event) => {
     event.preventDefault();
-    const q = (searchForm.elements.namedItem('q') as HTMLInputElement).value;
+    const q = (searchInput.value = domainLabel(searchInput.value).replace(/^-+|-+$/g, ''));
     searchError.textContent = '';
     const button = searchForm.querySelector('button')!;
     button.disabled = true;
@@ -99,74 +117,31 @@ export function startDomainTab(panel: HTMLElement, { api, strings, lang, slug }:
     }
   };
 
-  // The registrar only takes its own spelling of each state: a list per country (core/regions.ts), local names shown.
-  const country = input('country') as unknown as HTMLSelectElement;
-  const state = input('state') as unknown as HTMLSelectElement;
-  const syncStates = () => {
-    const regions = [...(REGIONS[country.value] ?? [])].sort((a, b) => a[0].localeCompare(b[0], lang));
-    const pick = new Option(regions.length ? '' : strings.contact.statePick, '');
-    state.replaceChildren(pick, ...regions.map(([label, value]) => new Option(label, value)));
-  };
-  setUpCountryPicker(country, input('phone'));
-  country.addEventListener('change', syncStates);
-  syncStates();
-
-  function openContact(quote: Quote) {
+  function openConfirm(quote: Quote) {
     chosen = quote;
-    $('[data-domain-chosen]').textContent = strings.contact.title.replace('{domain}', quote.domain);
-    $('[data-domain-paid]').textContent = strings.contact.paid.replace('{price}', usd(quote.priceCents!, lang));
-    $<HTMLElement>('[data-domain-public]').hidden = !/\.mx$/.test(quote.domain); // .mx and .com.mx have no WHOIS privacy
-    if (!input('email').value && page.email) input('email').value = page.email;
-    contactError.textContent = '';
-    view('contact');
-    input('firstName').focus();
+    $('[data-domain-chosen]').textContent = strings.confirm.title.replace('{domain}', quote.domain);
+    confirmError.textContent = '';
+    view('confirm');
+    $<HTMLButtonElement>('[data-domain-submit]').focus();
   }
 
   $<HTMLButtonElement>('[data-domain-back]').onclick = () => view('search');
 
-  const markInvalid = (fields: string[]) =>
-    contactForm.querySelectorAll<HTMLInputElement>('[data-field]').forEach((field) => field.setAttribute('aria-invalid', String(fields.includes(field.dataset.field!))));
-
-  contactForm.onsubmit = async (event) => {
+  confirmForm.onsubmit = async (event) => {
     event.preventDefault();
     if (!chosen) return;
-    const empty = [...contactForm.querySelectorAll<HTMLInputElement>('[data-field]')].filter((field) => !field.value.trim()).map((field) => field.dataset.field!);
-    const phone = fullNumber(country.value, input('phone').value);
-    if (!phone) empty.push('phone');
-    markInvalid(empty);
-    if (empty.length || !input('agree').checked) {
-      contactError.textContent = strings.contact.fieldError;
-      return;
-    }
-    const value = (name: string) => input(name).value.trim();
-    const contact = {
-      firstName: value('firstName'),
-      lastName: value('lastName'),
-      email: value('email'),
-      phone,
-      address: value('address'),
-      city: value('city'),
-      state: value('state'),
-      postalCode: value('postalCode'),
-      country: country.value,
-    };
     const submit = $<HTMLButtonElement>('[data-domain-submit]');
     submit.disabled = true;
-    submit.textContent = strings.contact.working;
+    submit.textContent = strings.confirm.working;
     try {
-      const { status, body } = await api<{ domain?: DomainView; error?: string; fields?: string[] }>('/me/domain', 'POST', { domain: chosen.domain, contact });
+      const { status, body } = await api<{ domain?: DomainView; error?: string }>('/me/domain', 'POST', { domain: chosen.domain });
       if (status === 201 && body.domain) return showOwned(body.domain);
-      if (status === 400 && body.fields) {
-        markInvalid(body.fields);
-        contactError.textContent = strings.contact.fieldError;
-        return;
-      }
-      contactError.textContent = strings.errors[body.error ?? 'registrar'] ?? strings.errors.registrar!;
+      confirmError.textContent = strings.errors[body.error ?? 'registrar'] ?? strings.errors.registrar!;
     } catch {
-      contactError.textContent = strings.errors.registrar!;
+      confirmError.textContent = strings.errors.registrar!;
     } finally {
       submit.disabled = false;
-      submit.textContent = strings.contact.submit;
+      submit.textContent = strings.confirm.submit;
     }
   };
 
@@ -178,14 +153,13 @@ export function startDomainTab(panel: HTMLElement, { api, strings, lang, slug }:
       page = body;
     } catch {
       searchError.textContent = strings.errors.registrar!;
-      page = { registerOpen: false, tlds: [] };
+      page = { registerOpen: false };
     }
     if (page.domain) return showOwned(page.domain);
     $<HTMLElement>('[data-domain-closed]').hidden = page.registerOpen;
     view('search');
-    const q = searchForm.elements.namedItem('q') as HTMLInputElement;
-    if (!q.value) {
-      q.value = slug;
+    if (!searchInput.value) {
+      searchInput.value = domainLabel(slug);
       searchForm.requestSubmit();
     }
   }

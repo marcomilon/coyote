@@ -41,6 +41,8 @@ export interface TemplateRequest {
   /** Redesigns: the current template and fill, and the owner's change request. */
   current?: { id: string; fill: StoredFill };
   instruction?: string;
+  /** Redesigns: texts on the current page that the owner wrote. */
+  keep?: string[];
   /** Unset: no photos are made; empty slots keep the template's drawing. */
   makeImage?: MakeImage;
 }
@@ -94,8 +96,9 @@ function fillPrompt(request: TemplateRequest, manifest: Manifest, templateId: st
           photos.length > 0 ? `The owner's photos: ${photos.join(', ')}. Put the owner's photos where they fit best (each one once). ` : 'The owner has no photos. '
         }${request.makeImage ? 'For a slot no owner photo fits, describe a photo to make (scene, in English): the business\'s products, work, tools or place; people only when the scene needs them, ordinary people of the business\'s country.' : 'Leave photo and scene empty for a slot no owner photo fits: the template draws it.'}\n`;
   const current = request.current?.id === templateId ? `\nThe page's current words (keep them, except what the owner's request changes):\n${JSON.stringify(request.current.fill)}\n` : request.current ? `\nThe page's current words, to reuse where they fit:\n${JSON.stringify(request.current.fill)}\n` : '';
+  const keep = request.keep?.length ? `\nThe owner wrote these texts themselves; use them word for word where they fit, unless the owner's request asks otherwise:\n${request.keep.map((text) => `- ${text}`).join('\n')}\n` : '';
   return `Language of the site: ${siteLanguage(answers)}.
-${goal}${images}${current}
+${goal}${images}${current}${keep}
 Call fill_page now, once, with all four parts: texts, lists, images and seo.`;
 }
 

@@ -16,6 +16,14 @@
     "domainName": "ventas314.com",
     "account": "887799775985",
     "turnstileSiteKey": "0x4AAAAAAFU3UMZOLrYHhjX3",
+    "mailMx": [
+      { "priority": 10, "hostName": "mx1.improvmx.com" },
+      { "priority": 20, "hostName": "mx2.improvmx.com" }
+    ],
+    "apexTxt": [
+      "v=spf1 include:spf.improvmx.com ~all",
+      "google-site-verification=tItdiXfx4uZNl5T5T9j28r0eh056qjrLBdPIvVjPSOE"
+    ],
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
     "@aws-cdk/core:newStyleStackSynthesis": true,
     "@aws-cdk/core:stackRelativeExports": true,

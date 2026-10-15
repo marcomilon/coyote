@@ -27,7 +27,7 @@ The `cdk.json` context `domainName` selects the mode:
 
 `consideralohecho.com` serves only the project landing page (`landing/index.html`, a static file hosted outside the stack).
 
-Context keys: `domainName`, and optionally `hostedZoneName` when the domain lives in a parent zone. Domain mode looks up the zone; the result is cached in `infra/cdk.context.json` (committed), and `account` in `cdk.json` names the account when synth runs with no credentials (CI).
+Context keys: `domainName`, and optionally `hostedZoneName` when the domain lives in a parent zone. Our own inbound mail (`info@<domain>`) goes to ImprovMX, a free forwarder, not to SES (forwarded spam would count against the account that sends the sign-in links): context `mailMx` (the bare domain's MX) and `apexTxt` (its TXT values: the forwarder's SPF and Google's site verification). SES sends with DKIM only, so that SPF is the domain's only one; a custom MAIL FROM later goes on a subdomain and does not touch it. Domain mode looks up the zone; the result is cached in `infra/cdk.context.json` (committed), and `account` in `cdk.json` names the account when synth runs with no credentials (CI).
 
 Switching domain = change the context, redeploy, run `./coyote.sh refill-all`. To keep it that simple:
 - No domain literal in code, prompts, or tests.

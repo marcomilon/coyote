@@ -1,5 +1,5 @@
 import { App } from 'aws-cdk-lib';
-import { CoyoteStack } from '../lib/coyote-stack';
+import { CoyoteStack, type CoyoteStackProps } from '../lib/coyote-stack';
 
 const app = new App();
 
@@ -16,4 +16,6 @@ new CoyoteStack(app, 'Coyote', {
   hostedZoneName: app.node.tryGetContext('hostedZoneName') as string | undefined,
   senderEmail: app.node.tryGetContext('senderEmail') as string | undefined,
   turnstileSiteKey: app.node.tryGetContext('turnstileSiteKey') as string | undefined,
+  mailMx: app.node.tryGetContext('mailMx') as CoyoteStackProps['mailMx'],
+  apexTxt: app.node.tryGetContext('apexTxt') as string[] | undefined,
 });

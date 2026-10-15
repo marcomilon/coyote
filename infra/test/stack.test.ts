@@ -338,6 +338,18 @@ describe('CoyoteStack, domain mode', () => {
     for (const record of dkim) expect(JSON.stringify(record.Properties.Name)).not.toContain('brand.test');
   });
 
+  it('points the bare domain\'s MX and TXT at a mail forwarder when configured', () => {
+    const withMail = synth({
+      env: { region: 'us-east-1', account: '123456789012' },
+      domainName: 'brand.test',
+      mailMx: [{ priority: 10, hostName: 'mx1.forwarder.test' }],
+      apexTxt: ['v=spf1 include:spf.forwarder.test ~all', 'site-verification=abc'],
+    });
+    withMail.hasResourceProperties('AWS::Route53::RecordSet', { Type: 'MX', Name: 'brand.test.', ResourceRecords: ['10 mx1.forwarder.test'] });
+    withMail.hasResourceProperties('AWS::Route53::RecordSet', { Type: 'TXT', Name: 'brand.test.', ResourceRecords: ['"v=spf1 include:spf.forwarder.test ~all"', '"site-verification=abc"'] });
+    template.resourcePropertiesCountIs('AWS::Route53::RecordSet', { Type: 'MX' }, 0);
+  });
+
   it('uses exact origins in the CSPs and the rewrite function', () => {
     expect(cspOf(template, 'SitesHeaders')).toContain('frame-ancestors https://www.brand.test http://localhost:5173');
     expect(cspOf(template, 'SitesHeaders')).toContain('form-action https://api.brand.test');

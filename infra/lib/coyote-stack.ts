@@ -54,6 +54,13 @@ export interface CoyoteStackProps extends StackProps {
   senderEmail?: string;
   /** Cloudflare Turnstile's site key (public; the CAPTCHA on the anonymous forms). Unset = the forms show no widget. */
   turnstileSiteKey?: string;
+  /** Domain mode: MX records of the bare domain, for our own inbound mail (a forwarding service such as ImprovMX). */
+  mailMx?: route53.MxRecordValue[];
+  /**
+   * Domain mode: the bare domain's TXT values (the forwarder's SPF, site verifications). Route 53 holds one TXT record
+   * set per name, so a hand-made one must be deleted before the first deploy.
+   */
+  apexTxt?: string[];
 }
 
 const LOCAL_DEV_ORIGIN = 'http://localhost:5173';
@@ -434,6 +441,10 @@ export class CoyoteStack extends Stack {
       // SES gives full names; they are tokens at synth, so CDK can't see they already end in the zone and would
       // append it again. The trailing dot marks them as fully qualified.
       mailIdentity.dkimRecords.forEach((record, i) => new route53.CnameRecord(this, `MailDkim${i}`, { zone: domain.zone, recordName: `${record.name}.`, domainName: record.value }));
+      // Our own inbound mail (info@ and the like) goes to a forwarding service, never to SES: forwarded spam would count
+      // against the account that sends the sign-in links.
+      if (props.mailMx?.length) new route53.MxRecord(this, 'MailMx', { zone: domain.zone, values: props.mailMx });
+      if (props.apexTxt?.length) new route53.TxtRecord(this, 'ApexTxt', { zone: domain.zone, values: props.apexTxt });
     } else if (props.senderEmail) {
       mailIdentity = new ses.EmailIdentity(this, 'MailIdentity', { identity: ses.Identity.email(props.senderEmail), configurationSet: mailConfigurationSet });
     }

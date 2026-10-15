@@ -21,6 +21,7 @@ Commands:
   restore <slug>                 Bring a quarantined site back online
   free-draft <email>             Give an email its free draft and its 3 free designs back (a second business, or testing)
   usage <email>                  An email's model calls, paid and free, and their cost: all time and this month
+  delete-all-sites               Delete every site, the domain records and all counters (asks for typed confirmation)
   view <slug>                    Copy a site's current draft to out/view/<slug>/ and open it in the browser
   page-mode [design|template]    Show or switch how pages are made, for the whole stack from the next job: design, Opus
                                  writes each page (about $0.50); template, Haiku fills a template Opus designed (a few cents).
@@ -403,6 +404,15 @@ cmd_email() {
   esac
 }
 
+# Sandbox only: every site goes, with its drafts, photos, chat and jobs, plus the domain records and all counters.
+cmd_delete_all_sites() {
+  echo "This deletes EVERY site in the Coyote stack (drafts, photos, chat, jobs), the domain records, and every"
+  echo "counter (free drafts, free designs, call counts, rate limits). Landing examples and accounts stay."
+  read -r -p "Type 'delete all sites' to continue: " answer
+  [ "$answer" = "delete all sites" ] || die "cancelled."
+  cmd_admin delete-all-sites
+}
+
 cmd_admin() {
   cd "$ROOT/services/generator"
   AWS_PROFILE="$PROFILE" npx tsx scripts/admin.ts "$@"
@@ -414,6 +424,7 @@ case "$command" in
   status) cmd_status ;;
   deploy) cmd_deploy "$@" ;;
   destroy) cmd_destroy ;;
+  delete-all-sites) cmd_delete_all_sites ;;
   abuse-report | unpublish | restore | refill-all | domains | free-draft | usage) cmd_admin "$command" "$@" ;;
   domain-register) cmd_domain_register "$@" ;;
   captcha) cmd_captcha "$@" ;;

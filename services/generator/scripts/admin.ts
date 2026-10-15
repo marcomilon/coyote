@@ -7,12 +7,15 @@
  *   domains             the domains registered for owners (Mi sitio → Dominio)
  *   free-draft <email>  give an email its free draft and its 3 free designs back (support: a second business; testing)
  *   usage <email>       the email's model calls by tier (paid/free) and their cost: all time and this month
+ *   delete-all-sites    delete every site (drafts, photos, chat, jobs), the domain records and every counter; keeps the
+ *                       landing examples and accounts. Sandbox only: ./coyote.sh asks for a typed confirmation
  */
 import { readFileSync } from 'node:fs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, paginateScan } from '@aws-sdk/lib-dynamodb';
+import { BatchWriteCommand, DynamoDBDocumentClient, paginateScan } from '@aws-sdk/lib-dynamodb';
 import { createStores } from '../src/aws/stores';
 import { refillDraft } from '../src/core/drafts';
+import { deleteSite } from '../src/core/owner';
 import { usageOf, type UsageCount } from '../src/core/email-usage';
 import { returnFreeDraft } from '../src/core/free-draft';
 import { PAID_WRITES_PER_EMAIL, paidWritesLeft, resetPaidWrites } from '../src/core/paid-writes';
@@ -39,6 +42,15 @@ const stores = createStores(config);
 const db = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 // Domain mode would read the two domain names from the CDK context instead.
 const urls = createUrls({ mode: 'domainless', appBaseUrl: outputs.AppUrl!, apiBaseUrl: outputs.ApiUrl!, sitesBaseUrl: outputs.SitesBaseUrl! });
+
+/** Deletes every row of a table, 25 at a time. Resolves to how many it deleted. */
+async function emptyTable(table: string, key: string): Promise<number> {
+  const keys = (await scan<Record<string, unknown>>(table)).map((item) => ({ [key]: item[key] }));
+  for (let i = 0; i < keys.length; i += 25) {
+    await db.send(new BatchWriteCommand({ RequestItems: { [table]: keys.slice(i, i + 25).map((Key) => ({ DeleteRequest: { Key } })) } }));
+  }
+  return keys.length;
+}
 
 async function scan<T>(table: string): Promise<T[]> {
   const items: T[] = [];
@@ -120,11 +132,37 @@ switch (command) {
   case 'usage': {
     if (!slug?.includes('@')) throw new Error('usage: usage <email>');
     const { all, month, monthName } = await usageOf(stores, emailId(slug), Date.now());
+    // Only the email's hash is stored: known means it has an account (it made a site or signed in) or recorded calls.
+    if (all.paid + all.free === 0 && !(await stores.getAccount(emailId(slug)))) {
+      console.error(`${slug.trim().toLowerCase()}: unknown email (no account and no model calls recorded).`);
+      process.exitCode = 1;
+      break;
+    }
     const line = (label: string, c: UsageCount) => `  ${label.padEnd(10)} ${String(c.paid).padStart(5)} paid  ${String(c.free).padStart(5)} free  $${(c.microUsd / 1_000_000).toFixed(2)}`;
     console.log(`${slug.trim().toLowerCase()}: model calls`);
     console.log(line('all time', all));
     console.log(line(monthName, month));
     console.log(`  free designs left: ${await paidWritesLeft(stores, emailId(slug))} of ${PAID_WRITES_PER_EMAIL}`);
+    break;
+  }
+  case 'delete-all-sites': {
+    const sites = await scan<SiteRecord>(config.sitesTable);
+    let failed = 0;
+    for (const site of sites) {
+      try {
+        await deleteSite(site, { stores });
+        console.log(`${site.slug}: deleted`);
+      } catch (error) {
+        failed++;
+        console.error(`${site.slug}: FAILED (${error instanceof Error ? error.message.slice(0, 200) : error})`);
+      }
+    }
+    // What no site points to any more: old jobs, leftover files, counters, domain records.
+    for (const prefix of ['_draft/', '_src/', '_media/', '_uploads/']) await stores.deletePrefix(prefix);
+    const jobs = await emptyTable(config.jobsTable, 'jobId');
+    const counters = await emptyTable(config.rateLimitTable, 'ip');
+    const domains = await emptyTable(config.domainsTable, 'domain');
+    console.log(`${sites.length - failed} site(s) deleted${failed ? `, ${failed} failed` : ''}; ${jobs} job(s), ${counters} counter(s), ${domains} domain record(s).`);
     break;
   }
   case 'domains': {

@@ -43,11 +43,11 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
     <section data-view="editor">
       <header>
         <h1 data-business>{m.heading}</h1>
-        {/* The page full screen in a new tab (/ver); the tooltip says so, and that only the owner can see it. */}
-        <a class="open-tab" data-draft-link target="_blank" rel="noopener" aria-label={`${m.open}. ${m.private}`} data-tip={`${m.open}. ${m.private}`}>
-          <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        {/* The page full screen in a new tab (/ver), under the title; the tooltip says only the owner can see it. */}
+        <a class="open-tab" data-draft-link target="_blank" rel="noopener" aria-label={`${m.openTab}. ${m.private}`} data-tip={m.private}>
+          <span>{m.openTab}</span>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </a>
-        <a class="open-link" data-draft-link target="_blank" rel="noopener">{m.openTab}</a>
       </header>
       {/* For an owner who came from the form or the "lista" email (not from Mis páginas web): how to come back later. */}
       <details class="later" data-later hidden>
@@ -117,32 +117,39 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
       {/* The owner's logo and photos: take some out, add new ones; saving starts a redesign that places them. */}
       <div class="tabpanel photos-panel" role="tabpanel" id="panel-photos" aria-labelledby="tab-photos" data-panel="photos" hidden>
         <p class="lead">{p.intro}</p>
+        {/* Each title sits above its card. */}
         <form data-photos-form novalidate>
           <section>
             <h3>{p.logo}</h3>
-            <ul class="thumbs current" data-current="logo"></ul>
-            <label class="sub" for="mp-logo" data-logo-label data-add={p.addLogo} data-change={p.changeLogo}>{p.addLogo}</label>
-            <input type="file" id="mp-logo" name="logo" accept="image/*" />
-            <ul class="thumbs" data-thumbs="logo"></ul>
+            <div class="panel-card">
+              <ul class="thumbs current" data-current="logo"></ul>
+              <label class="sub" for="mp-logo" data-logo-label data-add={p.addLogo} data-change={p.changeLogo}>{p.addLogo}</label>
+              <input type="file" id="mp-logo" name="logo" accept="image/*" />
+              <ul class="thumbs" data-thumbs="logo"></ul>
+            </div>
           </section>
           <section>
             <h3>{p.pics}</h3>
-            <p class="hint" data-no-photos>{p.none}</p>
-            <ul class="thumbs current" data-current="photos"></ul>
-            <label class="sub" for="mp-photos">{p.add}</label>
-            <input type="file" id="mp-photos" name="photos" accept="image/*" multiple />
-            <ul class="thumbs" data-thumbs="photos"></ul>
+            <div class="panel-card">
+              <p class="hint" data-no-photos>{p.none}</p>
+              <ul class="thumbs current" data-current="photos"></ul>
+              <label class="sub" for="mp-photos">{p.add}</label>
+              <input type="file" id="mp-photos" name="photos" accept="image/*" multiple />
+              <ul class="thumbs" data-thumbs="photos"></ul>
+            </div>
           </section>
           <p class="notice" data-kind="error" data-photos-error role="alert"></p>
-          <div><button class="btn" type="submit" data-photos-save disabled>{p.save}</button></div>
+          <div class="card-action"><button class="btn" type="submit" data-photos-save disabled>{p.save}</button></div>
         </form>
         {/* The photos the page writer made: each can be swapped for one of the owner's, in the same place (no redesign). */}
         <section class="made-photos" data-made-section hidden>
           <h3>{p.made.title}</h3>
-          <p class="hint">{p.made.intro}</p>
-          <ul class="thumbs current" data-made></ul>
+          <div class="panel-card">
+            <p class="hint">{p.made.intro}</p>
+            <ul class="thumbs current" data-made></ul>
+          </div>
           <p class="notice" data-kind="error" data-made-error role="alert"></p>
-          <div><button class="btn" type="button" data-made-save disabled>{p.made.save}</button></div>
+          <div class="card-action"><button class="btn" type="button" data-made-save disabled>{p.made.save}</button></div>
         </section>
       </div>
 

@@ -439,6 +439,8 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .chat-thread [data-chat-view] { display: none; }
 .chat-thread[data-state='chat'] [data-chat-view='chat'], .chat-thread[data-state='questions'] [data-chat-view='questions'] { display: block; }
 /* In Mi sitio the thread scrolls inside its card */
+/* A box like the chat and the QR on Actualiza tu página web. */
+.panel-card { border: 3px solid var(--ink); border-radius: .5rem; background: #fffaf0; box-shadow: var(--shadow); padding: 1.4rem 1.5rem; }
 .chat-thread.boxed { border: 3px solid var(--ink); border-radius: .5rem; background: #fffaf0; box-shadow: var(--shadow); padding: 1rem 1rem .4rem; }
 .chat-thread.boxed .thread { height: min(46vh, 30rem); overflow-y: auto; padding: .3rem .5rem 1rem .2rem; }
 .chat-thread.boxed .composer { position: static; background: none; }
@@ -461,15 +463,14 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .breadcrumb [aria-current] { opacity: .75; }
 .breadcrumb.wrap { padding-top: 1.5rem; } /* on its own row: the space other pages get from their container */
 .mysite header { display: flex; flex-wrap: wrap; gap: .8rem 1rem; align-items: center; margin-bottom: 1.6rem; }
-/* "Open in a new tab": an icon next to the page's name, with a tooltip on hover and keyboard focus. */
-.open-tab { position: relative; display: grid; place-items: center; width: 44px; height: 44px; flex: none; color: var(--ink); }
+/* "Open in a new tab": a link with an icon on its own line under the page's name, with a tooltip on hover and keyboard focus. */
+.open-tab { position: relative; display: inline-flex; align-items: center; gap: .45rem; margin-top: -.4rem; min-height: 44px; font-weight: 600; color: var(--ink); }
+.open-tab span { text-decoration: underline; text-underline-offset: 3px; }
+.open-tab svg { flex: none; }
 .open-tab:hover, .open-tab:focus-visible { color: var(--rojo); }
-.open-tab::after { content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 10px); z-index: 5; width: max-content; max-width: 16rem; padding: .5rem .7rem; border-radius: 8px; background: var(--ink); color: var(--paper-light); font: 500 .85rem/1.35 var(--body); text-align: left; opacity: 0; visibility: hidden; transform: translateX(-50%); transition: opacity .15s; pointer-events: none; }
+.open-tab::after { content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 4px); z-index: 5; width: max-content; max-width: 16rem; padding: .5rem .7rem; border-radius: 8px; background: var(--ink); color: var(--paper-light); font: 500 .85rem/1.35 var(--body); text-align: left; opacity: 0; visibility: hidden; transition: opacity .15s; pointer-events: none; }
 .open-tab:hover::after, .open-tab:focus-visible::after { opacity: 1; visibility: visible; }
-.mysite header h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); }
-/* The same link as the icon, in words, on its own line under the title. */
-.mysite header .open-link { flex-basis: 100%; margin-top: -.4rem; font-weight: 600; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-.mysite header .open-link:hover, .mysite header .open-link:focus-visible { color: var(--rojo); }
+.mysite header h1 { flex-basis: 100%; font-size: clamp(1.9rem, 5vw, 2.8rem); }
 /* Tabs: Vista previa (full width) · Cambiar */
 .tabs { display: inline-flex; flex-wrap: wrap; border: 3px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); background: var(--ink); gap: 3px; max-width: 100%; }
 .tabs [role='tab'] { font: 400 .95rem/1 var(--display); letter-spacing: .04em; text-transform: uppercase; color: var(--ink); background: var(--paper-deep); border: 0; padding: 1rem 1.6rem; min-width: 9rem; min-height: 44px; cursor: pointer; flex: 1 1 auto; }
@@ -525,14 +526,19 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .thumbs button { position: absolute; top: .25rem; right: .25rem; min-width: 44px; min-height: 44px; padding: 0 .5rem; border: 2px solid var(--ink); border-radius: 999px; background: var(--paper-light); color: var(--ink); font: 700 .8rem/1 var(--body); cursor: pointer; }
 .thumbs:not(.current) button { min-width: 32px; min-height: 32px; font-size: 1.1rem; }
 .photos-panel { max-width: 44rem; }
-.photos-panel:not([hidden]) { display: grid; gap: 1rem; }
+.photos-panel:not([hidden]) { display: grid; gap: 1.6rem; }
 .photos-panel form { display: grid; gap: 1.6rem; }
 .photos-panel h3 { margin: 0 0 .4rem; }
 .photos-panel .lead { font-size: 1.1rem; margin: 0; }
 .photos-panel [data-no-photos][hidden] { display: none; }
+/* The save button right under its card, so it reads as part of it; an error, when there is one, sits between them. */
+.photos-panel .notice { margin: 0; min-height: 0; }
+.photos-panel .notice:empty { display: none; }
+.photos-panel form .card-action { margin-top: -.6rem; }
 .made-photos[hidden] { display: none; }
-.made-photos { display: grid; gap: .8rem; border-top: 3px dashed var(--ink); padding-top: 1.4rem; }
+.made-photos { display: grid; gap: .8rem; }
 .made-photos h3, .made-photos .hint { margin: 0; }
+.made-photos .panel-card { display: grid; gap: 1rem; }
 .made-photos li { display: grid; gap: .4rem; justify-items: start; }
 .made-photos li[data-chosen] .thumb { outline: 3px solid var(--verde); outline-offset: 2px; }
 .made-photos label.linkbtn, .made-photos li > button { font-size: .85rem; }

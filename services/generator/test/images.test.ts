@@ -265,4 +265,27 @@ describe('runGenerateJob with made photos', () => {
     const edited = t.sites.get(site.slug)!;
     expect((await loadDraft(site.slug, edited.currentDraftId!, t.generateDeps.stores)).media.generated).toEqual(doc.media.generated);
   });
+
+  it('keeps every made photo the page uses; a redesign reuses the newest few', async () => {
+    const t = harness();
+    const deps = { ...t.generateDeps, generateImage, imageModelId: 'stability' };
+    // Each design shows the made photos it was offered and makes four more.
+    Object.assign(t.writer.options, {
+      images: ['Bread', 'Coffee', 'Oven', 'Flour'],
+      page: (request: PageRequest, made: string[]) =>
+        `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Panadería Luna</title></head><body><main><h1>Panadería Luna</h1>${[...request.photos.filter((p) => p.file.includes('/gen-')).map((p) => p.file), ...made].map((file) => `<img src="${file}" alt="">`).join('')}<p>${request.answers.about}</p><p>${'Pan recién horneado. '.repeat(20)}</p></main></body></html>`,
+    });
+    await submit({ ...body, aiImages: true }, '1.2.3.4', t.submitDeps);
+    expect(await runGenerateJob('job-1', deps)).toMatchObject({ outcome: 'DONE' });
+    const slug = t.jobs.get('job-1')!.slug!;
+    for (const job of ['job-2', 'job-3']) {
+      expect(await editSite(t.sites.get(slug)!, { instruction: 'otro diseño' }, t.ownerDeps)).toMatchObject({ status: 202 });
+      expect(await runGenerateJob(job, deps)).toMatchObject({ outcome: 'DONE' });
+    }
+    const site = t.sites.get(slug)!;
+    const doc = await loadDraft(slug, site.currentDraftId!, t.generateDeps.stores);
+    expect(doc.media.generated).toHaveLength(12); // 8 reused + 4 new, none dropped
+    expect(t.objects.get(`_draft/${site.currentDraftId}/index.html`)!.match(/<img src="assets\/gen-/g)).toHaveLength(12);
+    expect(t.writer.requests.at(-1)!.photos.filter((p) => p.file.includes('/gen-'))).toHaveLength(8);
+  });
 });

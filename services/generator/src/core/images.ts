@@ -7,6 +7,8 @@ export type GenerateImage = (prompt: string, negativePrompt: string, aspect: Ima
 
 /** Photos per page (each $0.04 and about 10 s). */
 export const MAX_IMAGES = 4;
+/** The made photos a redesign may reuse from the page it replaces (the newest). */
+export const REUSED_MADE = 8;
 
 /**
  * The image model cannot spell, and a made-up shop sign or logo would be the business's name written wrong.

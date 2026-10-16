@@ -34,7 +34,7 @@ export interface FakeModelOptions {
  * A page writer that answers with a small page built from the request: the business name, a WhatsApp link to the
  * number it was given, and the change it was asked for (a new design is a new page with the request in it). `page` replaces the page; `fail` makes it throw.
  */
-export function fakeWriter(options: { page?: (request: PageRequest) => string; fail?: Error; images?: string[]; useImages?: number } = {}) {
+export function fakeWriter(options: { page?: (request: PageRequest, made: string[]) => string; fail?: Error; images?: string[]; useImages?: number } = {}) {
   const requests: PageRequest[] = [];
   const settings: Parameters<WritePage>[1][] = [];
   const writePage: WritePage = async (request, setting) => {
@@ -49,7 +49,7 @@ export function fakeWriter(options: { page?: (request: PageRequest) => string; f
     }
     const imgs = made.slice(0, options.useImages ?? made.length).map((file) => `<img src="${file}" alt="">`).join('');
     const page =
-      options.page?.(request) ??
+      options.page?.(request, made) ??
       (request.current !== undefined
         ? request.current.replace('</main>', `<p>${request.instruction}</p>${imgs}</main>`)
         : `<!doctype html><html lang="${request.answers.lang}"><head><meta charset="utf-8"><title>${request.answers.businessName}</title></head><body><main><h1>${request.answers.businessName}</h1>${imgs}<p>${request.answers.about}</p><p>${'Pan recién horneado. '.repeat(20)}</p>${request.instruction ? `<p>${request.instruction}</p>` : ''}<a href="https://wa.me/${request.answers.contact.whatsapp}">WhatsApp</a></main></body></html>`);

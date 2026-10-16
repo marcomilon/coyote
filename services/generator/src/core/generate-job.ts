@@ -10,7 +10,7 @@ import type { Media } from './content';
 import { loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
 import { voiceOf } from './i18n';
 import { handsChecker } from './hands';
-import { imageMaker, imageRatio, madeRatio, type GenerateImage } from './images';
+import { imageMaker, imageRatio, madeRatio, REUSED_MADE, type GenerateImage } from './images';
 import type { Design, DesignLook, Job, Stores } from './jobs';
 import { checkPage } from './page-check';
 import { designTraits, type DesignTraits } from './design-traits';
@@ -435,7 +435,8 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
     // Opus writes the page (a new site, or a new design), or changes the current one (a photo change).
     // A new design is the owner's request: a complete new page, with the words and photos the page has now (designs).
     const redesign = Boolean(current && job.instruction);
-    const photos = await pagePhotos(slug, media, stores, redesign ? (media.generated ?? []).filter((file) => current!.page.includes(file)) : []);
+    // A redesign may reuse the made photos the page shows, the newest few, so the made photos a page uses stay a few.
+    const photos = await pagePhotos(slug, media, stores, redesign ? (media.generated ?? []).filter((file) => current!.page.includes(file)).slice(-REUSED_MADE) : []);
     const goal = job.answers.goal && { goal: job.answers.goal };
     // A new design looks different from every earlier one: the page writer hears what they used, and gets another layout and look.
     const before = redesign ? usedLooks(site.designs ?? [], current!) : undefined;
@@ -493,8 +494,9 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
       written.page = back.page;
       ownerPhotos = { kept: back.kept, restored: back.restored.length, lost: back.lost.length };
     }
-    // The made photos the page uses, with the earlier ones it still uses (an edit keeps its page's photos).
-    const generated = [...new Set([...(media.generated ?? []), ...written.made])].filter((file) => written.page.includes(file)).slice(-8);
+    // The made photos the page uses, with the earlier ones it still uses (an edit keeps its page's photos). All of them:
+    // one left out here would be taken off the page by the page check.
+    const generated = [...new Set([...(media.generated ?? []), ...written.made])].filter((file) => written.page.includes(file));
     const { generated: _earlier, ...files } = media;
     media = generated.length > 0 ? { ...files, generated } : files;
     // The form's photo descriptions live on as media.captions, which Tus fotos keeps up to date.

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_IMAGES, REUSED_MADE } from './images';
 import { validForCountry } from './phones';
 
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -37,6 +38,6 @@ export const Media = z.object({
   /** What the owner says each photo shows (Tus fotos), by file. */
   captions: z.record(assetPath, z.string().trim().min(1).max(100)).optional(),
   /** Photos the page writer made (make_image) that the page uses. */
-  generated: z.array(assetPath).max(8).optional(),
+  generated: z.array(assetPath).max(REUSED_MADE + MAX_IMAGES).optional(),
 });
 export type Media = z.infer<typeof Media>;

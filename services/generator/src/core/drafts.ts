@@ -30,8 +30,6 @@ export const SiteDoc = z.object({
   requests: z.array(z.string().max(1000)).optional(),
   /** The texts on the page the owner wrote (Tus textos, the chat): a redesign keeps them (page-texts.ts). */
   ownerTexts: z.array(z.string().max(5000)).max(200).optional(),
-  /** The look nudge the design was written with (page-writer.ts `Look`): a new design avoids it. */
-  look: z.object({ tones: z.array(z.string().max(60)).max(3), dark: z.boolean() }).optional(),
   /** Template mode: the template and the words written for it, for the next template redesign. */
   template: z.object({ id: z.string().max(60), fill: StoredFill }).optional(),
   /** The design this version belongs to (SiteRecord.designs). */
@@ -99,7 +97,7 @@ export function renderDraft(doc: SiteDoc, slug: string, urls: Urls): string {
  * writer made a complete page); otherwise it is the current design's new latest version. Older drafts beyond
  * MAX_DRAFTS are deleted unless a design points at them. Resolves to the new draft's ID.
  */
-export async function saveDraft(site: SiteRecord, written: SiteDoc, deps: DraftDeps, design?: Pick<Design, 'kind' | 'request'>): Promise<string> {
+export async function saveDraft(site: SiteRecord, written: SiteDoc, deps: DraftDeps, design?: Pick<Design, 'kind' | 'request' | 'look'>): Promise<string> {
   const { stores, urls } = deps;
   const draftId = (deps.newDraftId ?? newDraftId)();
   const prefix = draftPrefix(draftId);
@@ -110,7 +108,7 @@ export async function saveDraft(site: SiteRecord, written: SiteDoc, deps: DraftD
   const before = mine?.draftId;
   if (mine) mine.draftId = draftId;
   else {
-    mine = { id: draftId, draftId, at: (deps.now ?? Date.now)(), kind: design?.kind ?? 'create', ...(design?.request && { request: design.request.slice(0, 120) }) };
+    mine = { id: draftId, draftId, at: (deps.now ?? Date.now)(), kind: design?.kind ?? 'create', ...(design?.request && { request: design.request.slice(0, 120) }), ...(design?.look && { look: design.look }) };
     designs.push(mine);
   }
   const doc = { ...written, design: mine.id };

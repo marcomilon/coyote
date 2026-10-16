@@ -11,10 +11,10 @@ import { loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './dr
 import { voiceOf } from './i18n';
 import { handsChecker } from './hands';
 import { imageMaker, imageRatio, madeRatio, type GenerateImage } from './images';
-import type { Job, Stores } from './jobs';
+import type { Design, DesignLook, Job, Stores } from './jobs';
 import { checkPage } from './page-check';
-import { designTraits } from './design-traits';
-import { DEFAULT_PAGE_SKILL, NO_SKILL, parsePage, pickLook, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type WritePage } from './page-writer';
+import { designTraits, type DesignTraits } from './design-traits';
+import { DEFAULT_PAGE_SKILL, NO_SKILL, parsePage, pickLook, TONES, type Look, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type UsedLooks, type WritePage } from './page-writer';
 import { PolicyRejection, type Violation } from './policy';
 import { isRejected, prescreen } from './prescreen';
 import { planSite } from './site-writer';
@@ -129,6 +129,41 @@ const LOWER: Record<PageEffort, PageEffort> = { max: 'xhigh', xhigh: 'high', hig
 
 type PageResult = { page: string; made: string[]; template?: SiteDoc['template']; ownerTexts?: string[] } | { problem: 'failed' | 'policy' | 'guardrail'; detail: string; violations?: Violation[] };
 
+/**
+ * What a site's designs used, for a new design to avoid: their layouts and the background of the one shown, for
+ * pickLook; their tones, newest first while at least 3 of the 16 stay free; and their fonts with the current page's
+ * colors, for the request (`avoid`).
+ */
+export function usedLooks(designs: Design[], current: SiteDoc): { used: UsedLooks; avoid: DesignTraits } {
+  const traits = designTraits(current.page);
+  const looks = designs.flatMap((d) => (d.look ? [d.look] : []));
+  let tones: string[] = [];
+  for (const look of [...looks].reverse()) {
+    const more = [...new Set([...tones, ...look.tones])];
+    if (TONES.length - more.length < 3) break;
+    tones = more;
+  }
+  const shown = designs.find((d) => d.id === current.design)?.look;
+  const dark = shown?.dark ?? traits.dark;
+  return {
+    used: { tones, ...(dark !== undefined && { dark }), layouts: looks.flatMap((l) => (l.layout ? [l.layout] : [])) },
+    avoid: { ...traits, fonts: [...new Set([...traits.fonts, ...looks.flatMap((l) => l.fonts)])].slice(0, 8) },
+  };
+}
+
+/** What a new design used: the look it was asked for (a template page ignores it), and the fonts and background on the page. */
+function designLook(page: string, look: Look | undefined, template: string | undefined): DesignLook {
+  const traits = designTraits(page);
+  const asked = template ? undefined : look;
+  return {
+    ...(asked?.layout && { layout: asked.layout }),
+    tones: asked?.tones ?? [],
+    dark: asked?.dark ?? traits.dark ?? false,
+    fonts: traits.fonts,
+    ...(template && { template }),
+  };
+}
+
 /** A new design: a complete new page for a site that has one (an edit with a current page changes that page instead). */
 const isRedesign = (request: PageRequest) => request.instruction !== undefined && request.current === undefined;
 
@@ -241,7 +276,7 @@ async function swapCheckedPage(current: SiteDoc, swaps: { made: string; photo: s
 }
 
 /** Template mode: the cheap model picks a template and writes its words; then the same checks as a written page. */
-async function fillCheckedPage(request: PageRequest, media: Media, current: SiteDoc | undefined, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
+async function fillCheckedPage(request: PageRequest, media: Media, current: SiteDoc | undefined, usedTemplates: string[], requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
   if (!deps.templates) return { problem: 'failed', detail: 'template mode without a template library' };
   const { answers } = request;
   const made: string[] = [];
@@ -250,7 +285,7 @@ async function fillCheckedPage(request: PageRequest, media: Media, current: Site
   let written;
   try {
     written = await writeTemplatePage(
-      { answers, notes: request.notes, media, photos: request.photos, ...(current?.template && { current: current.template }), ...(request.instruction && { instruction: request.instruction }), ...(request.keep && { keep: request.keep }), ...(makeImage && { makeImage }) },
+      { answers, notes: request.notes, media, photos: request.photos, ...(current?.template && { current: current.template }), ...(usedTemplates.length > 0 && { used: usedTemplates }), ...(request.instruction && { instruction: request.instruction }), ...(request.keep && { keep: request.keep }), ...(makeImage && { makeImage }) },
       { callTool: deps.callTool, modelId: deps.modelId, templates: deps.templates },
     );
   } catch (error) {
@@ -402,10 +437,11 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
     const redesign = Boolean(current && job.instruction);
     const photos = await pagePhotos(slug, media, stores, redesign ? (media.generated ?? []).filter((file) => current!.page.includes(file)) : []);
     const goal = job.answers.goal && { goal: job.answers.goal };
-    // A new design looks different: the page writer hears what the current page looks like, and gets another look.
-    const avoid = redesign ? designTraits(current!.page) : undefined;
+    // A new design looks different from every earlier one: the page writer hears what they used, and gets another layout and look.
+    const before = redesign ? usedLooks(site.designs ?? [], current!) : undefined;
+    const avoid = before?.avoid;
     // The look nudge: new sites while page-look is on, and every new design.
-    const look = (deps.pageLook !== false || redesign) && { look: pickLook(deps.random, avoid && { tones: current!.look?.tones, dark: current!.look?.dark ?? avoid.dark }) };
+    const look = (deps.pageLook !== false || redesign) && { look: pickLook(deps.random, before?.used) };
     const keep = current?.ownerTexts?.length ? current.ownerTexts : undefined;
     // The owner's photos the page shows (taken-out ones are no longer in media).
     const keepPhotos = current ? media.photos.filter((file) => current!.page.includes(file)) : [];
@@ -425,7 +461,7 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
       ? await swapCheckedPage(current!, swaps, media, request, requests, slug, deps)
       : deps.pageMode === 'template'
         ? // Template mode: the cheap model fills again from the current words, and may pick another template for a new look.
-          await fillCheckedPage(request, media, current, requests, slug, deps, usage)
+          await fillCheckedPage(request, media, current, (site.designs ?? []).flatMap((d) => (d.look?.template ? [d.look.template] : [])), requests, slug, deps, usage)
         : await writeCheckedPage(request, requests, slug, deps, usage);
     if ('problem' in written) {
       if (written.problem === 'policy') throw new PolicyRejection(written.violations!);
@@ -465,13 +501,12 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
     const { photoNotes: _notes, ...answers } = job.answers;
     // The template and its words, for the next template redesign (an Opus edit keeps the earlier ones; a new design doesn't).
     const template = written.template ?? (redesign ? undefined : current?.template);
-    const { template: _template, look: earlierLook, ...earlier } = current ?? ({} as Partial<SiteDoc>);
-    // The look a new page was written with (an edit keeps its page's; a template page has none).
-    const wroteLook = !current || redesign ? (look && !written.template && deps.pageMode !== 'template' ? { tones: look.look.tones, dark: look.look.dark } : undefined) : earlierLook;
-    const doc: SiteDoc = { ...(current ? { ...earlier, requests } : { answers }), notes, media, page: written.page, ...(template && { template }), ...(wroteLook && { look: wroteLook }), ...(written.ownerTexts && { ownerTexts: written.ownerTexts }) } as SiteDoc;
+    const { template: _template, ...earlier } = current ?? ({} as Partial<SiteDoc>);
+    const doc: SiteDoc = { ...(current ? { ...earlier, requests } : { answers }), notes, media, page: written.page, ...(template && { template }), ...(written.ownerTexts && { ownerTexts: written.ownerTexts }) } as SiteDoc;
 
-    // The first page and each new design are designs of their own; anything else updates the current one.
-    const draftId = await saveDraft(site, doc, deps, kind === 'create' ? { kind: 'create' } : redesign ? { kind: 'redesign', request: job.instruction } : undefined);
+    // The first page and each new design are designs of their own, with what they used; anything else updates the current one.
+    const newDesign = kind === 'create' || redesign ? { look: designLook(written.page, look ? look.look : undefined, written.template?.id) } : undefined;
+    const draftId = await saveDraft(site, doc, deps, newDesign && (kind === 'create' ? { kind: 'create', ...newDesign } : { kind: 'redesign', request: job.instruction, ...newDesign }));
     site = (await stores.getSite(slug)) ?? site;
 
     // A new site's first draft: the site becomes the owner's, and the magic link is issued (shown once).

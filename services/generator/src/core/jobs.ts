@@ -181,6 +181,18 @@ export interface Design {
   kind: 'create' | 'redesign';
   /** The owner's request, for a redesign. */
   request?: string;
+  /** What the design used, so a later redesign of the site uses something else (generate-job.ts). */
+  look?: DesignLook;
+}
+
+export interface DesignLook {
+  /** The page structure (page-writer.ts LAYOUTS); unset for a first design, which picks freely. */
+  layout?: string;
+  tones: string[];
+  dark: boolean;
+  fonts: string[];
+  /** Template mode: the template it filled. */
+  template?: string;
 }
 
 /** Everything the request flows need from DynamoDB and S3. Implemented in src/aws/stores.ts. */

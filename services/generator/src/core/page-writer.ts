@@ -64,11 +64,37 @@ export const TONES = [
   'Swiss/international', 'hand-made/crafty', 'vintage signage', 'bold color-block', 'Memphis',
 ] as const;
 
+/**
+ * Page structures for new designs: each redesign of a site gets one its earlier designs didn't use, so the designs
+ * differ in structure, not only in fonts and colors. New sites don't get one: the skill picks freely.
+ */
+export const LAYOUTS = [
+  { id: 'split', text: 'a big photo beside the headline, then sections in a clear grid' },
+  { id: 'fullbleed', text: 'a full-bleed photo with the headline set over it, then wide full-width sections' },
+  { id: 'editorial', text: 'an editorial magazine page: asymmetric columns, large pull quotes, generous white space' },
+  { id: 'poster', text: 'a poster: the business name set huge across the first screen, the rest in bold blocks below' },
+  { id: 'bento', text: 'a bento grid: tiles of different sizes for the offer, the photos, the hours and the contact' },
+  { id: 'bands', text: 'full-width color bands, one per section, alternating text and photos' },
+  { id: 'sidebar', text: 'a fixed side column with the name and navigation, the content scrolling beside it' },
+  { id: 'collage', text: 'a scrapbook collage: overlapping photos, notes and stickers, slightly rotated' },
+  { id: 'story', text: 'a single narrow column read top to bottom like a short story, photos between the paragraphs' },
+  { id: 'menu', text: 'led by a menu board: the products and prices as a big list, the rest around it' },
+] as const;
+
 export interface Look {
   /** Three to choose from (pickLook); the bench sends one to see a style on its own. */
   tones: string[];
   dark: boolean;
   noTicker: boolean;
+  /** New designs: the page structure (LAYOUTS id). */
+  layout?: string;
+}
+
+/** What a site's earlier designs used, for a new design to avoid. `layouts`: oldest first. */
+export interface UsedLooks {
+  tones?: string[];
+  dark?: boolean;
+  layouts?: string[];
 }
 
 /** How often a new site's request asks for no ticker strip. */
@@ -76,13 +102,19 @@ const NO_TICKER_SHARE = 0.75;
 
 /**
  * Three different tones, a light or dark page, and usually no ticker strip. `random` is injectable for tests.
- * A new design `avoid`s the current look: none of its tones, and the other background.
+ * A new design `avoid`s the site's earlier designs: none of their tones (the caller keeps at least 3 to pick from),
+ * the other background, and a layout none of them used (all used: the one used longest ago).
  */
-export function pickLook(random: () => number = Math.random, avoid?: { tones?: string[]; dark?: boolean }): Look {
+export function pickLook(random: () => number = Math.random, avoid?: UsedLooks): Look {
   const pool: string[] = TONES.filter((tone) => !avoid?.tones?.includes(tone));
   const tones = [0, 1, 2].map(() => pool.splice(Math.floor(random() * pool.length), 1)[0]!);
   const dark = random() < 0.4;
-  return { tones, dark: avoid?.dark === undefined ? dark : !avoid.dark, noTicker: random() < NO_TICKER_SHARE };
+  const look: Look = { tones, dark: avoid?.dark === undefined ? dark : !avoid.dark, noTicker: random() < NO_TICKER_SHARE };
+  if (!avoid) return look;
+  const used = avoid.layouts ?? [];
+  const fresh = LAYOUTS.map((l) => l.id).filter((id) => !used.includes(id));
+  const oldest = LAYOUTS.map((l) => l.id).sort((a, b) => used.lastIndexOf(a) - used.lastIndexOf(b))[0]!;
+  return { ...look, layout: fresh.length > 0 ? fresh[Math.floor(random() * fresh.length)]! : oldest };
 }
 
 export interface PageRequest {
@@ -231,8 +263,9 @@ ${keep?.length ? `The owner wrote these texts themselves; keep them word for wor
         }[goal]
       }\n\n`
     : '';
+  const layout = look?.layout && LAYOUTS.find((l) => l.id === look.layout);
   const lookLine = look
-    ? `For the look, ${look.tones.length === 1 ? `go with ${look.tones[0]}` : `go with whichever of these suits the business best: ${look.tones.slice(0, -1).join(', ')}, or ${look.tones.at(-1)}`}, on a ${look.dark ? 'dark' : 'light'} background${look.noTicker ? ', without a scrolling ticker or marquee strip' : ''}.\n\n`
+    ? `${layout ? `Lay the page out as ${layout.text}. ` : ''}For the look, ${look.tones.length === 1 ? `go with ${look.tones[0]}` : `go with whichever of these suits the business best: ${look.tones.slice(0, -1).join(', ')}, or ${look.tones.at(-1)}`}, on a ${look.dark ? 'dark' : 'light'} background${look.noTicker ? ', without a scrolling ticker or marquee strip' : ''}.\n\n`
     : '';
   // A new design: a complete new page for a business that has one, with the words and photos it has now, that looks different.
   const list = (items: string[]) => (items.length === 1 ? items[0] : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);

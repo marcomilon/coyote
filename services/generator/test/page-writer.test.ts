@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
 import { checkPage, contactMissing, replaceContact } from '../src/core/page-check';
-import { DEFAULT_PAGE_SKILL, pageModel, pageParams, pagePrompt, parsePage, pickLook, siteLanguage, skillText, TONES, type PageRequest } from '../src/core/page-writer';
+import { DEFAULT_PAGE_SKILL, LAYOUTS, pageModel, pageParams, pagePrompt, parsePage, pickLook, siteLanguage, skillText, TONES, type PageRequest } from '../src/core/page-writer';
 import { submit } from '../src/core/submit';
 import { body, harness } from './harness';
 
@@ -180,6 +180,17 @@ describe('contact details on a written page', () => {
     expect(prompt).toContain('Make the new design look very different from the current one: other fonts, other colors, another layout, another kind of hero');
     expect(pagePrompt({ ...request, avoid: { fonts: ['Gloock', 'Jost'], colors: ['#1d2742', '#b8893b', '#fbf8f2'], dark: false } })).toContain(
       'The current design uses the fonts Gloock and Jost, the colors #1d2742, #b8893b and #fbf8f2 and a light background. Make the new design look very different',
+    );
+  });
+
+  it('a new design gets a layout no earlier design used, the one used longest ago when all were, and says it', () => {
+    const ids = LAYOUTS.map((l) => l.id);
+    for (let i = 0; i < 20; i++) expect(ids.slice(0, 7)).not.toContain(pickLook(Math.random, { layouts: ids.slice(0, 7) }).layout);
+    expect(pickLook(Math.random, { layouts: [...ids.slice(1), ids[0]!, ids[2]!] }).layout).toBe(ids[1]);
+    expect(pickLook(Math.random).layout).toBeUndefined();
+    const answers = { businessName: 'Luna', about: 'Pan', lang: 'es' as const, contact };
+    expect(pagePrompt({ answers, notes: [], photos: [], instruction: 'x', look: { tones: ['Memphis'], dark: false, noTicker: false, layout: 'bento' } })).toContain(
+      `Lay the page out as ${LAYOUTS.find((l) => l.id === 'bento')!.text}. For the look, go with Memphis`,
     );
   });
 

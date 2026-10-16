@@ -40,6 +40,8 @@ export interface TemplateRequest {
   photos: PagePhoto[];
   /** Redesigns: the current template and fill, and the owner's change request. */
   current?: { id: string; fill: StoredFill };
+  /** Redesigns: the templates the site's designs used, to pick another one while there is one. */
+  used?: string[];
   instruction?: string;
   /** Redesigns: texts on the current page that the owner wrote. */
   keep?: string[];
@@ -69,12 +71,14 @@ function imageInputs(photos: PagePhoto[]): ImageInput[] {
 
 /**
  * Picks the template. With one template, or a photo change (no instruction), no call is made. A new design gets a
- * template other than the current one, so it looks different.
+ * template other than the current one, and none the site's earlier designs used while there are others, so it looks different.
  */
 async function pickTemplate(request: TemplateRequest, catalog: TemplateInfo[], deps: TemplateWriterDeps, usage: Usage[]): Promise<string> {
   const current = request.current && catalog.some((t) => t.id === request.current!.id) ? request.current.id : undefined;
   if (current && !request.instruction) return current;
-  const others = catalog.filter((t) => t.id !== current);
+  // Never the current one; none the site used before either, while others are left.
+  const unused = request.instruction ? catalog.filter((t) => t.id !== current && !request.used?.includes(t.id)) : [];
+  const others = unused.length > 0 ? unused : catalog.filter((t) => t.id !== current);
   if (others.length === 0) return current!;
   if (others.length === 1) return others[0]!.id;
   catalog = others;
@@ -84,7 +88,7 @@ async function pickTemplate(request: TemplateRequest, catalog: TemplateInfo[], d
     modelId: deps.modelId,
     system: `You choose the website template that suits a small business best.\n\n${SHARED_RULES}\nCall the pick_template tool.`,
     guarded: answersBlock(request.answers, request.notes, request.instruction),
-    user: `The templates:\n${catalog.map((t) => `- ${t.id}: ${t.description}`).join('\n')}${current ? `\n\nThe page uses another template now; the owner wants a new design that looks different.` : ''}\n\nCall pick_template now.`,
+    user: `The templates:\n${catalog.map((t) => `- ${t.id}: ${t.description}`).join('\n')}${current || request.used?.length ? `\n\nThe owner wants a new design that looks different from the ones the site had.` : ''}\n\nCall pick_template now.`,
     maxTokens: 300,
     tool: { name: 'pick_template', description: 'Record the template that suits the business best.', schema },
   });

@@ -153,6 +153,22 @@ describe('template mode in the generate job', () => {
     expect(t.calls).toEqual(['classify', 'plan_site', 'fill_page']);
   });
 
+  it('each redesign takes a template none of the site\'s designs used, while there is one', async () => {
+    const t = await made(['warm', 'bold', 'calm']);
+    const site = () => t.sites.get('panaderia-luna')!;
+    const template = async () => JSON.parse(t.objects.get(`_src/panaderia-luna/${site().currentDraftId}.json`)!).template.id;
+    expect(await template()).toBe('bold');
+    t.options.pick = 'warm';
+    await editSite(site(), { instruction: 'otro diseño' }, t.ownerDeps);
+    await runGenerateJob('job-2', t.generateDeps);
+    expect(await template()).toBe('warm');
+    expect((t.requests.at(-2)!.tool.schema as unknown as { safeParse(v: unknown): { success: boolean } }).safeParse({ id: 'bold' }).success).toBe(false); // the current one isn't offered
+    await editSite(site(), { instruction: 'otro más' }, t.ownerDeps);
+    await runGenerateJob('job-3', t.generateDeps);
+    expect(await template()).toBe('calm'); // the only one left: no pick needed
+    expect(site().designs!.map((d) => d.look?.template)).toEqual(['bold', 'warm', 'calm']);
+  });
+
   it('a redesign fills the template again with the current words and the request', async () => {
     const t = await made();
     await editSite(t.sites.get('panaderia-luna')!, { instruction: 'más corto el título' }, t.ownerDeps);

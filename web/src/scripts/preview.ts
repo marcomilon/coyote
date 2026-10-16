@@ -1,5 +1,5 @@
 // The full-screen draft: the owner's token comes from owner-token.ts, like Mi sitio. Reloading shows the
-// latest version.
+// latest version. `?design=<id>` shows that design instead (Mi sitio → Diseños → Ver).
 import { api } from './jobs';
 import { ownerToken } from './owner-token';
 
@@ -23,9 +23,10 @@ function showMessage(message: Message) {
 
 async function load() {
   if (!token) return showMessage(strings.noToken);
-  const { status, body } = await api<{ draftUrl?: string; previewUrl?: string }>('/me', { headers: { authorization: `Bearer ${token}` } });
+  const { status, body } = await api<{ draftUrl?: string; previewUrl?: string; designs?: { id: string; draftUrl: string }[] }>('/me', { headers: { authorization: `Bearer ${token}` } });
   if (status === 429) return showMessage(strings.limited);
-  const url = status === 200 ? (body.previewUrl ?? body.draftUrl) : undefined;
+  const design = new URLSearchParams(location.search).get('design');
+  const url = status !== 200 ? undefined : design ? body.designs?.find((d) => d.id === design)?.draftUrl : (body.previewUrl ?? body.draftUrl);
   if (!url) return showMessage(strings.badToken);
   $<HTMLIFrameElement>('[data-frame]').src = url;
   root.dataset.state = 'ready';

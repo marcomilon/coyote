@@ -133,11 +133,10 @@ function showMessage(message: Message, recover = false) {
   show('message');
 }
 
-/** Mi sitio → Diseños: each design, the one in use marked; "Ver" shows one below, "Usar" makes it the site's (no model call). */
+/** Mi sitio → Diseños: each design, the one in use marked; "Ver" opens one in a new tab, "Usar" makes it the site's (no model call). */
 function showDesigns(designs: DesignView[]) {
   const g = strings.designs;
   const list = $<HTMLOListElement>('[data-designs]');
-  const view = $<HTMLElement>('[data-design-view]');
   const message = (text: string) => ($<HTMLElement>('[data-designs-notice]').textContent = text);
   const date = (at: number) => new Date(at).toLocaleDateString(strings.lang === 'pt' ? 'pt-BR' : 'es-419', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   const button = (text: string, className: string, onclick: () => void) => {
@@ -163,13 +162,9 @@ function showDesigns(designs: DesignView[]) {
       what.append(name, about);
       const actions = document.createElement('div');
       actions.className = 'actions';
-      actions.append(
-        button(g.view, 'btn small ghost', () => {
-          view.querySelector('iframe')!.src = design.draftUrl;
-          view.hidden = false;
-          view.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }),
-      );
+      const open = document.createElement('a');
+      Object.assign(open, { className: 'btn small ghost', textContent: g.view, target: '_blank', rel: 'noopener', href: `${strings.previewPath}?design=${encodeURIComponent(design.id)}${ownerHash()}` });
+      actions.append(open);
       if (!design.current) {
         const use = button(g.use, 'btn small', async () => {
           use.disabled = true;
@@ -178,7 +173,6 @@ function showDesigns(designs: DesignView[]) {
           try {
             const { status, body } = await api<View>('/me/design', 'POST', { design: design.id });
             if (status === 200) {
-              view.hidden = true;
               fill(body);
               notice(g.used);
               return showTab('preview');

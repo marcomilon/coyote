@@ -59,6 +59,18 @@ describe('designs', () => {
     expect((await loadDraft('panaderia-luna', 'draft2', t.stores)).look).toEqual({ tones: second!.look!.tones, dark: second!.look!.dark });
   });
 
+  it('a redesign uses frontend-design and a look whatever page-skill and page-look say', async () => {
+    const t = harness();
+    t.generateDeps.pageSkill = { name: 'classic-bold', text: 'Keep the structure.' };
+    t.generateDeps.pageLook = false;
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    await editSite(t.sites.get('panaderia-luna')!, { instruction: 'otro diseño' }, t.ownerDeps);
+    await runGenerateJob('job-2', t.generateDeps);
+    expect(t.writer.settings.map((s) => s.skill?.name)).toEqual(['classic-bold', 'frontend-design']);
+    expect(t.writer.requests.map((r) => r.look !== undefined)).toEqual([false, true]);
+  });
+
   it('waits for a running redesign', async () => {
     const t = await withDesigns();
     await editSite(t.site(), { instruction: 'colores verdes' }, t.ownerDeps);

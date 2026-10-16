@@ -237,7 +237,7 @@ ${keep?.length ? `The owner wrote these texts themselves; keep them word for wor
   // A new design: a complete new page for a business that has one, with the words and photos it has now, that looks different.
   const list = (items: string[]) => (items.length === 1 ? items[0] : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
   const now = avoid && [avoid.fonts.length > 0 && `the fonts ${list(avoid.fonts)}`, avoid.colors.length > 0 && `the colors ${list(avoid.colors)}`, avoid.dark !== undefined && `a ${avoid.dark ? 'dark' : 'light'} background`].filter((part): part is string => Boolean(part));
-  const different = `${now?.length ? `The current design uses ${list(now)}. ` : ''}Make the new design look very different from the current one: other fonts, other colors, another layout, unless the owner's request asks to keep something.\n\n`;
+  const different = `${now?.length ? `The current design uses ${list(now)}. ` : ''}Make the new design look very different from the current one: other fonts, other colors, another layout, another kind of hero, other shapes for the sections and cards, unless the owner's request asks to keep something.\n\n`;
   const redesign = instruction
     ? `The business already has a page; the owner wants a new design for it: ${instruction}\n\n${different}${texts?.length ? `Use the texts the page has now:\n${texts.map((text) => `- ${text}`).join('\n')}\n\n` : ''}${keep?.length ? `The owner wrote these texts themselves; keep them word for word:\n${keep.map((text) => `- ${text}`).join('\n')}\n\n` : ''}`
     : '';

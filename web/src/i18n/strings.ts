@@ -158,7 +158,6 @@ const es = {
       used: 'Listo: tu página web usa este diseño.',
       busy: 'Estamos cambiando tu página web. Espera a que termine e inténtalo de nuevo.',
       failed: 'No pudimos cambiar el diseño. Inténtalo de nuevo.',
-      preview: 'Vista del diseño',
     },
     photos: {
       intro: 'Sube el logo y las fotos de tu negocio y las ponemos en tu página web. Si faltan imágenes, las creamos con IA.',
@@ -682,7 +681,6 @@ const pt: typeof es = {
       used: 'Pronto: seu site usa este design.',
       busy: 'Estamos mudando seu site. Espere terminar e tente de novo.',
       failed: 'Não conseguimos trocar o design. Tente de novo.',
-      preview: 'Prévia do design',
     },
     photos: {
       intro: 'Envie o logo e as fotos do seu negócio e nós colocamos no seu site. Se faltarem imagens, criamos com IA.',

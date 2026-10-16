@@ -128,6 +128,9 @@ const LOWER: Record<PageEffort, PageEffort> = { max: 'xhigh', xhigh: 'high', hig
 
 type PageResult = { page: string; made: string[]; template?: SiteDoc['template']; ownerTexts?: string[] } | { problem: 'failed' | 'policy' | 'guardrail'; detail: string; violations?: Violation[] };
 
+/** A new design: a complete new page for a site that has one (an edit with a current page changes that page instead). */
+const isRedesign = (request: PageRequest) => request.instruction !== undefined && request.current === undefined;
+
 /** Asks the page writer for a page and runs the page checks and the output guardrail on it. */
 async function writeCheckedPage(request: PageRequest, requests: string[], slug: string, deps: GenerateJobDeps, usage: Usage[]): Promise<PageResult> {
   const effort = deps.pageEffort ?? 'high';
@@ -135,8 +138,10 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
   const made: string[] = [];
   const images = answers.aiImages === true && deps.pageImages !== false && deps.generateImage;
   const makeImage = images ? imageMaker(mediaPrefix(slug), { ...deps, generateImage: images }, made) : undefined;
+  // A new design gets the frontend-design skill whatever page-skill says: it leaves the layout free, so the page can change.
+  const skill = isRedesign(request) ? { skill: DEFAULT_PAGE_SKILL } : deps.pageSkill !== undefined && { skill: deps.pageSkill };
   const ask = (photos: PagePhoto[]) =>
-    deps.writePage({ ...request, photos }, { effort: request.current !== undefined ? LOWER[effort] : effort, model: deps.pageModel, ...(deps.pageSkill !== undefined && { skill: deps.pageSkill }), ...(makeImage && { makeImage }) });
+    deps.writePage({ ...request, photos }, { effort: request.current !== undefined ? LOWER[effort] : effort, model: deps.pageModel, ...skill, ...(makeImage && { makeImage }) });
   let reply;
   try {
     reply = await ask(request.photos).catch((error: unknown) => {
@@ -398,7 +403,8 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
     const goal = job.answers.goal && { goal: job.answers.goal };
     // A new design looks different: the page writer hears what the current page looks like, and gets another look.
     const avoid = redesign ? designTraits(current!.page) : undefined;
-    const look = deps.pageLook !== false && { look: pickLook(deps.random, avoid && { tones: current!.look?.tones, dark: current!.look?.dark ?? avoid.dark }) };
+    // The look nudge: new sites while page-look is on, and every new design.
+    const look = (deps.pageLook !== false || redesign) && { look: pickLook(deps.random, avoid && { tones: current!.look?.tones, dark: current!.look?.dark ?? avoid.dark }) };
     const keep = current?.ownerTexts?.length ? current.ownerTexts : undefined;
     // The owner's photos the page shows (taken-out ones are no longer in media).
     const keepPhotos = current ? media.photos.filter((file) => current!.page.includes(file)) : [];
@@ -513,13 +519,15 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
 
 /** The page writer's settings this job ran with (for the admin notice). */
 function pageWriterStatus(job: Job, deps: GenerateJobDeps, template?: string): PageWriterStatus {
+  // A new design: an edit with an instruction (generate's `redesign`), written with frontend-design and a look.
+  const redesign = job.kind === 'edit' && Boolean(job.instruction) && deps.pageMode !== 'template';
   return {
     ...(deps.pageMode === 'template' && template && { template }),
     model: writerModel(deps.pageMode, deps.pageModel, deps.modelId),
     tier: job.tier ?? 'paid',
     effort: deps.pageEffort ?? 'high',
-    skill: deps.pageSkill === undefined ? DEFAULT_PAGE_SKILL.name : (deps.pageSkill?.name ?? NO_SKILL),
-    look: deps.pageLook !== false,
+    skill: deps.pageSkill === undefined || redesign ? DEFAULT_PAGE_SKILL.name : (deps.pageSkill?.name ?? NO_SKILL),
+    look: deps.pageLook !== false || redesign,
     images: deps.pageImages !== false && !!deps.generateImage,
     ownerImages: job.answers.aiImages === true,
   };

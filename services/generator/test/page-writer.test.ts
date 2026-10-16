@@ -177,7 +177,7 @@ describe('contact details on a written page', () => {
     expect(prompt).toContain('keep them word for word:\n- Abrimos de 7 a 13');
     expect(prompt).toContain("Keep the owner's photos (assets/photo-a.jpg) on the page.");
     expect(prompt).toContain('brutally minimal');
-    expect(prompt).toContain('Make the new design look very different from the current one: other fonts, other colors, another layout');
+    expect(prompt).toContain('Make the new design look very different from the current one: other fonts, other colors, another layout, another kind of hero');
     expect(pagePrompt({ ...request, avoid: { fonts: ['Gloock', 'Jost'], colors: ['#1d2742', '#b8893b', '#fbf8f2'], dark: false } })).toContain(
       'The current design uses the fonts Gloock and Jost, the colors #1d2742, #b8893b and #fbf8f2 and a light background. Make the new design look very different',
     );

@@ -19,7 +19,7 @@ npm run diff           # cdk diff against the deployed stack (--profile coyote)
 ./coyote.sh status     # the deployed stack at a glance: URLs, page model/skill/look switches, Bedrock models
 ./coyote.sh deploy     # builds web, checks Lambda bundles, cdk deploy (--profile coyote); writes infra/cdk-outputs.json
 ./coyote.sh destroy    # deletes the stack and ALL data (asks for typed confirmation). Never run it without the user asking
-./coyote.sh abuse-report | unpublish <slug> | restore <slug> | refill-all | free-draft <email> | usage <email>   # admin commands (see README runbook)
+./coyote.sh abuse-report | unpublish <slug> | restore <slug> | refill-all | free-draft <email> | usage <email> | add-designs <email> <n>   # admin commands (see README runbook)
 ./coyote.sh page-mode [design|template]   # show or switch how pages are made: Opus writes each page, or Haiku fills a template Opus designed (no deploy)
 ./coyote.sh page-templates [add <id> <file> "<description>" | rm <id>]   # the template library (services/generator/templates/), checked and uploaded
 npm run templates:make -w services/generator -- --count 5   # Opus designs templates, Haiku fills example businesses; gallery in out/templates/<run>/ (real calls)
@@ -57,6 +57,7 @@ Tests live in `infra/test/` and `services/*/test/` (see `vitest.config.ts`). The
 - **Local development has no mock backend.** `npm run dev` serves only the static frontend; the API, Lambdas, and generated sites are the deployed stack, which allows `http://localhost:5173` in CORS and in the sites' `frame-ancestors`.
 - **Bots**: Cloudflare Turnstile on the anonymous forms (create, sign-in link, report): the widget's token goes in the JSON body as `turnstileToken`, and the Lambda checks it before any count, model call or email (`core/captcha.ts`, `aws/turnstile.ts`). Switch `./coyote.sh captcha`; the secret is in Secrets Manager `coyote/turnstile`, the public site key is the CDK context `turnstileSiteKey`.
 - **Safety is four independent layers** (Bedrock Guardrail incl. explicit `ApplyGuardrail` on output text, pre-screen classifier, `policy.ts` checks on content + rendered HTML, post-publication reports/quarantine). The rate limit runs before any Bedrock call.
+- **Design packs**: when an email's 3 free designs are used, Mi sitio sells 3 more for USD 4.90 through Paddle (sandbox; `core/payments.ts`, `aws/paddle.ts`). The transaction is made on our server; Paddle's webhook adds the designs once per transaction (`paid-writes.ts`). Keys in Secrets Manager `coyote/paddle`; the client token and price id are CDK context `paddle`.
 - **Owners' domains** (Mi sitio → Dominio, `core/domains.ts`): Porkbun is the registrar (`aws/porkbun.ts`, key in Secrets Manager `coyote/porkbun-api`, free DNS). The owner is the registrant; registering works only while `./coyote.sh domain-register` is on. The tab is hidden with CSS until the flow is finished, unless `PUBLIC_DOMAIN_TAB=on` at build/dev time (e.g. in `web/.env.development.local`, which only `npm run dev` reads). Connecting a domain to its site waits for publishing.
 - MVP sites carry only WhatsApp and call buttons (one number, "Teléfono" on the form). The contact form, SES email, WhatsApp flows, and custom domains are post-MVP and specified in the plans.
 

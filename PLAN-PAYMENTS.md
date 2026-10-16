@@ -1,11 +1,11 @@
-# Paddle pricing (sandbox): design credits + monthly hosting subscription
+# Paddle pricing (sandbox): design packs (built) + monthly hosting subscription (pending)
 
 ## Context
 `ventas314-pricing.md` sets the business model: 1 free design, extra designs sold in packs, paid hosting. Coyote has no payment code yet (PLAN.md:466-467 leaves the provider undecided, behind `payments.ts`). Decisions from the Q&A:
 - **Provider:** Paddle **sandbox**, in the existing shared sandbox account (it already holds "Guardiana Plus"). Our webhook ignores everything except our price IDs with `custom_data.app = "coyote"`.
 - **Free design:** stays 1 per email (`core/free-draft.ts`). WhatsApp verification comes later, with Phase 2.
 - **Free designs:** each email already gets 3 paid-tier page writes (`core/paid-writes.ts`: the first design and 2 redesigns), and Mi sitio shows a banner when they run out. Credits extend that count; the banner gets the buy button.
-- **Design pack:** USD 5, one-time, gives **3 design credits**. One credit pays for each paid-tier page write (`modelTier` in `models.ts`: Opus today) after the free one. Free-tier writes (Haiku: template mode, `page-model haiku`) never spend a credit. A credit pays for: a new site, or a redesign from the chat ("Rediseñar con esta idea", photos added or removed). No free redesigns. Subscribers pay credits too. Free, as today (no Opus call): text edits, contact edits, photo swaps, the chat itself, undo. `EDITS_PER_DAY = 5` stays as a safety cap.
+- **Design pack (built):** USD 4.90, one-time, can be bought again, gives **3 designs**. They raise the email's paid-writes allowance (`designs-bought#<email hash>` in the rate-limit table, added once per Paddle transaction), so the claim and refund in `generate-job.ts` stay as they are. The rest of this section is the original design; the credit-balance steps below (`core/credits.ts`, `spendCredit`, `paidWith`) are replaced by that counter. New sites still need the free draft. One credit pays for each paid-tier page write (`modelTier` in `models.ts`: Opus today) after the free one. Free-tier writes (Haiku: template mode, `page-model haiku`) never spend a credit. A credit pays for: a new site, or a redesign from the chat ("Rediseñar con esta idea", photos added or removed). No free redesigns. Subscribers pay credits too. Free, as today (no Opus call): text edits, contact edits, photo swaps, the chat itself, undo. `EDITS_PER_DAY = 5` stays as a safety cap.
 - **Hosting:** subscription at **USD 7.99/month**, one per site, same price everywhere (no Argentina override). The pack pays for designs only.
 - **Scope: payment only.** The subscription marks the site paid. Publishing (domain → CloudFront tenant + DNS) and registering the domain stay for later.
 
@@ -13,7 +13,7 @@
 | Product | `tax_category` | Price |
 |---|---|---|
 | "Ventas314 – Hosting" (`custom_data.app: coyote`) | `website-hosting` | USD 799, `billing_cycle` month/1, quantity 1–1 |
-| "Ventas314 – 3 diseños" | `standard` (or `saas`) | USD 500, one-time, quantity 1–1 |
+| "Ventas314 – 3 diseños" (`pro_01m52dtjdg2m03hmtmbdr9nd5q`) | `standard` | USD 490 (`pri_01m52dtjk2q1x2bjtwnrewj2zv`), one-time, quantity 1–1 |
 
 The price IDs go into `infra/cdk.json` context as `paddle: { env: 'sandbox', clientToken, hostingPriceId, designsPriceId }`. This works like `turnstileSiteKey`: the client token is public, and synth keeps working without credentials. Paddle converts USD into local currencies on its own.
 

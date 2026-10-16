@@ -131,6 +131,16 @@ export interface PageCheckOptions {
   assets?: string[];
 }
 
+/** Globals a page script cannot declare at its top level (the browser refuses the whole script). */
+const FIXED_GLOBAL = /(^|[;\n{}])\s*(?:const|let|class)\s+(?:top|window|document|location)\b/;
+
+/**
+ * Runs before the page's own scripts. When one of them throws (a syntax error included), every element still fully
+ * transparent after load is made visible: a broken script must not leave the page blank (fade-ins on scroll).
+ */
+const REVEAL_ON_ERROR =
+  "(function(){var failed=false;addEventListener('error',function(e){if(!(e.target instanceof Element))failed=true},true);addEventListener('load',function(){setTimeout(function(){if(!failed)return;document.querySelectorAll('body *').forEach(function(el){var s=getComputedStyle(el);if(s.opacity==='0'&&s.visibility!=='hidden'){el.style.opacity='1';el.style.transform='none'}})},600)})})();";
+
 export function checkPage(page: string, { contact, ownerText = '', businessName, lang, homeUrl, reportUrl, privacyUrl, assets }: PageCheckOptions): PageCheckResult {
   const known = knownDetails(contact, ownerText);
   const violations: Violation[] = [];
@@ -201,6 +211,13 @@ export function checkPage(page: string, { contact, ownerText = '', businessName,
         return;
       }
       for (const detail of redirects(code, known)) violations.push({ code: 'forbidden-url', detail });
+      // A classic script that declares a browser's fixed global (`const top = …`) is refused whole by the browser, and
+      // whatever it shows (fade-ins, menus) never appears. In a block, its declarations are its own.
+      const text = el.children.find((c): c is Text => c.type === 'text');
+      if (text && !/module/i.test(attr('type') ?? '') && FIXED_GLOBAL.test(code)) {
+        text.data = `{\n${text.data}\n}`;
+        repairs.push('wrapped a script that redeclared a browser global');
+      }
       return;
     }
     if (tag === 'link') {
@@ -263,6 +280,10 @@ export function checkPage(page: string, { contact, ownerText = '', businessName,
     const guard = parseDocument('<style>html,body{overflow-x:clip}</style>').children[0]!;
     guard.parent = head;
     head.children.push(guard);
+    // First in the head: if a page script fails, content it was going to fade in is shown anyway once the page loads.
+    const reveal = parseDocument(`<script>${REVEAL_ON_ERROR}</script>`).children[0]!;
+    reveal.parent = head;
+    head.children.unshift(reveal);
     const t = strings(lang);
     const footer = parseDocument(
       h`<footer style="padding:1.25rem;font:13px/1.5 system-ui,sans-serif;text-align:center;opacity:.75;background:inherit"><a href="${homeUrl}" style="color:inherit">${t.madeWith}</a> · <a href="${reportUrl}" style="color:inherit">${t.report}</a> · <a href="${privacyUrl}" style="color:inherit">${t.privacy}</a></footer>`.value,

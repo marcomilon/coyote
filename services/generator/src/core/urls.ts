@@ -33,6 +33,8 @@ export interface Urls {
   mySitesUrl(login: string, lang: 'es' | 'pt', slug?: string): string;
   /** The From address of our emails, or undefined when none is set up. */
   mailFrom?: string;
+  /** Where owners write to us (a paused account), or undefined with no domain (inbound mail needs one). */
+  supportEmail?: string;
   reportUrl(slug: string): string;
   privacyUrl: string;
   /** The links in every page's platform footer: our home page, report, and privacy, in the page's language. */
@@ -52,6 +54,7 @@ export function createUrls(config: UrlConfig): Urls {
       exampleUrl: (slug) => `https://${slug}.${config.domainName}/`,
       draftUrl: (draftId) => `${draftOrigin}/${draftId}/`,
       mailFrom: `no-reply@${config.domainName}`,
+      supportEmail: `soporte@${config.domainName}`,
     });
   }
 

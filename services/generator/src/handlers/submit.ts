@@ -55,7 +55,7 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event
 
   if (result.status !== 400) {
     const metric =
-      result.status === 202 ? 'Submitted' : result.status === 429 ? 'RateLimited' : result.status === 403 ? 'CaptchaFailed' : result.status === 409 ? 'HasDraft' : result.unclear ? 'Unclear' : 'Rejected';
+      result.status === 202 ? 'Submitted' : result.status === 429 ? 'RateLimited' : result.status === 403 ? 'CaptchaFailed' : result.status === 409 ? 'HasDraft' : result.status === 423 ? 'Frozen' : result.unclear ? 'Unclear' : 'Rejected';
     emitMetrics({ [metric]: 1 });
   }
 
@@ -71,6 +71,8 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event
     case 422:
       // A policy rejection never says why; an unclear description asks the owner to describe the business again.
       return json(422, { error: result.unclear ? 'unclear' : 'rejected' });
+    case 423:
+      return json(423, { error: 'frozen' });
     case 429:
       return json(429, { error: 'rate_limited' });
   }

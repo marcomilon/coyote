@@ -30,7 +30,7 @@ export interface FakeModelOptions {
 /** A scripted model. Every option can be changed between calls. */
 /**
  * A page writer that answers with a small page built from the request: the business name, a WhatsApp link to the
- * number it was given, and the change it was asked for. `page` replaces the page; `fail` makes it throw.
+ * number it was given, and the change it was asked for (a new design is a new page with the request in it). `page` replaces the page; `fail` makes it throw.
  */
 export function fakeWriter(options: { page?: (request: PageRequest) => string; fail?: Error; images?: string[]; useImages?: number } = {}) {
   const requests: PageRequest[] = [];
@@ -50,7 +50,7 @@ export function fakeWriter(options: { page?: (request: PageRequest) => string; f
       options.page?.(request) ??
       (request.current !== undefined
         ? request.current.replace('</main>', `<p>${request.instruction}</p>${imgs}</main>`)
-        : `<!doctype html><html lang="${request.answers.lang}"><head><meta charset="utf-8"><title>${request.answers.businessName}</title></head><body><main><h1>${request.answers.businessName}</h1>${imgs}<p>${request.answers.about}</p><p>${'Pan recién horneado. '.repeat(20)}</p><a href="https://wa.me/${request.answers.contact.whatsapp}">WhatsApp</a></main></body></html>`);
+        : `<!doctype html><html lang="${request.answers.lang}"><head><meta charset="utf-8"><title>${request.answers.businessName}</title></head><body><main><h1>${request.answers.businessName}</h1>${imgs}<p>${request.answers.about}</p><p>${'Pan recién horneado. '.repeat(20)}</p>${request.instruction ? `<p>${request.instruction}</p>` : ''}<a href="https://wa.me/${request.answers.contact.whatsapp}">WhatsApp</a></main></body></html>`);
     return { text: `\`\`\`html\n${page}\n\`\`\``, stopReason: 'end_turn', usage: { step: request.current !== undefined ? 'edit_page' : 'write_page', modelId: 'opus', inputTokens: 100, outputTokens: 1000 } };
   };
   return { writePage, requests, settings, options };

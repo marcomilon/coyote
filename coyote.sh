@@ -20,7 +20,9 @@ Commands:
   unpublish <slug>               Take a site down for good and blocklist its slug
   restore <slug>                 Bring a quarantined site back online
   free-draft <email>             Give an email its free draft and its 3 free designs back (a second business, or testing)
-  usage <email>                  An email's model calls, paid and free, and their cost: all time and this month
+  usage <email>                  An email's model calls, paid and free, and their cost (all time and this month), and its designs left
+  add-designs <email> <n>        Give an email n more designs without a payment (usage shows what is left)
+  unfreeze <email>               Lift the freeze an account got for 5 refused requests in 24 h
   delete-all-sites               Delete every site, the domain records and all counters (asks for typed confirmation)
   view <slug>                    Copy a site's current draft to out/view/<slug>/ and open it in the browser
   page-mode [design|template]    Show or switch how pages are made, for the whole stack from the next job: design, Opus
@@ -425,7 +427,7 @@ case "$command" in
   deploy) cmd_deploy "$@" ;;
   destroy) cmd_destroy ;;
   delete-all-sites) cmd_delete_all_sites ;;
-  abuse-report | unpublish | restore | refill-all | domains | free-draft | usage) cmd_admin "$command" "$@" ;;
+  abuse-report | unpublish | restore | refill-all | domains | free-draft | usage | add-designs | unfreeze) cmd_admin "$command" "$@" ;;
   domain-register) cmd_domain_register "$@" ;;
   captcha) cmd_captcha "$@" ;;
   email) cmd_email "$@" ;;

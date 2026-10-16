@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
 import { editSite, ownerView } from '../src/core/owner';
-import { PAID_WRITES_PER_EMAIL, paidWritesLeft, resetPaidWrites } from '../src/core/paid-writes';
+import { addBoughtDesigns, boughtDesigns, PAID_WRITES_PER_EMAIL, paidWritesLeft, resetPaidWrites } from '../src/core/paid-writes';
 import { submit } from '../src/core/submit';
 import { emailId } from '../src/core/token';
 import { body, harness } from './harness';
@@ -54,5 +54,28 @@ describe('paid writes per email', () => {
     }
     expect(await paidWritesLeft(t.stores, emailId(body.ownerEmail))).toBe(3);
     expect((await ownerView(t.sites.get('panaderia-luna')!, ownerDeps)).designsLeft).toBeUndefined();
+  });
+
+  it('a bought pack opens 3 more redesigns, once per payment', async () => {
+    const t = harness();
+    await submit(body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    const owner = emailId(body.ownerEmail);
+    await redesign(t, 'job-2');
+    await redesign(t, 'job-3');
+    expect(await redesign(t, 'job-4')).toBe(402);
+
+    expect(await addBoughtDesigns(t.stores, owner, 'txn_1', 3, Date.now())).toBe(true);
+    expect(await addBoughtDesigns(t.stores, owner, 'txn_1', 3, Date.now())).toBe(false); // a retried webhook
+    expect(await boughtDesigns(t.stores, owner)).toBe(3);
+    expect((await ownerView(t.sites.get('panaderia-luna')!, t.ownerDeps)).designsLeft).toBe(3);
+    // A refused redesign makes no job, so the ids go on from job-4.
+    for (const id of ['job-4', 'job-5', 'job-6']) expect(await redesign(t, id)).toBe(202);
+    expect(t.jobs.get('job-6')).toMatchObject({ status: 'DONE', paidWrite: owner });
+    expect(await redesign(t, 'job-7')).toBe(402);
+
+    // A second pack adds 3 more.
+    await addBoughtDesigns(t.stores, owner, 'txn_2', 3, Date.now());
+    expect(await paidWritesLeft(t.stores, owner)).toBe(3);
   });
 });

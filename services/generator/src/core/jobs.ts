@@ -65,8 +65,11 @@ export interface Job {
   newCaptions?: string[];
   /** Edit jobs: made photos (`assets/gen-…`) the owner's uploaded photos replace, in upload order, with no page writer. */
   replaceMade?: string[];
+  /** Edit jobs: a new logo only, swapped for the one the page shows, with no page writer. */
+  swapLogo?: boolean;
   /** Edit jobs: the photo change once moderated, kept between the clarify and write stages. */
-  photoChange?: { added: string[]; removed: string[]; described?: string[]; replaced?: string[] };
+  /** placed: a new logo put in the page's tagged logo spot (logo.ts), with no page writer. */
+  photoChange?: { added: string[]; removed: string[]; described?: string[]; replaced?: string[]; placed?: string };
   /** Create jobs: the owner's email (account.ts). Never sent to a model. */
   ownerEmail?: string;
   /** Edit jobs: the `at` of the chat note that follows this redesign (chat-notes.ts). */
@@ -90,6 +93,8 @@ export interface SiteRecord {
   currentDraftId?: string;
   /** The last few versions, oldest first; the last one is current. */
   drafts?: string[];
+  /** Every design the page writer made (the first page, then each redesign), oldest first; each points at its latest version (drafts.ts). */
+  designs?: Design[];
   /** Every job that produced a version of this site (for "delete my data"). */
   jobIds?: string[];
   /** The owner's account (account.ts): `emailId` of the email given in the form. */
@@ -163,6 +168,21 @@ export interface ChatMessage {
   ttl: number;
 }
 
+/**
+ * A complete page the page writer made: the first one, or a redesign the owner asked for. Updates (texts, contact,
+ * photos, the chat) are new versions of the current design. The owner picks the design the site uses (Mi sitio → Diseños).
+ */
+export interface Design {
+  /** The draft that started it. */
+  id: string;
+  /** Its latest version. */
+  draftId: string;
+  at: number;
+  kind: 'create' | 'redesign';
+  /** The owner's request, for a redesign. */
+  request?: string;
+}
+
 /** Everything the request flows need from DynamoDB and S3. Implemented in src/aws/stores.ts. */
 export interface Stores {
   /** Counts one request for this key. Resolves to false when the daily limit is already reached. */
@@ -177,6 +197,8 @@ export interface Stores {
   putOnce(key: string, ttl: number): Promise<boolean>;
   /** Adds one to a counter and resolves to the new value. */
   increment(key: string, ttl: number): Promise<number>;
+  /** Atomic: adds `n` to a counter only the first time `onceKey` is seen. Resolves to false when it was seen. */
+  addOnce(onceKey: string, key: string, n: number, ttl: number): Promise<boolean>;
   /** Adds model calls to a usage counter (email-usage.ts). */
   addUsage(key: string, count: UsageCount, ttl: number): Promise<void>;
   /** A usage counter (zeros when unseen). */

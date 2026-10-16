@@ -27,7 +27,7 @@ import { EXAMPLE_SITES } from '../../services/generator/src/core/examples';
 import { VOSEO_COUNTRIES } from '../../services/generator/src/core/i18n';
 import { PAGE_FONT_HOSTS, PAGE_SCRIPT_HOSTS, PAGE_STYLE_HOSTS } from '../../services/generator/src/core/page-check';
 import { appCsp, sitesCsp } from './csp';
-import { GeneratorApi } from './generator-api';
+import { GeneratorApi, type PaddleConfig } from './generator-api';
 import { CoyoteGuardrail } from './guardrail';
 import { Monitoring } from './monitoring';
 
@@ -54,6 +54,8 @@ export interface CoyoteStackProps extends StackProps {
   senderEmail?: string;
   /** Cloudflare Turnstile's site key (public; the CAPTCHA on the anonymous forms). Unset = the forms show no widget. */
   turnstileSiteKey?: string;
+  /** Paddle, the checkout of the design packs (public values). Unset = no checkout. */
+  paddle?: PaddleConfig;
   /** Domain mode: MX records of the bare domain, for our own inbound mail (a forwarding service such as ImprovMX). */
   mailMx?: route53.MxRecordValue[];
   /**
@@ -386,7 +388,7 @@ export class CoyoteStack extends Stack {
     });
     // config.js on its own, with no-cache: browsers would otherwise keep an old one (no new example links, an old API URL).
     new s3deploy.BucketDeployment(this, 'AppConfigDeployment', {
-      sources: [s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl, examples: exampleUrls, ...(props.turnstileSiteKey ? { turnstileSiteKey: props.turnstileSiteKey } : {}) })};\n`)],
+      sources: [s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl, examples: exampleUrls, ...(props.turnstileSiteKey ? { turnstileSiteKey: props.turnstileSiteKey } : {}), ...(props.paddle ? { paddle: { env: props.paddle.env, clientToken: props.paddle.clientToken } } : {}), ...(domain?.urls.supportEmail ? { supportEmail: domain.urls.supportEmail } : {}) })};\n`)],
       destinationBucket: this.appBucket,
       prune: false,
       cacheControl: [s3deploy.CacheControl.noCache()],
@@ -477,6 +479,7 @@ export class CoyoteStack extends Stack {
       prescreenModelId: props.prescreenModelId ?? DEFAULT_PRESCREEN_MODEL_ID,
       rateLimitPerDay: 100, // sandbox account; production uses 3
       urlEnv: this.urlEnv,
+      paddle: props.paddle,
     });
 
     // Routes that do costly work (model calls, emails, uploads) get their own, lower limit, so a flood on one of them
@@ -489,9 +492,11 @@ export class CoyoteStack extends Stack {
       'POST /account/login': [2, 5],
       'POST /me/chat': [5, 10],
       'POST /me/edit': [5, 10],
+      'POST /me/design': [5, 10],
       'GET /me/chat': [25, 50],
       'GET /me/domain/check': [2, 5], // each check asks the registry about every TLD; the registrar allows 10 per 10 s
       'POST /me/domain': [1, 2],
+      ...(props.paddle && { 'POST /me/checkout': [2, 5] as [number, number], 'POST /paddle/webhook': [20, 50] as [number, number] }),
     };
     (apiStage.node.defaultChild as apigwv2.CfnStage).addPropertyOverride(
       'RouteSettings',

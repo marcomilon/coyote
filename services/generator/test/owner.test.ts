@@ -94,12 +94,15 @@ describe('edits', () => {
 
     expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!).ownerTexts).toEqual(['Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.']);
 
-    // A redesign gets them in its request, and puts them back when the new page rewords them.
+    // A new design gets them in its request (with the page's other texts), and puts them back when the new page rewords them.
     const notices: string[] = [];
-    t.writer.options.page = (request) => request.current!.replace('Pan de masa madre y café, Chapinero.', 'Pan de masa madre y buen café en Chapinero.');
+    t.writer.options.page = () =>
+      '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Panadería Luna</title></head><body><main><h1>Panadería Luna</h1><p>Pan de masa madre y buen café en Chapinero.</p><p>' + 'Pan recién horneado. '.repeat(20) + '</p><a href="https://wa.me/573001234567">WhatsApp</a></main></body></html>';
     expect(await editSite(t.site(), { instruction: 'hazla más moderna' }, t.ownerDeps)).toMatchObject({ status: 202 });
     await runGenerateJob('job-2', { ...t.generateDeps, announce: async (_: string, message: string) => void notices.push(message) });
     expect(t.writer.requests.at(-1)!.keep).toEqual(['Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.']);
+    expect(t.writer.requests.at(-1)!.texts).toContain('Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.');
+    expect(t.writer.requests.at(-1)!.current).toBeUndefined();
     expect(t.objects.get('_draft/draft3/index.html')).toContain('<p>Pan de masa madre y café, Chapinero. Pedidos: 601 555 1234.</p>');
     expect(notices.at(-1)).toContain('Textos del dueño: 0 mantenidos, 1 devueltos, 0 perdidos');
     t.writer.options.page = undefined;
@@ -122,7 +125,7 @@ describe('edits', () => {
     expect(t.site().currentDraftId).toBe('draft1');
   });
 
-  it('a free-text change starts an edit job: screened, then the page writer changes the current page, then a new draft', async () => {
+  it('a free-text change starts an edit job: screened, then the page writer makes a new design with the page\'s texts, then a new draft', async () => {
     const t = await withDraft();
     const result = await editSite(t.site(), { instruction: 'cambia el horario del sábado a 9–13' }, t.ownerDeps);
     expect(result).toEqual({ status: 202, jobId: 'job-2' });
@@ -132,9 +135,11 @@ describe('edits', () => {
     expect(t.calls.slice(-2)).toEqual(['classify', 'plan_site']);
     const edit = t.writer.requests.at(-1)!;
     expect(edit.instruction).toBe('cambia el horario del sábado a 9–13');
-    expect(edit.current).toContain('<h1>Panadería Luna</h1>'); // the current page, as written
-    expect(edit.current).toContain('573001234567'); // the page as it is, with the owner's number
-    expect(t.jobs.get('job-2')!.usage.at(-1)!.step).toBe('edit_page');
+    expect(edit.current).toBeUndefined(); // a new design: not the old page
+    expect(edit.texts).toContain('Panadería Luna'); // but its words
+    expect(edit.look).toBeDefined();
+    expect(t.writer.settings.at(-1)!.effort).toBe('high'); // full effort, like a new site
+    expect(t.jobs.get('job-2')!.usage.at(-1)!.step).toBe('write_page');
     expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE', draftUrl: urls.draftUrl('draft2') });
     expect(t.jobs.get('job-2')!.ownerToken).toBeUndefined(); // no second magic link
     expect(t.objects.get('_draft/draft2/index.html')).toContain('<p>cambia el horario del sábado a 9–13</p>');

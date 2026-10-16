@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import type { PageRequest } from '../src/core/page-writer';
 import { describe, expect, it } from 'vitest';
 import { imageMaker, IMAGE_NEGATIVE, legibleWords, MAX_IMAGES, type ImageDeps } from '../src/core/images';
 import { anthropicWritePage, MAKE_IMAGE_TOOL, pageParams, pagePrompt, type MakeImage } from '../src/core/page-writer';
@@ -187,11 +188,12 @@ describe('runGenerateJob with made photos', () => {
     for (const file of doc.media.generated!) expect(t.objects.has(`_draft/${site.currentDraftId}/${file}`)).toBe(true);
     expect(t.jobs.get('job-1')!.usage.filter((u) => u.step === 'make_image')).toEqual(Array(3).fill({ step: 'make_image', modelId: 'stability', inputTokens: 0, outputTokens: 0 }));
 
-    // An edit that makes no photos keeps the ones its page still shows.
-    Object.assign(t.writer.options, { images: [] });
+    // A new design gets the made photos the page shows, and keeps the ones it uses instead of making new ones.
+    Object.assign(t.writer.options, { images: [], page: (request: PageRequest) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Panadería Luna</title></head><body><main><h1>Panadería Luna</h1>${request.photos.filter((p) => p.file.includes('/gen-')).map((p) => `<img src="${p.file}" alt="">`).join('')}<p>${request.answers.about}</p><p>${'Pan recién horneado. '.repeat(20)}</p></main></body></html>` });
     expect(await editSite(site, { instruction: 'agrega que abrimos los domingos' }, t.ownerDeps)).toMatchObject({ status: 202 });
     expect(await runGenerateJob('job-2', deps)).toMatchObject({ outcome: 'DONE' });
     expect(t.writer.settings[1]!.makeImage).toBeDefined();
+    expect(t.writer.requests[1]!.photos.map((p) => p.file)).toEqual(doc.media.generated);
     const edited = t.sites.get(site.slug)!;
     expect((await loadDraft(site.slug, edited.currentDraftId!, t.generateDeps.stores)).media.generated).toEqual(doc.media.generated);
   });

@@ -7,6 +7,7 @@
  *   domains             the domains registered for owners (Mi sitio → Dominio)
  *   free-draft <email>  give an email its free draft and its 3 free designs back (support: a second business; testing)
  *   usage <email>       the email's model calls by tier (paid/free) and their cost: all time and this month
+ *   unfreeze <email>    lift the freeze an account got for too many refused requests (freeze.ts)
  *   delete-all-sites    delete every site (drafts, photos, chat, jobs), the domain records and every counter; keeps the
  *                       landing examples and accounts. Sandbox only: ./coyote.sh asks for a typed confirmation
  */
@@ -18,7 +19,8 @@ import { refillDraft } from '../src/core/drafts';
 import { deleteSite } from '../src/core/owner';
 import { usageOf, type UsageCount } from '../src/core/email-usage';
 import { returnFreeDraft } from '../src/core/free-draft';
-import { PAID_WRITES_PER_EMAIL, paidWritesLeft, resetPaidWrites } from '../src/core/paid-writes';
+import { isFrozen, unfreeze } from '../src/core/freeze';
+import { addBoughtDesigns, boughtDesigns, PAID_WRITES_PER_EMAIL, paidWritesLeft, resetPaidWrites } from '../src/core/paid-writes';
 import { emailId } from '../src/core/token';
 import type { DomainRecord, Job, SiteRecord } from '../src/core/jobs';
 import { createUrls } from '../src/core/urls';
@@ -58,7 +60,7 @@ async function scan<T>(table: string): Promise<T[]> {
   return items;
 }
 
-const [command, slug] = process.argv.slice(2);
+const [command, slug, ...rest] = process.argv.slice(2);
 const needSlug = () => {
   if (!slug) throw new Error(`usage: ${command} <slug>`);
   return slug;
@@ -142,7 +144,24 @@ switch (command) {
     console.log(`${slug.trim().toLowerCase()}: model calls`);
     console.log(line('all time', all));
     console.log(line(monthName, month));
-    console.log(`  free designs left: ${await paidWritesLeft(stores, emailId(slug))} of ${PAID_WRITES_PER_EMAIL}`);
+    console.log(`  designs left: ${await paidWritesLeft(stores, emailId(slug))} (${PAID_WRITES_PER_EMAIL} free + ${await boughtDesigns(stores, emailId(slug))} bought)`);
+    if (await isFrozen(stores, emailId(slug))) console.log(`  FROZEN: too many refused requests (./coyote.sh unfreeze ${slug.trim().toLowerCase()})`);
+    break;
+  }
+  case 'add-designs': {
+    // Support or testing: designs given by hand, as if bought, without a payment. `usage` shows the count.
+    const [n] = rest;
+    if (!slug?.includes('@') || !/^[1-9]\d?$/.test(n ?? '')) throw new Error('usage: add-designs <email> <n>');
+    const id = emailId(slug);
+    await addBoughtDesigns(stores, id, `admin-${Date.now()}`, Number(n), Date.now());
+    console.log(`${slug.trim().toLowerCase()}: ${await paidWritesLeft(stores, id)} designs left (${PAID_WRITES_PER_EMAIL} free + ${await boughtDesigns(stores, id)} bought)`);
+    break;
+  }
+  case 'unfreeze': {
+    if (!slug?.includes('@')) throw new Error('usage: unfreeze <email>');
+    const was = await isFrozen(stores, emailId(slug));
+    await unfreeze(stores, slug);
+    console.log(`${slug.trim().toLowerCase()}: ${was ? 'unfrozen' : 'was not frozen'}; refusal count cleared.`);
     break;
   }
   case 'delete-all-sites': {
@@ -175,6 +194,6 @@ switch (command) {
     break;
   }
   default:
-    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | refill-all | domains | free-draft <email> | usage <email>');
+    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | refill-all | domains | free-draft <email> | usage <email> | unfreeze <email>');
     process.exit(1);
 }

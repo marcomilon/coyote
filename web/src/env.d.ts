@@ -1,3 +1,3 @@
 interface Window {
-  COYOTE_CONFIG?: { apiUrl: string | null; examples?: Record<string, string>; turnstileSiteKey?: string };
+  COYOTE_CONFIG?: { apiUrl: string | null; examples?: Record<string, string>; turnstileSiteKey?: string; supportEmail?: string; paddle?: { env: 'sandbox' | 'production'; clientToken: string } };
 }

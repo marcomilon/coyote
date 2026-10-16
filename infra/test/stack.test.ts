@@ -144,10 +144,12 @@ describe('CoyoteStack, domainless', () => {
     });
   });
 
-  it("lets the app run its own scripts only, plus Turnstile's script and frame", () => {
+  it("lets the app run its own scripts only, plus Turnstile's and Paddle's scripts and frames", () => {
     const csp = cspOf(template, 'AppHeaders');
-    expect(csp).toContain("script-src 'self' https://challenges.cloudflare.com;");
+    expect(csp).toContain("script-src 'self' https://challenges.cloudflare.com https://cdn.paddle.com;");
     expect(csp).toMatch(/frame-src [^;]*https:\/\/challenges\.cloudflare\.com/);
+    expect(csp).toMatch(/frame-src [^;]*https:\/\/sandbox-buy\.paddle\.com/);
+    expect(csp).toMatch(/connect-src [^;]*https:\/\/\*\.paddle\.com/);
     expect(csp).not.toContain("'unsafe-eval'");
   });
 
@@ -169,6 +171,18 @@ describe('CoyoteStack, domainless', () => {
     expect(jobFailed.Properties.Environment.Variables.SITE_NOTICES_TOPIC_ARN).toBeDefined();
     const policy = Object.entries(template.findResources('AWS::IAM::Policy')).find(([id]) => id.startsWith('GeneratorApiJobFailed'))![1];
     expect(JSON.stringify(policy.Properties.PolicyDocument)).toContain('sns:Publish');
+  });
+
+  it('has no checkout without Paddle config, and with it a payments Lambda that alone reads the Paddle secret', () => {
+    const routesOf = (t: Template) => Object.values(t.findResources('AWS::ApiGatewayV2::Route')).map((r) => r.Properties.RouteKey);
+    expect(routesOf(template)).not.toContain('POST /me/checkout');
+    const paid = synth({ paddle: { env: 'sandbox', clientToken: 'test_token', designsPriceId: 'pri_designs' } });
+    expect(routesOf(paid)).toEqual(expect.arrayContaining(['POST /me/checkout', 'POST /paddle/webhook']));
+    const readers = Object.entries(paid.findResources('AWS::IAM::Policy'))
+      .filter(([, p]) => JSON.stringify(p.Properties.PolicyDocument).includes(':secret:coyote/paddle'))
+      .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
+    expect(readers).toEqual(['GeneratorApiPayments']);
+    paid.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PADDLE_ENV: 'sandbox', PADDLE_DESIGNS_PRICE_ID: 'pri_designs' }) } });
   });
 
   it('hands the Turnstile site key to the web when one is set', () => {
@@ -225,7 +239,7 @@ describe('CoyoteStack, domainless', () => {
     const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')).map((r) => r.Properties.RouteKey).sort();
     expect(routes).toEqual([
       'DELETE /me', 'GET /account', 'GET /jobs/{id}', 'GET /me', 'GET /me/chat', 'GET /me/domain', 'GET /me/domain/check', 'POST /account/login', 'POST /account/session',
-      'POST /generate', 'POST /jobs/{id}/answers', 'POST /me/chat', 'POST /me/domain', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads',
+      'POST /generate', 'POST /jobs/{id}/answers', 'POST /me/chat', 'POST /me/design', 'POST /me/domain', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads',
     ]);
   });
 

@@ -163,6 +163,9 @@ describe('template mode in the generate job', () => {
     expect(fillRequest.user).toContain('"hero_title":"Masa madre"');
     expect(fillRequest.guarded).toContain('más corto el título');
     expect(t.objects.get('_draft/draft2/index.html')).toContain('<h1>Pan</h1>');
+    // A new design takes another template, to look different: with one other, no pick is needed.
+    expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!).template.id).toBe('warm');
+    expect(t.calls.slice(-1)).toEqual(['fill_page']);
   });
 
   it('the admin notice names the template and prices the pick, the fill and the photos', async () => {

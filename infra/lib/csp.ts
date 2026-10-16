@@ -25,16 +25,23 @@ export function sitesCsp(options: { formAction: string; frameAncestors: string[]
 /** Cloudflare Turnstile, the CAPTCHA on the anonymous forms: its script, and the iframe it draws the check in. */
 export const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
 
-/** Our app: own scripts only (Astro emits external files) and Turnstile's, the API, the draft iframe and its photos (Mi sitio), direct S3 uploads. */
+/** Paddle.js, the checkout of the design packs (web/src/scripts/paddle.ts): its script and styles, its API, and the checkout iframe. */
+export const PADDLE = {
+  script: 'https://cdn.paddle.com',
+  connect: 'https://*.paddle.com',
+  frame: ['https://buy.paddle.com', 'https://sandbox-buy.paddle.com'],
+};
+
+/** Our app: own scripts only (Astro emits external files), Turnstile's and Paddle's, the API, the draft iframe and its photos (Mi sitio), direct S3 uploads. */
 export function appCsp(options: { connectSrc: string[]; frameSrc: string[] }): string {
   return [
     "default-src 'self'",
-    `script-src 'self' ${TURNSTILE_ORIGIN}`,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    `script-src 'self' ${TURNSTILE_ORIGIN} ${PADDLE.script}`,
+    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${PADDLE.script}`,
     'font-src https://fonts.gstatic.com',
     `img-src 'self' data: blob: ${options.frameSrc.join(' ')}`,
-    `connect-src ${options.connectSrc.join(' ')}`,
-    `frame-src ${[...options.frameSrc, TURNSTILE_ORIGIN].join(' ')}`,
+    `connect-src ${[...options.connectSrc, PADDLE.connect].join(' ')}`,
+    `frame-src ${[...options.frameSrc, TURNSTILE_ORIGIN, ...PADDLE.frame].join(' ')}`,
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",

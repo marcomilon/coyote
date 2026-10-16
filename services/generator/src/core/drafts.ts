@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { Answers } from './answers';
 import { Media } from './content';
-import type { SiteRecord, Stores } from './jobs';
+import type { Design, SiteRecord, Stores } from './jobs';
 import { checkPage } from './page-check';
 import { StoredFill } from './template';
 import type { Urls } from './urls';
@@ -30,8 +30,12 @@ export const SiteDoc = z.object({
   requests: z.array(z.string().max(1000)).optional(),
   /** The texts on the page the owner wrote (Tus textos, the chat): a redesign keeps them (page-texts.ts). */
   ownerTexts: z.array(z.string().max(5000)).max(200).optional(),
+  /** The look nudge the design was written with (page-writer.ts `Look`): a new design avoids it. */
+  look: z.object({ tones: z.array(z.string().max(60)).max(3), dark: z.boolean() }).optional(),
   /** Template mode: the template and the words written for it, for the next template redesign. */
   template: z.object({ id: z.string().max(60), fill: StoredFill }).optional(),
+  /** The design this version belongs to (SiteRecord.designs). */
+  design: z.string().max(64).optional(),
 });
 export type SiteDoc = z.infer<typeof SiteDoc>;
 
@@ -41,6 +45,8 @@ export const ownerText = ({ answers, notes, requests, media }: Pick<SiteDoc, 'an
 
 /** Versions kept per site ("Deshacer" goes back through them). */
 export const MAX_DRAFTS = 5;
+/** Designs kept per site (Mi sitio → Diseños); their latest versions are kept even when older than MAX_DRAFTS. */
+export const MAX_DESIGNS = 10;
 
 export const newDraftId = () => randomBytes(16).toString('hex');
 export const mediaPrefix = (slug: string) => `_media/${slug}/`;
@@ -56,6 +62,7 @@ export interface DraftDeps {
   urls: Urls;
   newDraftId?: () => string;
   newPreviewId?: () => string;
+  now?: () => number;
 }
 
 /**
@@ -88,14 +95,26 @@ export function renderDraft(doc: SiteDoc, slug: string, urls: Urls): string {
 }
 
 /**
- * Writes a new draft and makes it the site's current version. Older drafts beyond MAX_DRAFTS are deleted.
- * Resolves to the new draft's ID.
+ * Writes a new draft and makes it the site's current version. With `design`, the draft starts a new design (the page
+ * writer made a complete page); otherwise it is the current design's new latest version. Older drafts beyond
+ * MAX_DRAFTS are deleted unless a design points at them. Resolves to the new draft's ID.
  */
-export async function saveDraft(site: SiteRecord, doc: SiteDoc, deps: DraftDeps): Promise<string> {
+export async function saveDraft(site: SiteRecord, written: SiteDoc, deps: DraftDeps, design?: Pick<Design, 'kind' | 'request'>): Promise<string> {
   const { stores, urls } = deps;
-  const page = renderDraft(doc, site.slug, urls);
   const draftId = (deps.newDraftId ?? newDraftId)();
   const prefix = draftPrefix(draftId);
+  const designs = (site.designs ?? []).map((d) => ({ ...d }));
+  // The design the version comes from (an update carries it over; choosing a design loads its version), else the one shown.
+  let mine = design ? undefined : (designs.find((d) => d.id === written.design) ?? designs.find((d) => d.draftId === site.currentDraftId));
+  // The design's version before this one: kept only while it is among the last versions.
+  const before = mine?.draftId;
+  if (mine) mine.draftId = draftId;
+  else {
+    mine = { id: draftId, draftId, at: (deps.now ?? Date.now)(), kind: design?.kind ?? 'create', ...(design?.request && { request: design.request.slice(0, 120) }) };
+    designs.push(mine);
+  }
+  const doc = { ...written, design: mine.id };
+  const page = renderDraft(doc, site.slug, urls);
 
   for (const asset of [doc.media.logo, ...doc.media.photos, ...(doc.media.generated ?? [])]) {
     if (asset) await stores.copyObject(`${mediaPrefix(site.slug)}${asset}`, `${prefix}${asset}`, contentType(asset));
@@ -104,11 +123,19 @@ export async function saveDraft(site: SiteRecord, doc: SiteDoc, deps: DraftDeps)
   await stores.putPage(`${prefix}index.html`, page);
 
   const all = [...(site.drafts ?? []), draftId];
-  await stores.saveSite({ slug: site.slug, drafts: all.slice(-MAX_DRAFTS), currentDraftId: draftId });
-  for (const old of all.slice(0, -MAX_DRAFTS)) await deleteDraft(site.slug, old, stores);
+  const drafts = all.slice(-MAX_DRAFTS);
+  // Over the cap: the oldest designs that aren't this one go.
+  const dropped: Design[] = [];
+  while (designs.length > MAX_DESIGNS) dropped.push(...designs.splice(designs.findIndex((d) => d !== mine), 1));
+  const kept = new Set([...drafts, ...designs.map((d) => d.draftId)]);
+  await stores.saveSite({ slug: site.slug, drafts, currentDraftId: draftId, designs });
+  for (const old of new Set([...all.slice(0, -MAX_DRAFTS), ...dropped.map((d) => d.draftId), ...(before ? [before] : [])])) if (!kept.has(old)) await deleteDraft(site.slug, old, stores);
   await refreshPreview(site.slug, draftId, deps);
   return draftId;
 }
+
+/** Every draft a site keeps: its last versions and each design's latest. */
+export const keptDrafts = (site: SiteRecord) => [...new Set([...(site.drafts ?? []), ...(site.designs ?? []).map((d) => d.draftId)])];
 
 export async function loadDraft(slug: string, draftId: string, stores: Stores): Promise<SiteDoc> {
   const doc = await stores.getText(docKey(slug, draftId));

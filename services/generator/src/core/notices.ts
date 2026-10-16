@@ -88,11 +88,14 @@ const tokenLine = (usage: Usage[]) => {
 /** What the owner changed in Mi sitio: "Fotos: 2 nuevas, 1 quitada, 1 descripción". */
 function photoLine(change: Job['photoChange']): string | undefined {
   if (!change) return undefined;
+  // Swapped files: made photos, or the old logo (a logo swap, logo.ts).
+  const made = (change.replaced ?? []).filter((file) => file.includes('/gen-'));
   const parts = [
     change.added.length > 0 && `${change.added.length} ${change.added.length === 1 ? 'nueva' : 'nuevas'}`,
     change.removed.length > 0 && `${change.removed.length} ${change.removed.length === 1 ? 'quitada' : 'quitadas'}`,
     change.described?.length && `${change.described.length} ${change.described.length === 1 ? 'descripción' : 'descripciones'}`,
-    change.replaced?.length && `${change.replaced.length} en lugar de ${change.replaced.length === 1 ? 'una creada' : 'creadas'} con IA, sin rediseño`,
+    made.length > 0 && `${made.length} en lugar de ${made.length === 1 ? 'una creada' : 'creadas'} con IA, sin rediseño`,
+    (change.placed || made.length < (change.replaced?.length ?? 0)) && 'logo cambiado, sin rediseño',
   ].filter(Boolean);
   return parts.length > 0 ? `Fotos: ${parts.join(', ')}` : undefined;
 }

@@ -4,7 +4,7 @@
 | Item | Price |
 |---|---|
 | 1st design | Free (1 per business, verified by WhatsApp; preview only until published) |
-| Extra designs | 3 for USD 5 (or USD 2 each) |
+| Extra designs | 3 for USD 4.90 |
 | Publishing (custom domain + hosting, all included) | **USD 100/year** (consider USD 99 for display) |
 
 Pitch: "Tu primer diseño es gratis. Publicalo con tu dominio por USD 99 al año, todo incluido. ¿Querés más opciones? 3 diseños por USD 5."

@@ -137,13 +137,40 @@ export function createStores(config: StoreConfig): Stores {
       return Number(Attributes?.count ?? 0);
     },
 
+    async addOnce(onceKey, key, n, ttl) {
+      try {
+        await db.send(
+          new TransactWriteCommand({
+            TransactItems: [
+              { Put: { TableName: config.rateLimitTable, Item: { ip: onceKey, ttl }, ConditionExpression: 'attribute_not_exists(ip)' } },
+              {
+                Update: {
+                  TableName: config.rateLimitTable,
+                  Key: { ip: key },
+                  UpdateExpression: 'SET #ttl = if_not_exists(#ttl, :ttl) ADD #count :n',
+                  ExpressionAttributeNames: { '#count': 'count', '#ttl': 'ttl' },
+                  ExpressionAttributeValues: { ':n': n, ':ttl': ttl },
+                },
+              },
+            ],
+          }),
+        );
+        return true;
+      } catch (error) {
+        // Only "already seen" is an answer; a conflict throws, so the caller (a webhook) is retried.
+        if (error instanceof TransactionCanceledException && error.CancellationReasons?.[0]?.Code === 'ConditionalCheckFailed') return false;
+        throw error;
+      }
+    },
+
     async addUsage(key, count, ttl) {
       await db.send(
         new UpdateCommand({
           TableName: config.rateLimitTable,
           Key: { ip: key },
-          UpdateExpression: 'SET #ttl = if_not_exists(#ttl, :ttl) ADD paid :paid, free :free, microUsd :microUsd',
-          ExpressionAttributeNames: { '#ttl': 'ttl' },
+          // `free` is a DynamoDB reserved word: every attribute goes through a name placeholder.
+          UpdateExpression: 'SET #ttl = if_not_exists(#ttl, :ttl) ADD #paid :paid, #free :free, #microUsd :microUsd',
+          ExpressionAttributeNames: { '#ttl': 'ttl', '#paid': 'paid', '#free': 'free', '#microUsd': 'microUsd' },
           ExpressionAttributeValues: { ':paid': count.paid, ':free': count.free, ':microUsd': count.microUsd, ':ttl': ttl },
         }),
       );

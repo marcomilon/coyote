@@ -186,12 +186,77 @@ describe('uploads in a generation', () => {
 
     // A redesign is told to keep the owner's photo, and gets it back when it puts a made photo of its shape in its place.
     t.stores.getBytes = async () => png(1200, 900); // the owner's photo: 4:3
-    t.writer.options.page = (request) => request.current!.split('assets/photo-f1.jpg').join('assets/gen-0a1b2c3d-3x2.jpg');
+    // The new design (a new page, here built like the old one) uses a made photo where the owner's was.
+    const before = JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!).page as string;
+    t.writer.options.page = () => before.split('assets/photo-f1.jpg').join('assets/gen-0a1b2c3d-3x2.jpg');
     expect(await editSite(site(), { instruction: 'hazla más moderna' }, t.ownerDeps)).toMatchObject({ status: 202 });
     await runGenerateJob('job-3', { ...t.generateDeps, announce: async (_, message) => void notices.push(message) });
     expect(t.writer.requests.at(-1)!.keepPhotos).toEqual(['assets/photo-f1.jpg']);
     expect(t.objects.get('_draft/draft3/index.html')).toContain('<img src="assets/photo-f1.jpg" alt="Nuestro horno de leña">');
     expect(notices.at(-1)).toContain('Fotos del dueño: 0 mantenidas, 1 devueltas, 0 perdidas');
+  });
+
+  it('a new logo in place of the one the page shows: swapped, no page writer, no paid write; with no logo shown it is a redesign', async () => {
+    const t = setup();
+    await submit({ ...t.body, uploadId: undefined }, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    const doc = JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!);
+    doc.media.logo = 'assets/logo-old.png';
+    doc.page = doc.page.replace('</main>', '<img src="assets/logo-old.png" alt="Panadería Luna"></main>');
+    t.objects.set('_src/panaderia-luna/draft1.json', JSON.stringify(doc));
+    t.objects.set('_media/panaderia-luna/assets/logo-old.png', 'old');
+    const site = () => t.sites.get('panaderia-luna')!;
+    // Out of redesigns: a logo swap still goes through.
+    t.ownerDeps.pageTier = async () => 'paid';
+    for (let i = 0; i < 2; i++) await t.stores.hitRateLimit(`paid-writes#${site().ownerEmailId}`, 3, 0);
+
+    t.objects.set(`_uploads/${UPLOAD}/logo.png`, 'new');
+    expect(await editSite(site(), { uploadId: UPLOAD }, t.ownerDeps)).toMatchObject({ status: 202 });
+    expect(t.jobs.get('job-2')).toMatchObject({ swapLogo: true });
+    const writes = t.writer.requests.length;
+    await runGenerateJob('job-2', t.generateDeps);
+    expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE', tier: 'free' });
+    expect(t.jobs.get('job-2')!.paidWrite).toBeUndefined();
+    expect(t.writer.requests).toHaveLength(writes);
+    const page = t.objects.get('_draft/draft2/index.html')!;
+    expect(page).not.toContain('logo-old');
+    expect(page).toMatch(/<img src="assets\/logo-[\w]+\.png" alt="Panadería Luna">/);
+
+    // A page that shows no logo: the page writer places it, as a paid redesign (none left here: 402).
+    const next = JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!);
+    next.page = next.page.replace(/<img src="assets\/logo-[\w]+\.png" alt="Panadería Luna">/, '');
+    t.objects.set('_src/panaderia-luna/draft2.json', JSON.stringify(next));
+    expect(await editSite(site(), { uploadId: UPLOAD }, t.ownerDeps)).toEqual({ status: 402 });
+  });
+
+  it('a new logo goes into the logo spot the page was tagged with (a drawn mark), with no page writer', async () => {
+    const t = setup();
+    await submit({ ...t.body, uploadId: undefined }, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    const site = () => t.sites.get('panaderia-luna')!;
+    const header = '<header><a href="#inicio" class="brand" aria-label="Panadería Luna"><svg viewBox="0 0 4 4"><path d="M0 0h4"/></svg><span>Luna</span></a></header>';
+    // A redesign whose page has a header brand with a drawn mark: the stored page comes back tagged.
+    const before = JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!).page as string;
+    t.writer.options.page = () => before.replace(/<body([^>]*)>/, `<body$1>${header}`);
+    expect(await editSite(site(), { instruction: 'hazla más moderna' }, t.ownerDeps)).toMatchObject({ status: 202 });
+    await runGenerateJob('job-2', t.generateDeps);
+    const stored = JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!);
+    expect(stored.page).toContain('<a data-logo href="#inicio" class="brand"');
+    expect(stored.page).toContain('<svg data-logo-mark viewBox');
+
+    t.objects.set(`_uploads/${UPLOAD}/logo.png`, 'new');
+    expect(await editSite(site(), { uploadId: UPLOAD }, t.ownerDeps)).toMatchObject({ status: 202 });
+    expect(t.jobs.get('job-3')).toMatchObject({ swapLogo: true });
+    const writes = t.writer.requests.length;
+    const notices: string[] = [];
+    await runGenerateJob('job-3', { ...t.generateDeps, announce: async (_, message) => void notices.push(message) });
+    expect(t.jobs.get('job-3')).toMatchObject({ status: 'DONE', tier: 'free' });
+    expect(t.writer.requests).toHaveLength(writes);
+    const page = t.objects.get('_draft/draft3/index.html')!;
+    expect(page).not.toContain('<svg data-logo-mark');
+    expect(page).toMatch(/<a data-logo href="#inicio" class="brand" aria-label="Panadería Luna"><img src="assets\/logo-\w+\.png" alt(="")? data-logo-mark style="[^"]+"><span>Luna<\/span><\/a>/);
+    expect(notices[0]).toContain('logo cambiado, sin rediseño');
+    expect(notices[0]).not.toContain('creada con IA');
   });
 
   it('restorePhotos: puts back left-out owner photos in place of made ones of a similar shape, unless the request is about photos', () => {

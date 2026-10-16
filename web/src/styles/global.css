@@ -508,9 +508,12 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .mysite .ticket { margin: 0; }
 .linkbtn { background: none; border: 0; padding: .3rem; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; color: var(--ink); min-height: 44px; }
 .notice { font-weight: 600; margin-top: 1rem; min-height: 1.5rem; }
-.mysite .banner { margin-top: 16px; padding: 16px 20px; background: var(--paper-light); border: 2px solid var(--ink); border-left: 10px solid var(--azul); border-radius: 10px; }
+.mysite .banner { margin-top: 16px; margin-bottom: 24px; padding: 16px 20px; background: var(--paper-light); border: 2px solid var(--ink); border-left: 10px solid var(--azul); border-radius: 10px; }
+.mysite .banner.frozen { border-left-color: var(--rojo); }
 .mysite .banner strong { display: block; font-size: 18px; }
 .mysite .banner p { margin-top: 4px; }
+.mysite .banner .buy { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.mysite .banner .buy[hidden] { display: none; }
 .notice[data-kind='error'] { color: var(--rojo); }
 .danger { margin-top: 3rem; border-top: 3px dashed var(--ink); padding-top: 1.6rem; display: grid; gap: 1.2rem; }
 .danger[hidden] { display: none; }
@@ -528,6 +531,16 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .thumbs li[data-removed] > input { opacity: .5; }
 .thumbs button { position: absolute; top: .25rem; right: .25rem; min-width: 44px; min-height: 44px; padding: 0 .5rem; border: 2px solid var(--ink); border-radius: 999px; background: var(--paper-light); color: var(--ink); font: 700 .8rem/1 var(--body); cursor: pointer; }
 .thumbs:not(.current) button { min-width: 32px; min-height: 32px; font-size: 1.1rem; }
+.designs-panel:not([hidden]) { display: grid; gap: 1.2rem; }
+.designs-panel .lead { font-size: 1.1rem; margin: 0; max-width: 44rem; }
+.designs { list-style: none; margin: 0; padding: 0; display: grid; gap: .8rem; max-width: 44rem; }
+.designs li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .8rem; padding: 1rem 1.2rem; background: var(--paper); border: 2px solid var(--ink); border-radius: 10px; }
+.designs li[data-current] { background: var(--paper-light); border-left: 10px solid var(--azul); }
+.designs .what { display: grid; gap: .15rem; min-width: 0; }
+.designs .what small { color: var(--muted); overflow-wrap: anywhere; }
+.designs .badge { display: inline-block; margin-left: .5rem; padding: .1rem .5rem; border-radius: 999px; background: var(--azul); color: var(--paper-light); font-size: .75rem; font-weight: 700; vertical-align: middle; }
+.designs .actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.designs-panel .notice:empty { display: none; }
 .photos-panel { max-width: 44rem; }
 .photos-panel:not([hidden]) { display: grid; gap: 1.6rem; }
 .photos-panel form { display: grid; gap: 1.6rem; }

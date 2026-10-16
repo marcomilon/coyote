@@ -3,6 +3,7 @@ import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-sec
 import type { Answers, PageGoal } from './answers';
 import type { Usage } from './bedrock';
 import type { Contact } from './content';
+import type { DesignTraits } from './design-traits';
 import { DEFAULT_PAGE_SKILL } from './frontend-design';
 import { MAX_IMAGES } from './images';
 import { DEFAULT_PAGE_MODEL, pageModel } from './models';
@@ -73,11 +74,15 @@ export interface Look {
 /** How often a new site's request asks for no ticker strip. */
 const NO_TICKER_SHARE = 0.75;
 
-/** Three different tones, a light or dark page, and usually no ticker strip. `random` is injectable for tests. */
-export function pickLook(random: () => number = Math.random): Look {
-  const pool: string[] = [...TONES];
+/**
+ * Three different tones, a light or dark page, and usually no ticker strip. `random` is injectable for tests.
+ * A new design `avoid`s the current look: none of its tones, and the other background.
+ */
+export function pickLook(random: () => number = Math.random, avoid?: { tones?: string[]; dark?: boolean }): Look {
+  const pool: string[] = TONES.filter((tone) => !avoid?.tones?.includes(tone));
   const tones = [0, 1, 2].map(() => pool.splice(Math.floor(random() * pool.length), 1)[0]!);
-  return { tones, dark: random() < 0.4, noTicker: random() < NO_TICKER_SHARE };
+  const dark = random() < 0.4;
+  return { tones, dark: avoid?.dark === undefined ? dark : !avoid.dark, noTicker: random() < NO_TICKER_SHARE };
 }
 
 export interface PageRequest {
@@ -86,8 +91,10 @@ export interface PageRequest {
   goal?: PageGoal;
   notes: Note[];
   photos: PagePhoto[];
-  /** New sites only: the direction nudge. */
+  /** New sites and new designs: the direction nudge. */
   look?: Look;
+  /** A new design: what the current page looks like (design-traits.ts), so the new one looks different. */
+  avoid?: DesignTraits;
   /** Edits: the current page and the owner's change request. */
   current?: string;
   instruction?: string;
@@ -95,6 +102,8 @@ export interface PageRequest {
   keep?: string[];
   /** Edits: the owner's photos the current page shows. */
   keepPhotos?: string[];
+  /** A new design (an instruction with no current page): the texts the page has now, to use again. */
+  texts?: string[];
 }
 
 /** Photo shapes the image model makes: only ones Stable Image Core accepts (it has no 4:3 or 3:4). */
@@ -176,7 +185,7 @@ function contactLines(contact: Contact): string {
  * The request, worded like the chat request that gave the best designs. Keep it that way: no tags, notes, or
  * rules. Safety is the checks on the finished page (page-check.ts), not the prompt.
  */
-export function pagePrompt({ answers, notes, photos, look, goal, current, instruction, keep, keepPhotos }: PageRequest, skill: string | null = DEFAULT_PAGE_SKILL.name, images = false): string {
+export function pagePrompt({ answers, notes, photos, look, avoid, goal, current, instruction, keep, keepPhotos, texts }: PageRequest, skill: string | null = DEFAULT_PAGE_SKILL.name, images = false): string {
   const details = notes.map((n) => `  - ${n.question} ${n.answer}`).join('\n');
   const business = [
     `- Name: ${answers.businessName}`,
@@ -225,11 +234,19 @@ ${keep?.length ? `The owner wrote these texts themselves; keep them word for wor
   const lookLine = look
     ? `For the look, ${look.tones.length === 1 ? `go with ${look.tones[0]}` : `go with whichever of these suits the business best: ${look.tones.slice(0, -1).join(', ')}, or ${look.tones.at(-1)}`}, on a ${look.dark ? 'dark' : 'light'} background${look.noTicker ? ', without a scrolling ticker or marquee strip' : ''}.\n\n`
     : '';
+  // A new design: a complete new page for a business that has one, with the words and photos it has now, that looks different.
+  const list = (items: string[]) => (items.length === 1 ? items[0] : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`);
+  const now = avoid && [avoid.fonts.length > 0 && `the fonts ${list(avoid.fonts)}`, avoid.colors.length > 0 && `the colors ${list(avoid.colors)}`, avoid.dark !== undefined && `a ${avoid.dark ? 'dark' : 'light'} background`].filter((part): part is string => Boolean(part));
+  const different = `${now?.length ? `The current design uses ${list(now)}. ` : ''}Make the new design look very different from the current one: other fonts, other colors, another layout, unless the owner's request asks to keep something.\n\n`;
+  const redesign = instruction
+    ? `The business already has a page; the owner wants a new design for it: ${instruction}\n\n${different}${texts?.length ? `Use the texts the page has now:\n${texts.map((text) => `- ${text}`).join('\n')}\n\n` : ''}${keep?.length ? `The owner wrote these texts themselves; keep them word for word:\n${keep.map((text) => `- ${text}`).join('\n')}\n\n` : ''}`
+    : '';
+  const keepLine = instruction && keepPhotos?.length ? `Keep the owner's photos (${keepPhotos.join(', ')}) on the page. ` : '';
   return `${skill ? `Use the ${skill} skill to create` : 'Create'} a one-page website for this small business, as a single HTML file.
 
 ${business}
 
-${goalLine}${lookLine}${photosLine}Don't invent facts the owner didn't give.`;
+${redesign}${goalLine}${lookLine}${photosLine}${keepLine}Don't invent facts the owner didn't give.`;
 }
 
 /** The reply's HTML document: the last ```html block, or a bare document. */

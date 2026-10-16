@@ -9,6 +9,7 @@ import { isOurExample } from './example-about';
 import { countUsage } from './email-usage';
 import { emailId } from './token';
 import { hasFreeDraftLeft } from './free-draft';
+import { isFrozen, noteRefusal } from './freeze';
 import type { ModelTier } from './models';
 import { isRejected, isUnclear, prescreen } from './prescreen';
 import { hashIp, rateLimitKey } from './ratelimit';
@@ -60,6 +61,8 @@ export type SubmitResult =
   | { status: 409 }
   /** unclear: the description names no real business; the owner is asked to describe it again. */
   | { status: 422; unclear?: true }
+  /** The email's account is frozen (freeze.ts). */
+  | { status: 423 }
   | { status: 429 };
 
 const SLUG_ATTEMPTS = 5;
@@ -87,6 +90,7 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
   }
 
   if (!(await passesCaptcha(deps.verifyHuman, token, ip))) return { status: 403 };
+  if (await isFrozen(stores, emailId(ownerEmail))) return { status: 423 };
   if ((await deps.pageTier?.()) !== 'free' && !(await hasFreeDraftLeft(stores, ownerEmail))) return { status: 409 };
   // Our own example, copied back: no model call, no count.
   if (isOurExample(answers.about)) return { status: 422, unclear: true };
@@ -110,6 +114,8 @@ export async function submit(body: unknown, ip: string, deps: SubmitDeps): Promi
   const reject = async (rejectedBy: Job['rejectedBy'], rejectDetail: string): Promise<SubmitResult> => {
     await stores.putJob({ ...job, status: 'REJECTED', rejectedBy, rejectDetail });
     await announceRejection(deps.announce, job, rejectedBy ?? 'unknown', rejectDetail);
+    // The owner's own text refused by a safety layer: it counts toward freezing the account (freeze.ts).
+    if (rejectedBy === 'prescreen' || rejectedBy === 'guardrail') await noteRefusal(stores, emailId(ownerEmail), deps.now(), { announce: deps.announce, where: 'formulario', text: answers.about });
     return { status: 422 };
   };
 

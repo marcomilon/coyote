@@ -1,17 +1,20 @@
 import { voiceOf } from './i18n';
 import { z } from 'zod';
 import { checkSession } from './account';
-import { noteRedesign, noteUndo } from './chat-notes';
+import { noteDesignChosen, noteRedesign, noteUndo } from './chat-notes';
 import { cleanContact, type ContactField } from './answers';
 import { Contact } from './content';
-import { deleteDraft, draftPrefix, loadDraft, mediaPrefix, ownerText, refreshPreview, saveDraft, sourcePrefix, type SiteDoc } from './drafts';
+import { deleteDraft, draftPrefix, keptDrafts, loadDraft, mediaPrefix, ownerText, refreshPreview, saveDraft, sourcePrefix, type SiteDoc } from './drafts';
 import { JOB_TTL_SECONDS, publicJob, type Job, type SiteRecord, type Stores } from './jobs';
 import type { ModelTier } from './models';
 import { paidWritesLeft } from './paid-writes';
+import { isFrozen } from './freeze';
 import { checkPage, contactMissing, replaceContact } from './page-check';
 import { editTexts, ownerTextsAfter, pageTexts, type TextEdit } from './page-texts';
 import { checkTexts } from './policy';
 import { parseToken, secretMatches } from './token';
+import { onlyLogo } from './uploads';
+import { hasLogoSpot } from './logo';
 import type { Urls } from './urls';
 
 const OWNER_REQUESTS_PER_DAY = 60;
@@ -79,6 +82,10 @@ export async function ownerView(site: SiteRecord, deps: Pick<OwnerDeps, 'stores'
   return {
     // 0: no redesigns left; Mi sitio shows a banner and its redesign buttons get 402.
     designsLeft: await designsLeft(site, deps),
+    // Too many refused requests (freeze.ts): Mi sitio shows a banner, and every change answers 423.
+    frozen: await isFrozen(stores, site.ownerEmailId),
+    // Mi sitio → Diseños: every design, oldest first; `current` is the one the site uses.
+    designs: (site.designs ?? []).map(({ id, draftId, at, kind, request }) => ({ id, at, kind, ...(request && { request }), draftUrl: urls.draftUrl(draftId), current: draftId === site.currentDraftId })),
     slug: site.slug,
     status: site.status,
     draftUrl: site.currentDraftId ? urls.draftUrl(site.currentDraftId) : undefined,
@@ -127,6 +134,8 @@ export type EditResult =
   | { status: 400; fields: string[] }
   /** The owner's email used up its paid writes (paid-writes.ts). */
   | { status: 402 }
+  /** The owner's account is frozen (freeze.ts). */
+  | { status: 423 }
   | { status: 409; error?: 'busy' | 'stale' }
   | { status: 422 }
   | { status: 429 };
@@ -148,6 +157,7 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   const parsed = EditBody.safeParse(body ?? {});
   if (!parsed.success) return { status: 400, fields: [...new Set(parsed.error.issues.map((i) => i.path.join('.') || 'body'))] };
   const { instruction, contact, texts, from, uploadId, replaceMade } = parsed.data;
+  if (await isFrozen(stores, site.ownerEmailId)) return { status: 423 };
   // A swap: only photos in place of made ones, nothing else.
   if (replaceMade && (!uploadId || instruction || parsed.data.removePhotos?.length || parsed.data.captions)) return { status: 400, fields: ['replaceMade'] };
   const removePhotos = parsed.data.removePhotos?.length ? parsed.data.removePhotos : undefined;
@@ -161,16 +171,21 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   // One redesign at a time: a second one would start from the page the first is about to replace. The same for
   // texts: the redesign would drop them.
   if ((redesign || texts) && (await runningEdit(site, stores, now))) return { status: 409, error: 'busy' };
-  // A paid-tier redesign needs one of the email's paid writes left (the claim itself is in the generate job).
-  if (redesign && !replaceMade && (await designsLeft(site, deps)) === 0) return { status: 402 };
-  // A swap calls no model (uploads have their own daily cap), so it doesn't count as one of the day's redesigns.
-  if (redesign && !replaceMade && !(await stores.hitRateLimit(`edits#${site.slug}#${day(now)}`, EDITS_PER_DAY, inTwoDays(now)))) return { status: 429 };
 
   let current = await loadDraft(site.slug, site.currentDraftId, stores);
   const images = [current.media.logo, ...current.media.photos];
   if (removePhotos?.some((file) => !images.includes(file))) return { status: 400, fields: ['removePhotos'] };
   if (captions && Object.keys(captions).some((file) => !current.media.photos.includes(file))) return { status: 400, fields: ['captions'] };
   if (replaceMade?.some((file) => !current.media.generated?.includes(file) || !current.page.includes(file))) return { status: 400, fields: ['replaceMade'] };
+  // Only a new logo, and the page shows the old one or has a tagged logo spot (logo.ts): put in with no page writer, like replaceMade.
+  const oldLogo = current.media.logo;
+  const logoGoes = (oldLogo && current.page.includes(oldLogo)) || hasLogoSpot(current.page);
+  const swapLogo = Boolean(uploadId && !instruction && !captions && !newCaptions && !replaceMade && logoGoes && !removePhotos?.some((file) => file !== oldLogo) && (await onlyLogo(uploadId, stores)));
+  const swap = Boolean(replaceMade) || swapLogo;
+  // A paid-tier redesign needs one of the email's paid writes left (the claim itself is in the generate job).
+  if (redesign && !swap && (await designsLeft(site, deps)) === 0) return { status: 402 };
+  // A swap calls no model (uploads have their own daily cap), so it doesn't count as one of the day's redesigns.
+  if (redesign && !swap && !(await stores.hitRateLimit(`edits#${site.slug}#${day(now)}`, EDITS_PER_DAY, inTwoDays(now)))) return { status: 429 };
 
   let missing: string[] = [];
   if (texts) {
@@ -211,6 +226,7 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
     ...(captions && { captions }),
     ...(newCaptions && { newCaptions }),
     ...(replaceMade && { replaceMade }),
+    ...(swapLogo && { swapLogo: true }),
     slug: site.slug,
     usage: [],
     chatAt: await noteRedesign(stores, site.slug, jobId, voiceOf(current.answers), now),
@@ -278,25 +294,48 @@ export async function applyTexts(
   return { doc };
 }
 
+/**
+ * Mi sitio → Diseños: the site uses another of its designs. Its latest version is saved again as a new version of
+ * that design, so the versions stay in order and "Deshacer" goes back to the design shown before. No model call.
+ */
+export async function chooseDesign(site: SiteRecord, body: unknown, deps: OwnerDeps): Promise<{ status: 200 } | { status: 400 | 404 | 423 } | { status: 409; error: 'busy' }> {
+  if (await isFrozen(deps.stores, site.ownerEmailId)) return { status: 423 };
+  const parsed = z.object({ design: z.string().max(64) }).strict().safeParse(body ?? {});
+  if (!parsed.success) return { status: 400 };
+  const design = site.designs?.find((d) => d.id === parsed.data.design);
+  if (!design) return { status: 404 };
+  if (design.draftId === site.currentDraftId) return { status: 200 };
+  const now = deps.now();
+  if (await runningEdit(site, deps.stores, now)) return { status: 409, error: 'busy' };
+  const doc = await loadDraft(site.slug, design.draftId, deps.stores);
+  const draftId = await saveDraft(site, doc, deps);
+  await noteDesignChosen(deps.stores, site.slug, voiceOf(doc.answers), now, draftId);
+  return { status: 200 };
+}
+
 /** "Deshacer": back to the previous version. The newer one is deleted. */
 export async function undo(site: SiteRecord, { stores, now }: Pick<OwnerDeps, 'stores' | 'now'>): Promise<{ status: 200 } | { status: 409 }> {
   const drafts = site.drafts ?? [];
   if (drafts.length < 2) return { status: 409 };
   const dropped = drafts.at(-1)!;
-  await stores.saveSite({ slug: site.slug, drafts: drafts.slice(0, -1), currentDraftId: drafts.at(-2)! });
-  await refreshPreview(site.slug, drafts.at(-2)!, { stores });
-  await deleteDraft(site.slug, dropped, stores);
+  const previous = drafts.at(-2)!;
+  // The design the dropped version belonged to goes back to its version before, or goes with it when it started there.
+  const back = await loadDraft(site.slug, previous, stores);
+  const designs = (site.designs ?? []).flatMap((d) => (d.draftId !== dropped ? [d] : d.id !== dropped && back.design === d.id ? [{ ...d, draftId: previous }] : d.id !== dropped ? [d] : []));
+  await stores.saveSite({ slug: site.slug, drafts: drafts.slice(0, -1), currentDraftId: previous, designs });
+  await refreshPreview(site.slug, previous, { stores });
+  if (!designs.some((d) => d.draftId === dropped)) await deleteDraft(site.slug, dropped, stores);
   await stores.invalidatePaths([`/${draftPrefix(dropped)}*`]);
   // The chat reply that made it says so, so the chat model is not told the change is still there.
   const made = (await stores.listChat(site.slug, 0, UNDO_LOOKBACK)).find((m) => m.draftId === dropped);
   if (made) await stores.updateChat(site.slug, made.at, { undone: true });
-  await noteUndo(stores, site.slug, voiceOf((await loadDraft(site.slug, drafts.at(-2)!, stores)).answers), now());
+  await noteUndo(stores, site.slug, voiceOf(back.answers), now());
   return { status: 200 };
 }
 
 /** "Delete my data": every draft, the sources and images, the site record (the slug becomes free), and the text of every job. */
 export async function deleteSite(site: SiteRecord, { stores }: Pick<OwnerDeps, 'stores'>): Promise<void> {
-  const drafts = site.drafts ?? [];
+  const drafts = keptDrafts(site);
   const previews = site.previewId ? [site.previewId] : [];
   for (const draftId of [...drafts, ...previews]) await deleteDraft(site.slug, draftId, stores);
   await stores.deletePrefix(sourcePrefix(site.slug));

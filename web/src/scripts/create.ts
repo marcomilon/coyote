@@ -1,5 +1,6 @@
 // The create flow: form → POST /generate → poll GET /jobs/{id} → (questions → POST /jobs/{id}/answers → poll)
 // → Mi sitio, opened with the magic link. Validation uses the same zod schema as the API, so the two can never disagree.
+import { supportLine } from './support';
 import { ZodError } from 'zod';
 import { normalizeAnswers } from '../../../services/generator/src/core/answers';
 import { isOurExample } from '../../../services/generator/src/core/example-about';
@@ -28,6 +29,7 @@ interface Strings {
   question: QuestionStrings & { invalid: string; intro: string; requiredIntro: string; needed: string };
   rejected: Message;
   rateLimited: Message;
+  frozen: Message & { support: string };
   hasDraft: Message;
   mySitesPath: string;
   captcha: Message;
@@ -339,6 +341,7 @@ form.addEventListener('submit', async (event) => {
     if (status === 409) return showMessage(strings.hasDraft);
     if (status === 422 && body.error === 'unclear') return formErrors(['about:unclear']);
     if (status === 422) return showMessage(strings.rejected);
+    if (status === 423) return showMessage({ ...strings.frozen, text: strings.frozen.text + supportLine(strings.frozen.support) });
     if (status === 429) return showMessage(strings.rateLimited);
     showMessage(strings.failed);
   } catch {

@@ -42,6 +42,12 @@ export function memoryStores() {
       counters.set(key, (counters.get(key) ?? 0) + 1);
       return counters.get(key)!;
     },
+    async addOnce(onceKey, key, n) {
+      if (counters.has(onceKey)) return false;
+      counters.set(onceKey, 1);
+      counters.set(key, (counters.get(key) ?? 0) + n);
+      return true;
+    },
     async addUsage(key, count) {
       const now = usageCounts.get(key) ?? { paid: 0, free: 0, microUsd: 0 };
       usageCounts.set(key, { paid: now.paid + count.paid, free: now.free + count.free, microUsd: now.microUsd + count.microUsd });

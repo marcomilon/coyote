@@ -43,6 +43,8 @@ export const PORKBUN_SECRET_NAME = 'coyote/porkbun-api';
 export const DOMAIN_REGISTER_PARAMETER = '/coyote/domain-register';
 /** The Cloudflare Turnstile secret key (aws/turnstile.ts), created by hand (👤). */
 export const TURNSTILE_SECRET_NAME = 'coyote/turnstile';
+/** Paddle's API key and webhook secret (`{apiKey, webhookSecret}`, aws/paddle.ts), created by hand (👤). */
+export const PADDLE_SECRET_NAME = 'coyote/paddle';
 /** Whether the anonymous forms need the CAPTCHA (Turnstile): on or off. Set by `./coyote.sh captcha`; survives deploys. */
 export const CAPTCHA_PARAMETER = '/coyote/captcha';
 /** Whether we send email at all: on or off. The bounce/complaint rate alarms turn it off; `./coyote.sh email on` resumes. Survives deploys. */
@@ -82,6 +84,15 @@ export interface GeneratorApiProps {
   rateLimitPerDay: number;
   /** URL env vars from the stack (see urls.ts `urlConfigFromEnv`). */
   urlEnv: Record<string, string>;
+  /** Paddle (design packs). Unset = no checkout routes. */
+  paddle?: PaddleConfig;
+}
+
+/** CDK context `paddle`: public values only (the client token goes to the browser). */
+export interface PaddleConfig {
+  env: 'sandbox' | 'production';
+  clientToken: string;
+  designsPriceId: string;
 }
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -191,6 +202,7 @@ export class GeneratorApi extends Construct {
     const withInvalidation = { ...environment, SITES_DISTRIBUTION_ID: props.sitesDistribution.distributionId };
     // The chat's replies (chat.ts): Haiku changes the page's text, a new draft. Started by the owner Lambda.
     const chat = fn('Chat', 'chat', {
+      environment: { ...environment, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn }, // the notice when an account gets frozen (freeze.ts)
       memorySize: 1024,
       timeout: Duration.minutes(2),
       retryAttempts: 0, // a retry would pay for the model calls twice; a stuck reply reads as failed
@@ -306,6 +318,7 @@ export class GeneratorApi extends Construct {
     props.abuseReports.grantPublish(report);
     props.siteNotices.grantPublish(generate);
     props.siteNotices.grantPublish(submit);
+    props.siteNotices.grantPublish(chat);
     props.siteNotices.grantPublish(jobFailed); // the failure notice of a crashed or timed-out generate
     for (const f of [owner, report]) props.sitesDistribution.grantCreateInvalidation(f);
     // Every API Lambda counts requests per IP per minute (perIpLimit in handlers/http.ts).
@@ -351,12 +364,28 @@ export class GeneratorApi extends Construct {
     route('/uploads', apigwv2.HttpMethod.POST, uploads);
     route('/me', apigwv2.HttpMethod.GET, owner);
     route('/me', apigwv2.HttpMethod.DELETE, owner);
-    for (const action of ['edit', 'undo', 'chat']) route(`/me/${action}`, apigwv2.HttpMethod.POST, owner);
+    for (const action of ['edit', 'undo', 'chat', 'design']) route(`/me/${action}`, apigwv2.HttpMethod.POST, owner);
     route('/me/chat', apigwv2.HttpMethod.GET, owner);
     for (const action of ['login', 'session']) route(`/account/${action}`, apigwv2.HttpMethod.POST, account);
     route('/account', apigwv2.HttpMethod.GET, account);
     route('/me/domain', apigwv2.HttpMethod.GET, domains);
     route('/me/domain', apigwv2.HttpMethod.POST, domains);
     route('/me/domain/check', apigwv2.HttpMethod.GET, domains);
+
+    // Design packs (payments.ts): a checkout for Mi sitio, and Paddle's webhook that adds the designs once paid.
+    if (props.paddle) {
+      const payments = fn('Payments', 'payments', {
+        memorySize: 256,
+        environment: { ...environment, IP_HASH_SALT: ipSalt, PADDLE_SECRET_NAME, PADDLE_ENV: props.paddle.env, PADDLE_DESIGNS_PRICE_ID: props.paddle.designsPriceId, PAGE_MODE_PARAMETER, PAGE_MODEL_PARAMETER },
+      });
+      secretsmanager.Secret.fromSecretNameV2(this, 'PaddleKey', PADDLE_SECRET_NAME).grantRead(payments);
+      pageMode.grantRead(payments);
+      pageModel.grantRead(payments);
+      props.sitesTable.grantReadData(payments);
+      props.accountsTable.grantReadData(payments); // checkSession, and the email that prefills the checkout
+      props.rateLimitTable.grantReadWriteData(payments);
+      route('/me/checkout', apigwv2.HttpMethod.POST, payments);
+      route('/paddle/webhook', apigwv2.HttpMethod.POST, payments);
+    }
   }
 }

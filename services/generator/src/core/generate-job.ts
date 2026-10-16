@@ -1,7 +1,9 @@
 import { issueLogin, linkSite } from './account';
 import { countUsage } from './email-usage';
 import { claimFreeDraft, returnFreeDraft } from './free-draft';
+import { noteRefusal } from './freeze';
 import { claimPaidWrite, returnPaidWrite } from './paid-writes';
+import { hasLogoSpot, placeLogo, tagLogo } from './logo';
 import { noteRedesignDone } from './chat-notes';
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
 import type { Media } from './content';
@@ -10,6 +12,7 @@ import { voiceOf } from './i18n';
 import { imageMaker, imageRatio, madeRatio, type GenerateImage } from './images';
 import type { Job, Stores } from './jobs';
 import { checkPage } from './page-check';
+import { designTraits } from './design-traits';
 import { DEFAULT_PAGE_SKILL, NO_SKILL, parsePage, pickLook, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type WritePage } from './page-writer';
 import { PolicyRejection, type Violation } from './policy';
 import { isRejected, prescreen } from './prescreen';
@@ -22,7 +25,7 @@ import { mergeMedia, processUploads } from './uploads';
 import type { Urls } from './urls';
 import { announceEdit, announceFailure, announceNewSite, announceRejection, type Announce, type OwnerTextsCount, type PageWriterStatus } from './notices';
 import { escapeHtml } from './html';
-import { restoreTexts } from './page-texts';
+import { pageTexts, restoreTexts } from './page-texts';
 
 export interface GenerateJobDeps {
   stores: Stores;
@@ -58,7 +61,7 @@ export interface GenerateJobDeps {
    */
   pageMode?: PageMode;
   templates?: TemplateLibrary;
-  /** The look nudge on new sites (`./coyote.sh page-look`). Unset: on. */
+  /** The look nudge on new sites and new designs (`./coyote.sh page-look`). Unset: on. */
   pageLook?: boolean;
   /**
    * Photos the page writer makes, for owners who left "Fotos creadas con IA" on: the text-to-image model, and the
@@ -92,7 +95,7 @@ async function loadImages(slug: string, media: Media, stores: Stores): Promise<I
   return images;
 }
 
-async function pagePhotos(slug: string, media: Media, stores: Stores): Promise<PagePhoto[]> {
+async function pagePhotos(slug: string, media: Media, stores: Stores, made: string[] = []): Promise<PagePhoto[]> {
   const photos: PagePhoto[] = [];
   const add = async (file: string | undefined, caption?: string) => {
     if (!file) return;
@@ -101,6 +104,8 @@ async function pagePhotos(slug: string, media: Media, stores: Stores): Promise<P
   };
   await add(media.logo);
   for (const photo of media.photos) await add(photo, media.captions?.[photo]);
+  // A new design gets the photos the page writer made for the current one, to use again instead of making new ones.
+  for (const photo of made) await add(photo);
   return photos;
 }
 
@@ -151,8 +156,10 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
 }
 
 /** The page checks and the output guardrail, for a page from either mode. */
-async function checkWrittenPage(page: string, made: string[], request: Pick<PageRequest, 'answers' | 'notes' | 'photos'>, requests: string[], slug: string, deps: GenerateJobDeps): Promise<PageResult> {
+async function checkWrittenPage(written: string, made: string[], request: Pick<PageRequest, 'answers' | 'notes' | 'photos'>, requests: string[], slug: string, deps: GenerateJobDeps): Promise<PageResult> {
   const { answers } = request;
+  // The logo spot, tagged for later logo changes with no page writer (logo.ts).
+  const page = tagLogo(written, answers.businessName);
   const checked = checkPage(page, { contact: answers.contact, ownerText: ownerText({ answers, notes: request.notes, requests, media: { captions: Object.fromEntries(request.photos.flatMap((p) => (p.caption ? [[p.file, p.caption]] : []))) } }), businessName: answers.businessName, lang: answers.lang, ...deps.urls.pageLinks(slug, answers.lang) });
   if (checked.violations.length > 0) return { problem: 'policy', detail: JSON.stringify(checked.violations).slice(0, 300), violations: checked.violations };
   if (!(await deps.outputAllowed(checked.texts.join('\n')))) return { problem: 'guardrail', detail: 'page text' };
@@ -303,6 +310,7 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
         if (isRejected(screening)) {
           await finish({ status: 'REJECTED', rejectedBy: 'prescreen', rejectDetail: screening.category });
           await announceRejection(deps.announce, job, 'prescreen', screening.category, usage);
+          await noteRefusal(stores, run.owner, deps.now(), { announce: deps.announce, where: 'rediseño', text: screened });
           return { outcome: 'REJECTED', ...tokens() };
         }
       }
@@ -318,8 +326,14 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
         const removed = (job.removePhotos ?? []).filter((file) => file === current!.media.logo || current!.media.photos.includes(file));
         media = mergeMedia(current.media, processed.media, removed, job.captions);
         const described = Object.keys(job.captions ?? {}).filter((file) => media.photos.includes(file));
-        const replaced = job.replaceMade?.slice(0, processed.media.photos.length);
-        photoChange = { added: [processed.media.logo, ...processed.media.photos].filter((f): f is string => !!f), removed, ...(described.length > 0 && { described }), ...(replaced?.length && { replaced }) };
+        // A new logo in place of the one the page shows is a swap too: `added` starts with the logo.
+        const oldLogo = current.media.logo;
+        const newLogo = job.swapLogo && processed.media.photos.length === 0 ? processed.media.logo : undefined;
+        const fileSwap = newLogo && oldLogo && current.page.includes(oldLogo);
+        // No logo file in the page, but a tagged logo spot: the new logo goes there (logo.ts).
+        const placed = newLogo && !fileSwap && hasLogoSpot(current.page) ? newLogo : undefined;
+        const replaced = fileSwap ? [oldLogo] : job.replaceMade?.slice(0, processed.media.photos.length);
+        photoChange = { added: [processed.media.logo, ...processed.media.photos].filter((f): f is string => !!f), removed, ...(described.length > 0 && { described }), ...(replaced?.length && { replaced }), ...(placed && { placed }) };
         await stores.updateJob(jobId, { media, photoChange });
       }
     } else if (stage === 'clarify' && job.uploadId) {
@@ -351,7 +365,7 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
 
     // A paid-tier writer (models.ts) uses the new site's free draft, claimed atomically right before it runs.
     // Swapping in the owner's photos calls no model.
-    const tier = current && photoChange?.replaced?.length ? 'free' : modelTier(writerModel(deps.pageMode, deps.pageModel, deps.modelId));
+    const tier = current && (photoChange?.replaced?.length || photoChange?.placed) ? 'free' : modelTier(writerModel(deps.pageMode, deps.pageModel, deps.modelId));
     if (job.tier !== tier) {
       job.tier = tier;
       await stores.updateJob(jobId, { tier });
@@ -377,22 +391,34 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
       await stores.updateJob(jobId, { paidWrite: run.owner });
     }
 
-    // Opus writes the page (a new site), or changes the current one (an edit).
-    const photos = await pagePhotos(slug, media, stores);
+    // Opus writes the page (a new site, or a new design), or changes the current one (a photo change).
+    // A new design is the owner's request: a complete new page, with the words and photos the page has now (designs).
+    const redesign = Boolean(current && job.instruction);
+    const photos = await pagePhotos(slug, media, stores, redesign ? (media.generated ?? []).filter((file) => current!.page.includes(file)) : []);
     const goal = job.answers.goal && { goal: job.answers.goal };
+    // A new design looks different: the page writer hears what the current page looks like, and gets another look.
+    const avoid = redesign ? designTraits(current!.page) : undefined;
+    const look = deps.pageLook !== false && { look: pickLook(deps.random, avoid && { tones: current!.look?.tones, dark: current!.look?.dark ?? avoid.dark }) };
     const keep = current?.ownerTexts?.length ? current.ownerTexts : undefined;
     // The owner's photos the page shows (taken-out ones are no longer in media).
     const keepPhotos = current ? media.photos.filter((file) => current!.page.includes(file)) : [];
-    const request = current
-      ? { answers: job.answers, notes, photos, ...goal, current: current.page, instruction, ...(keep && { keep }), ...(keepPhotos.length > 0 && { keepPhotos }) }
-      : { answers: job.answers, notes, photos, ...goal, ...(deps.pageLook !== false && { look: pickLook(deps.random) }) };
+    const texts = redesign ? [...new Set(pageTexts(current!.page, job.answers.contact).filter((t) => !t.locked).map((t) => t.text))].slice(0, 150) : [];
+    const request = !current
+      ? { answers: job.answers, notes, photos, ...goal, ...look }
+      : redesign
+        ? { answers: job.answers, notes, photos, ...goal, ...look, avoid, instruction, texts, ...(keep && { keep }), ...(keepPhotos.length > 0 && { keepPhotos }) }
+        : { answers: job.answers, notes, photos, ...goal, current: current.page, instruction, ...(keep && { keep }), ...(keepPhotos.length > 0 && { keepPhotos }) };
     const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
     // The owner's photos in place of made ones: swapped in the page, with no page writer.
     const swaps = current && photoChange?.replaced?.length ? photoChange.replaced.map((made, i) => ({ made, photo: photoChange!.added[i]! })) : undefined;
-    const written = swaps
+    const placedPage = current && photoChange?.placed ? placeLogo(current.page, photoChange.placed, job.answers.businessName) : undefined;
+    const written = placedPage
+      ? await checkWrittenPage(placedPage, [], request, requests, slug, deps).then((checked) => ('problem' in checked || !current!.template ? checked : { ...checked, template: current!.template }))
+      : swaps
       ? await swapCheckedPage(current!, swaps, media, request, requests, slug, deps)
       : deps.pageMode === 'template'
-        ? await fillCheckedPage(request, media, current, requests, slug, deps, usage)
+        ? // Template mode: the cheap model fills again from the current words, and may pick another template for a new look.
+          await fillCheckedPage(request, media, current, requests, slug, deps, usage)
         : await writeCheckedPage(request, requests, slug, deps, usage);
     if ('problem' in written) {
       if (written.problem === 'policy') throw new PolicyRejection(written.violations!);
@@ -430,11 +456,15 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
     media = generated.length > 0 ? { ...files, generated } : files;
     // The form's photo descriptions live on as media.captions, which Tus fotos keeps up to date.
     const { photoNotes: _notes, ...answers } = job.answers;
-    // The template and its words, for the next template redesign (an Opus edit keeps the earlier ones).
-    const template = written.template ?? current?.template;
-    const doc: SiteDoc = { ...(current ? { ...current, requests } : { answers }), notes, media, page: written.page, ...(template && { template }), ...(written.ownerTexts && { ownerTexts: written.ownerTexts }) };
+    // The template and its words, for the next template redesign (an Opus edit keeps the earlier ones; a new design doesn't).
+    const template = written.template ?? (redesign ? undefined : current?.template);
+    const { template: _template, look: earlierLook, ...earlier } = current ?? ({} as Partial<SiteDoc>);
+    // The look a new page was written with (an edit keeps its page's; a template page has none).
+    const wroteLook = !current || redesign ? (look && !written.template && deps.pageMode !== 'template' ? { tones: look.look.tones, dark: look.look.dark } : undefined) : earlierLook;
+    const doc: SiteDoc = { ...(current ? { ...earlier, requests } : { answers }), notes, media, page: written.page, ...(template && { template }), ...(wroteLook && { look: wroteLook }), ...(written.ownerTexts && { ownerTexts: written.ownerTexts }) } as SiteDoc;
 
-    const draftId = await saveDraft(site, doc, deps);
+    // The first page and each new design are designs of their own; anything else updates the current one.
+    const draftId = await saveDraft(site, doc, deps, kind === 'create' ? { kind: 'create' } : redesign ? { kind: 'redesign', request: job.instruction } : undefined);
     site = (await stores.getSite(slug)) ?? site;
 
     // A new site's first draft: the site becomes the owner's, and the magic link is issued (shown once).

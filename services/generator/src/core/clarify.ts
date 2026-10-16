@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { GuardrailBlocked, type CallTool } from './bedrock';
 import { countUsage } from './email-usage';
+import { noteRefusal } from './freeze';
 import { releaseNewSite } from './generate-job';
 import { announceRejection, type Announce } from './notices';
 import type { Stores } from './jobs';
@@ -59,6 +60,7 @@ export async function submitAnswers(jobId: string, body: unknown, deps: AnswersD
       await releaseNewSite(job, deps);
       await stores.updateJob(jobId, { status: 'REJECTED', rejectedBy, rejectDetail, notes, usage });
       await announceRejection(deps.announce, job, rejectedBy, rejectDetail);
+      await noteRefusal(stores, job.ownerEmail ? emailId(job.ownerEmail) : (await stores.getSite(job.slug ?? ''))?.ownerEmailId, deps.now(), { announce: deps.announce, where: 'respuestas', text: notes.map((n) => n.answer).join(' / ') });
       return { status: 422 };
     };
     try {

@@ -67,18 +67,24 @@ function imageInputs(photos: PagePhoto[]): ImageInput[] {
   return photos.map((p) => ({ label: `${p.file.startsWith('assets/logo') ? 'The logo' : `Photo ${p.file}`}${p.caption ? ` (the owner says it shows: ${p.caption})` : ''}:`, format: p.mediaType === 'image/png' ? 'png' : 'jpeg', bytes: p.bytes }));
 }
 
-/** Picks the template. With one template, or a redesign that keeps the look, no call is made. */
+/**
+ * Picks the template. With one template, or a photo change (no instruction), no call is made. A new design gets a
+ * template other than the current one, so it looks different.
+ */
 async function pickTemplate(request: TemplateRequest, catalog: TemplateInfo[], deps: TemplateWriterDeps, usage: Usage[]): Promise<string> {
-  const ids = catalog.map((t) => t.id);
-  if (ids.length === 1) return ids[0]!;
-  const current = request.current && ids.includes(request.current.id) ? request.current.id : undefined;
+  const current = request.current && catalog.some((t) => t.id === request.current!.id) ? request.current.id : undefined;
   if (current && !request.instruction) return current;
+  const others = catalog.filter((t) => t.id !== current);
+  if (others.length === 0) return current!;
+  if (others.length === 1) return others[0]!.id;
+  catalog = others;
+  const ids = catalog.map((t) => t.id);
   const schema = z.object({ id: z.enum(ids as [string, ...string[]]) });
   const picked = await callWithRetry(deps.callTool, usage, {
     modelId: deps.modelId,
     system: `You choose the website template that suits a small business best.\n\n${SHARED_RULES}\nCall the pick_template tool.`,
     guarded: answersBlock(request.answers, request.notes, request.instruction),
-    user: `The templates:\n${catalog.map((t) => `- ${t.id}: ${t.description}`).join('\n')}${current ? `\n\nThe page uses ${current} now. Choose another one only if the owner's request asks for a different look.` : ''}\n\nCall pick_template now.`,
+    user: `The templates:\n${catalog.map((t) => `- ${t.id}: ${t.description}`).join('\n')}${current ? `\n\nThe page uses another template now; the owner wants a new design that looks different.` : ''}\n\nCall pick_template now.`,
     maxTokens: 300,
     tool: { name: 'pick_template', description: 'Record the template that suits the business best.', schema },
   });

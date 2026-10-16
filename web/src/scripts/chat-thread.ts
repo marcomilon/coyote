@@ -1,6 +1,7 @@
 // The chat with the site: each message is a change request; the reply arrives a few seconds later (polled from
 // GET /me/chat). A change too big for the chat comes with a "Rediseñar" button that starts the usual page-writer
 // edit (POST /me/edit), followed here. Used full-page on the phone (chat.ts) and inside Mi sitio (my-site.ts).
+import { supportLine } from './support';
 import { api as apiCall, apiUrl, sendAnswers, waitForJob } from './jobs';
 import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
 
@@ -46,6 +47,8 @@ export interface ChatStrings {
   limit: string;
   editLimit: string;
   noDesigns: string;
+  frozen: string;
+  frozenSupport: string;
   error: string;
   noToken: Note;
   badToken: Note;
@@ -211,7 +214,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
         schedule();
         return;
       }
-      notice(status === 429 ? strings.limit : status === 409 ? strings.busy : strings.error);
+      notice(status === 423 ? strings.frozen + supportLine(strings.frozenSupport) : status === 429 ? strings.limit : status === 409 ? strings.busy : strings.error);
     } catch {
       notice(strings.error);
     }
@@ -251,7 +254,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
         return void (await followRedesign(body.jobId));
       }
       redesigning = false;
-      localNote(status === 402 ? strings.noDesigns : status === 429 ? strings.editLimit : status === 422 ? strings.rejected : status === 409 ? strings.busy : strings.failed, 'failed');
+      localNote(status === 423 ? strings.frozen + supportLine(strings.frozenSupport) : status === 402 ? strings.noDesigns : status === 429 ? strings.editLimit : status === 422 ? strings.rejected : status === 409 ? strings.busy : strings.failed, 'failed');
     } catch {
       redesigning = false;
       localNote(strings.error, 'failed');

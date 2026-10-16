@@ -3,6 +3,7 @@
 // Five tabs: the current draft; the chat that changes it (texts, contact details, undo, a redesign), with the
 // QR that opens the same chat on the owner's phone; every text on the page, to change directly; the owner's logo
 // and photos; and the owner's own domain (domain.ts). The preview follows every change live. And delete.
+import { showSupport } from './support';
 import { loadAccount } from './account';
 import { api as apiCall, apiUrl } from './jobs';
 import { startChat, type ChatStrings } from './chat-thread';
@@ -10,6 +11,7 @@ import { startDomainTab, type DomainStrings } from './domain';
 import { qrCode } from './live-preview';
 import { captionField, captionsOf, showThumbs, UploadLimitError, uploadImages } from './upload';
 import { forgetOwnerTokens, ownerHash, ownerToken, tokenHash } from './owner-token';
+import { buyDesigns, checkoutAvailable } from './paddle';
 
 interface View {
   slug: string;
@@ -23,6 +25,18 @@ interface View {
   texts?: PageText[];
   /** Free designs (paid-tier page writes) the owner has left; undefined when there is no limit. */
   designsLeft?: number;
+  /** Every design the page writer made, oldest first (Mi sitio → Diseños). */
+  designs?: DesignView[];
+  /** Too many refused requests: every change answers 423 until an admin lifts it. */
+  frozen?: boolean;
+}
+interface DesignView {
+  id: string;
+  at: number;
+  kind: 'create' | 'redesign';
+  request?: string;
+  draftUrl: string;
+  current: boolean;
 }
 /** As services/generator/src/core/page-texts.ts sends it. */
 interface PageText {
@@ -41,6 +55,7 @@ interface SiteImage {
 }
 type Message = { title: string; text: string };
 interface Strings {
+  designsOut: { opening: string; waiting: string; done: string; late: string; failed: string };
   noToken: Message;
   badToken: Message;
   limited: Message;
@@ -55,7 +70,20 @@ interface Strings {
   domain: DomainStrings;
   photos: PhotoStrings;
   texts: TextStrings;
+  designs: DesignStrings;
+  frozen: Message;
   lang: string;
+}
+interface DesignStrings {
+  name: string;
+  first: string;
+  inUse: string;
+  view: string;
+  use: string;
+  using: string;
+  used: string;
+  busy: string;
+  failed: string;
 }
 interface TextStrings {
   top: string;
@@ -105,9 +133,126 @@ function showMessage(message: Message, recover = false) {
   show('message');
 }
 
-/** The banner for an owner whose free designs are used up (a 402 from a redesign shows it too). */
+/** Mi sitio → Diseños: each design, the one in use marked; "Ver" shows one below, "Usar" makes it the site's (no model call). */
+function showDesigns(designs: DesignView[]) {
+  const g = strings.designs;
+  const list = $<HTMLOListElement>('[data-designs]');
+  const view = $<HTMLElement>('[data-design-view]');
+  const message = (text: string) => ($<HTMLElement>('[data-designs-notice]').textContent = text);
+  const date = (at: number) => new Date(at).toLocaleDateString(strings.lang === 'pt' ? 'pt-BR' : 'es-419', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  const button = (text: string, className: string, onclick: () => void) => {
+    const b = document.createElement('button');
+    Object.assign(b, { type: 'button', className, textContent: text, onclick });
+    return b;
+  };
+  list.replaceChildren(
+    ...designs.map((design, i) => {
+      const li = document.createElement('li');
+      li.toggleAttribute('data-current', design.current);
+      const what = document.createElement('div');
+      what.className = 'what';
+      const name = document.createElement('strong');
+      name.textContent = `${g.name} ${i + 1}`;
+      if (design.current) {
+        const badge = document.createElement('span');
+        Object.assign(badge, { className: 'badge', textContent: g.inUse });
+        name.append(badge);
+      }
+      const about = document.createElement('small');
+      about.textContent = `${date(design.at)} · ${design.kind === 'create' ? g.first : `«${design.request ?? ''}»`}`;
+      what.append(name, about);
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      actions.append(
+        button(g.view, 'btn small ghost', () => {
+          view.querySelector('iframe')!.src = design.draftUrl;
+          view.hidden = false;
+          view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }),
+      );
+      if (!design.current) {
+        const use = button(g.use, 'btn small', async () => {
+          use.disabled = true;
+          use.textContent = g.using;
+          message('');
+          try {
+            const { status, body } = await api<View>('/me/design', 'POST', { design: design.id });
+            if (status === 200) {
+              view.hidden = true;
+              fill(body);
+              notice(g.used);
+              return showTab('preview');
+            }
+            if (status === 423) showFrozen(true);
+            message(status === 423 ? strings.frozen.title : status === 409 ? g.busy : g.failed);
+          } catch {
+            message(g.failed);
+          }
+          use.disabled = false;
+          use.textContent = g.use;
+        });
+        actions.append(use);
+      }
+      li.append(what, actions);
+      return li;
+    }),
+  );
+}
+
+/** The banner for a frozen account (a 423 from any change shows it too). */
+function showFrozen(frozen: boolean) {
+  $<HTMLElement>('[data-frozen]').hidden = !frozen;
+  if (frozen) showSupport($('[data-frozen] [data-support]'));
+}
+
+/** The banner for an owner whose designs are used up (a 402 from a redesign shows it too), with the pack to buy. */
 function showDesignsOut(out: boolean) {
   $<HTMLElement>('[data-designs-out]').hidden = !out;
+  $<HTMLElement>('[data-buy-designs]').hidden = !out || !checkoutAvailable();
+}
+
+/** How long Mi sitio waits for Paddle's webhook to add the designs after a payment. */
+const PAID_WAIT_MS = 60_000;
+
+/** "Comprar 3 diseños": a transaction from our API → Paddle's overlay → GET /me until the designs arrive. */
+function setUpBuyDesigns() {
+  const line = $<HTMLElement>('[data-buy-designs]');
+  const button = line.querySelector('button')!;
+  const say = (text: string, error = false) => {
+    const note = $<HTMLElement>('[data-buy-notice]');
+    note.textContent = text;
+    note.dataset.kind = error ? 'error' : '';
+  };
+  button.onclick = async () => {
+    button.disabled = true;
+    say(strings.designsOut.opening);
+    try {
+      const { status, body } = await api<{ transactionId?: string; email?: string }>('/me/checkout', 'POST', {});
+      const opened = status === 200 && body?.transactionId && (await buyDesigns({ transactionId: body.transactionId, email: body.email }, strings.lang, () => void waitForDesigns()));
+      say(opened ? '' : strings.designsOut.failed, !opened);
+    } catch {
+      say(strings.designsOut.failed, true);
+    } finally {
+      button.disabled = false;
+    }
+  };
+  async function waitForDesigns() {
+    say(strings.designsOut.waiting);
+    button.disabled = true;
+    for (const started = Date.now(); Date.now() - started < PAID_WAIT_MS; ) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      const { status, body } = await api<View>('/me').catch(() => ({ status: 0, body: undefined }));
+      if (status === 200 && body && (body.designsLeft ?? 1) > 0) {
+        button.disabled = false;
+        say('');
+        fill(body); // hides the banner
+        notice(strings.designsOut.done);
+        return;
+      }
+    }
+    button.disabled = false;
+    say(strings.designsOut.late);
+  }
 }
 
 function notice(text: string) {
@@ -138,6 +283,8 @@ function fill(view: View) {
   showMade(view.made);
   showTexts(view.texts);
   showDesignsOut(view.designsLeft === 0);
+  showDesigns(view.designs ?? []);
+  showFrozen(view.frozen === true);
   $<HTMLButtonElement>('[data-delete]').onclick = async () => {
     if (window.prompt(`${strings.deleteConfirm} ${view.slug}`) !== view.slug) return;
     const { status } = await api('/me', 'DELETE');
@@ -297,16 +444,19 @@ photosForm.onsubmit = async (event) => {
       ...(Object.keys(captions).length > 0 && { captions }),
     });
     if (status === 202) {
+      // A new logo alone usually goes in with no page writer (seconds); anything else is a redesign (minutes).
+      const logoOnly = logo && photos.length === 0 && removed.size === 0 && Object.keys(captions).length === 0;
       for (const input of [logoInput, photosInput]) {
         input.value = '';
         showThumbs(input, $(`[data-thumbs="${input.name}"]`), thumbStrings(input.name));
       }
       showPhotos(images);
-      notice(strings.photos.started);
+      notice(logoOnly ? strings.photos.made.started : strings.photos.started);
       showTab('preview');
     } else {
       if (status === 402) showDesignsOut(true);
-      photoError(status === 402 ? strings.photos.noDesigns : status === 409 ? strings.photos.busy : status === 429 ? strings.photos.limited : strings.photos.failed);
+      if (status === 423) showFrozen(true);
+      photoError(status === 423 ? strings.frozen.title : status === 402 ? strings.photos.noDesigns : status === 409 ? strings.photos.busy : status === 429 ? strings.photos.limited : strings.photos.failed);
     }
   } catch (error) {
     photoError(error instanceof UploadLimitError ? strings.photos.limited : strings.photos.failed);
@@ -415,7 +565,8 @@ textsForm.onsubmit = async (event) => {
       if (fresh.status === 200) showTexts(fresh.body.texts);
       return textsError(x.stale);
     }
-    textsError(status === 409 ? x.busy : status === 422 ? x.rejected : status === 429 ? x.limited : x.failed);
+    if (status === 423) showFrozen(true);
+    textsError(status === 423 ? strings.frozen.title : status === 409 ? x.busy : status === 422 ? x.rejected : status === 429 ? x.limited : x.failed);
   } catch {
     textsError(x.failed);
   } finally {
@@ -519,7 +670,10 @@ $<HTMLButtonElement>('[data-made-save]').onclick = async () => {
       chosen.clear(); // the finished swap's view replaces the list
       notice(strings.photos.made.started);
       showTab('preview');
-    } else madeError(status === 409 ? strings.photos.busy : status === 429 ? strings.photos.limited : strings.photos.failed);
+    } else {
+      if (status === 423) showFrozen(true);
+      madeError(status === 423 ? strings.frozen.title : status === 409 ? strings.photos.busy : status === 429 ? strings.photos.limited : strings.photos.failed);
+    }
   } catch (error) {
     madeError(error instanceof UploadLimitError ? strings.photos.limited : strings.photos.failed);
   } finally {
@@ -579,6 +733,7 @@ root.querySelectorAll<HTMLButtonElement>('.viewport button').forEach((button) =>
 // Phone width first on small screens, where the desktop preview would not fit.
 if (window.matchMedia('(max-width: 48rem)').matches) setViewport('phone');
 
+setUpBuyDesigns();
 void load();
 
 export {};

@@ -4,6 +4,8 @@ import { callWithRetry, GuardrailBlocked, ModelOutputError, type CallTool, type 
 import { Contact } from './content';
 import { loadDraft, ownerText, saveDraft, type DraftDeps, type SiteDoc } from './drafts';
 import { countUsage } from './email-usage';
+import { isFrozen, noteRefusal } from './freeze';
+import type { Announce } from './notices';
 import { publicJob, type ChatMessage, type SiteRecord } from './jobs';
 import { CHAT_TTL_SECONDS, noteRedesignDone } from './chat-notes';
 import { applyContact, day, inTwoDays, previewUrl, runningEdit, type ContactInput, type OwnerDeps } from './owner';
@@ -50,6 +52,7 @@ const REPLIES = {
     notOnPage: 'Guardei o dado, mas não encontrei onde mudá-lo na página. Me diga em que parte aparece e eu mudo.',
   },
 } as const;
+const REFUSALS = new Set<string>(Object.values(REPLIES).map((r) => r.refused));
 
 /** What the browser sees of a message. */
 export function publicMessage(message: ChatMessage, now: number) {
@@ -98,6 +101,8 @@ export type PostChatResult =
   | { status: 202; messages: ReturnType<typeof publicMessage>[] }
   | { status: 400 }
   | { status: 409; error: 'busy' | 'not_available' }
+  /** The owner's account is frozen (freeze.ts). */
+  | { status: 423 }
   | { status: 429 };
 
 /** POST /me/chat: stores the owner's message and a pending reply, and starts the chat Lambda on it. */
@@ -106,6 +111,7 @@ export async function postChat(site: SiteRecord, body: unknown, deps: OwnerDeps)
   const parsed = ChatBody.safeParse(body ?? {});
   if (!parsed.success) return { status: 400 };
   if (!site.currentDraftId) return { status: 409, error: 'not_available' };
+  if (await isFrozen(stores, site.ownerEmailId)) return { status: 423 };
   const now = deps.now();
 
   // One reply at a time, and never while the page writer is changing the page (its result would drop the chat's changes).
@@ -164,6 +170,8 @@ export interface ChatDeps extends DraftDeps {
   prescreenModelId: string;
   outputAllowed(text: string): Promise<boolean>;
   now(): number;
+  /** Notices for the admin (a frozen account, freeze.ts). */
+  announce?: Announce;
 }
 
 export type ChatOutcome = { outcome: 'SKIPPED' } | { outcome: 'EDITED' | 'REPLIED' | 'REJECTED' | 'FAILED'; usage: Usage[] };
@@ -203,6 +211,11 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
     await stores.updateChat(slug, at, { status: 'done', ...patch });
     return { outcome, usage };
   };
+  // The owner's message refused by the pre-screen or the input guardrail: it counts toward freezing the account.
+  const refused = async () => {
+    await noteRefusal(stores, site?.ownerEmailId, deps.now(), { announce: deps.announce, where: 'chat', text: request?.text ?? '' });
+    return answer('REJECTED', { text: REPLIES[voice].refused });
+  };
 
   try {
     if (!request || !site?.currentDraftId) throw new Error(`chat ${slug}/${at} has no request or no draft`);
@@ -213,10 +226,13 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
 
     const screening = await prescreen(doc.answers, { callTool: deps.callTool, modelId: deps.prescreenModelId }, request.text);
     usage.push(screening.usage);
-    if (isRejected(screening)) return await answer('REJECTED', { text: say.refused });
+    if (isRejected(screening)) return await refused();
 
     const outline = elide(doc.page);
-    const earlier = history.filter((m) => m.at < request.at && m.status === 'done' && m.text);
+    // A refused message stays out of what the model is sent, with its refusal: the guardrail would block every later
+    // message for it (a prompt attack in the history), and the owner could never use the chat again.
+    const shown = history.filter((m) => m.at < request.at && m.status === 'done' && m.text);
+    const earlier = shown.filter((m, i) => !REFUSALS.has(m.text!) && !(m.role === 'owner' && shown[i + 1]?.role === 'coyote' && REFUSALS.has(shown[i + 1]!.text!)));
     const speaker = (m: ChatMessage) =>
       m.role === 'owner' ? 'Owner' : m.draftId ? (m.undone ? 'Coyote (changed the page, then the owner undid it)' : 'Coyote (changed the page)') : m.redesign ? (m.redesignStarted ? 'Coyote (offered a redesign, and the owner started it)' : 'Coyote (offered a redesign)') : 'Coyote';
     const conversation = earlier.map((m) => `${speaker(m)}: ${m.text}`).join('\n');
@@ -279,7 +295,7 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
     const draftId = await saveDraft(site, next, deps);
     return await answer('EDITED', { text: result.reply, draftId });
   } catch (error) {
-    if (error instanceof GuardrailBlocked) return answer('REJECTED', { text: REPLIES[voice].refused });
+    if (error instanceof GuardrailBlocked) return refused();
     if (error instanceof ModelOutputError) usage.push(error.usage);
     console.error('chat failed', { slug, at, error });
     await stores.updateChat(slug, at, { status: 'failed', text: REPLIES[voice].failed });

@@ -71,6 +71,13 @@ export type ProcessResult = { ok: true; media: Media } | { ok: false; reason: st
  * `photo-<id>.jpg`), so photos added later never overwrite ones a page uses. Anything flagged rejects the job.
  * `notes[i]` is what the owner says upload photo-(i+1) shows; it becomes that photo's caption.
  */
+/** True when an upload holds only a logo (Mi sitio → Tus fotos: a new logo and nothing else). */
+export async function onlyLogo(uploadId: string, stores: Pick<Stores, 'listKeys'>): Promise<boolean> {
+  const prefix = `_uploads/${uploadId}/`;
+  const names = (await stores.listKeys(prefix)).map((key) => key.slice(prefix.length));
+  return names.length > 0 && names.every((name) => name === FILES.logo.key);
+}
+
 export async function processUploads(uploadId: string, targetPrefix: string, { stores, moderate, newFileId }: ProcessDeps, notes: string[] = []): Promise<ProcessResult> {
   const prefix = `_uploads/${uploadId}/`;
   const expected = new Map<string, string>([[FILES.logo.key, FILES.logo.contentType], ...Array.from({ length: MAX_PHOTOS }, (_, i) => [FILES.photo.key(i + 1), FILES.photo.contentType] as [string, string])]);

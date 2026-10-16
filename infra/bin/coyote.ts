@@ -16,6 +16,7 @@ new CoyoteStack(app, 'Coyote', {
   hostedZoneName: app.node.tryGetContext('hostedZoneName') as string | undefined,
   senderEmail: app.node.tryGetContext('senderEmail') as string | undefined,
   turnstileSiteKey: app.node.tryGetContext('turnstileSiteKey') as string | undefined,
+  paddle: app.node.tryGetContext('paddle') as CoyoteStackProps['paddle'],
   mailMx: app.node.tryGetContext('mailMx') as CoyoteStackProps['mailMx'],
   apexTxt: app.node.tryGetContext('apexTxt') as string[] | undefined,
 });

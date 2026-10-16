@@ -16,6 +16,7 @@ const other = t(s.otherLang.code);
 const d = m.domain;
 const p = m.photos;
 const x = m.texts;
+const g = m.designs;
 // The Dominio tab is hidden (global.css) unless PUBLIC_DOMAIN_TAB=on, e.g. in web/.env.development.local, which only `npm run dev` reads.
 const domainTab = import.meta.env.PUBLIC_DOMAIN_TAB === 'on';
 const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, question: s.questions } };
@@ -49,10 +50,18 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </a>
       </header>
+      {/* Too many refused requests (freeze.ts): every change is closed until an admin lifts it; the page stays. */}
+      <aside class="banner frozen" data-frozen role="status" hidden>
+        <strong>{m.frozen.title}</strong>
+        <p>{m.frozen.text}</p>
+        <p data-support hidden>{m.frozen.support} <a></a></p>
+      </aside>
       {/* The owner's email used its free designs (paid-writes.ts): redesigns are closed, text and contact edits are not. */}
       <aside class="banner" data-designs-out role="status" hidden>
         <strong>{m.designsOut.title}</strong>
         <p>{m.designsOut.text}</p>
+        {/* A design pack (services/generator core/payments.ts), shown only when config.js has Paddle. */}
+        <p class="buy" data-buy-designs hidden><button type="button" class="btn small">{m.designsOut.buy}</button> <span class="notice" data-buy-notice aria-live="polite"></span></p>
       </aside>
       {/* For an owner who came from the form or the "lista" email (not from Mis páginas web): how to come back later. */}
       <details class="later" data-later hidden>
@@ -67,6 +76,7 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
       <div class="tabs" role="tablist" aria-label={m.tabs.label}>
         <button type="button" role="tab" id="tab-preview" aria-controls="panel-preview" aria-selected="true" data-tab="preview">{m.tabs.preview}</button>
         <button type="button" role="tab" id="tab-change" aria-controls="panel-change" aria-selected="false" tabindex="-1" data-tab="change">{m.tabs.change}</button>
+        <button type="button" role="tab" id="tab-designs" aria-controls="panel-designs" aria-selected="false" tabindex="-1" data-tab="designs">{m.tabs.designs}</button>
         <button type="button" role="tab" id="tab-texts" aria-controls="panel-texts" aria-selected="false" tabindex="-1" data-tab="texts">{m.tabs.texts}</button>
         <button type="button" role="tab" id="tab-photos" aria-controls="panel-photos" aria-selected="false" tabindex="-1" data-tab="photos">{m.tabs.photos}</button>
         <button type="button" role="tab" id="tab-domain" aria-controls="panel-domain" aria-selected="false" tabindex="-1" data-tab="domain">{m.tabs.domain}</button>
@@ -103,6 +113,16 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
         {/* Delete: hidden for now (remove `hidden` to show it again). */}
         <div class="danger" hidden>
           <div class="line"><button class="linkbtn" type="button" data-delete>{m.delete}</button></div>
+        </div>
+      </div>
+
+      {/* Every design the page writer made (the first page and each redesign); the owner picks the one the site uses, with no model call. */}
+      <div class="tabpanel designs-panel" role="tabpanel" id="panel-designs" aria-labelledby="tab-designs" data-panel="designs" hidden>
+        <p class="lead">{g.intro}</p>
+        <ol class="designs" data-designs></ol>
+        <p class="notice" data-designs-notice role="status" aria-live="polite"></p>
+        <div class="device" data-width="desktop" data-design-view hidden>
+          <iframe title={g.preview} sandbox="allow-scripts allow-same-origin" referrerpolicy="no-referrer"></iframe>
         </div>
       </div>
 

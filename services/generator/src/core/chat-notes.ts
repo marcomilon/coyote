@@ -15,6 +15,7 @@ const NOTES = {
     rejected: 'No puedo hacer ese cambio porque no cumple las reglas de uso.',
     failed: 'Algo salió mal y no pude rediseñar tu página web. Inténtalo de nuevo.',
     undone: 'Listo, volví a la versión anterior.',
+    designChosen: 'Listo: tu página web usa ahora el diseño que elegiste.',
   },
   vos: {
     redesigning: 'Rediseñando tu página web. Tarda 2–3 minutos; podés dejar esta pantalla abierta.',
@@ -22,6 +23,7 @@ const NOTES = {
     rejected: 'No puedo hacer ese cambio porque no cumple las reglas de uso.',
     failed: 'Algo salió mal y no pude rediseñar tu página web. Intentalo de nuevo.',
     undone: 'Listo, volví a la versión anterior.',
+    designChosen: 'Listo: tu página web usa ahora el diseño que elegiste.',
   },
   pt: {
     redesigning: 'Redesenhando seu site. Leva 2–3 minutos; pode deixar esta tela aberta.',
@@ -29,6 +31,7 @@ const NOTES = {
     rejected: 'Não posso fazer essa mudança porque ela não segue as regras de uso.',
     failed: 'Algo deu errado e não consegui redesenhar seu site. Tente de novo.',
     undone: 'Pronto, voltei para a versão anterior.',
+    designChosen: 'Pronto: seu site agora usa o design que você escolheu.',
   },
 } as const;
 
@@ -52,4 +55,9 @@ export async function noteRedesignDone(stores: Pick<Stores, 'updateChat'>, job: 
 
 export async function noteUndo(stores: Pick<Stores, 'putChat'>, slug: string, voice: Voice, now: number): Promise<void> {
   await stores.putChat({ slug, at: now, role: 'coyote', text: NOTES[voice].undone, status: 'done', ttl: ttl(now) });
+}
+
+/** The owner chose another design in Mi sitio → Diseños: the chat says so, so its next reply works on that page. */
+export async function noteDesignChosen(stores: Pick<Stores, 'putChat'>, slug: string, voice: Voice, now: number, draftId: string): Promise<void> {
+  await stores.putChat({ slug, at: now, role: 'coyote', text: NOTES[voice].designChosen, status: 'done', draftId, ttl: ttl(now) });
 }

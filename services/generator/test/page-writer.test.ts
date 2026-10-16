@@ -13,6 +13,18 @@ const doc = (body: string, head = '') =>
   `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Panadería Luna</title>${head}</head><body>${body}</body></html>`;
 
 describe('checkPage', () => {
+  it('wraps a script that declares a browser global, so the browser runs it, and shows faded content if a script fails', () => {
+    const page = (script: string) => `<!doctype html><html><head><title>Panadería Luna</title></head><body><h1>Panadería Luna</h1><script>${script}</script></body></html>`;
+    const broken = checkPage(page("const top = document.getElementById('top');\ndocument.body.classList.add('ok');"), opts);
+    expect(broken.repairs).toContain('wrapped a script that redeclared a browser global');
+    expect(broken.html).toContain("<script>{\nconst top = document.getElementById('top');\ndocument.body.classList.add('ok');\n}</script>");
+    // Ordinary scripts stay as they are; modules have their own scope.
+    expect(checkPage(page('const topbar = 1;'), opts).repairs).not.toContain('wrapped a script that redeclared a browser global');
+    expect(checkPage(page('const stop = 1; let x = top;'), opts).repairs).not.toContain('wrapped a script that redeclared a browser global');
+    // The safety net runs first in the head.
+    expect(broken.html).toMatch(/<head><script>\(function\(\)\{var failed=false;addEventListener\('error'/);
+  });
+
   it('keeps the owner\'s links, CDN scripts, and a Google map; adds the overflow guard and the footer', () => {
     const page = doc(
       `<h1>Panadería Luna</h1><a href="https://wa.me/573001234567?text=Hola">Pedir</a><a href="https://instagram.com/luna.pan/">IG</a>
@@ -144,6 +156,40 @@ describe('contact details on a written page', () => {
     const request: PageRequest = { answers: { businessName: 'Panadería Luna', about: 'Pan', lang: 'es', contact }, notes: [], photos: [] };
     expect(pagePrompt(request)).toContain('573001234567');
     expect(pagePrompt(request)).toContain('frontend-design skill');
+  });
+
+  it('a new design asks for a complete new page with the page\'s texts, the owner\'s texts word for word and their photos', () => {
+    const request: PageRequest = {
+      answers: { businessName: 'Panadería Luna', about: 'Pan', lang: 'es', contact },
+      notes: [],
+      photos: [],
+      look: { tones: ['brutally minimal'], dark: true, noTicker: false },
+      instruction: 'hazla más moderna',
+      texts: ['Pan de masa madre', 'Abrimos de 7 a 13'],
+      keep: ['Abrimos de 7 a 13'],
+      keepPhotos: ['assets/photo-a.jpg'],
+    };
+    const prompt = pagePrompt(request);
+    expect(prompt).toContain('a one-page website for this small business');
+    expect(prompt).not.toContain('```html');
+    expect(prompt).toContain('the owner wants a new design for it: hazla más moderna');
+    expect(prompt).toContain('Use the texts the page has now:\n- Pan de masa madre\n- Abrimos de 7 a 13');
+    expect(prompt).toContain('keep them word for word:\n- Abrimos de 7 a 13');
+    expect(prompt).toContain("Keep the owner's photos (assets/photo-a.jpg) on the page.");
+    expect(prompt).toContain('brutally minimal');
+    expect(prompt).toContain('Make the new design look very different from the current one: other fonts, other colors, another layout');
+    expect(pagePrompt({ ...request, avoid: { fonts: ['Gloock', 'Jost'], colors: ['#1d2742', '#b8893b', '#fbf8f2'], dark: false } })).toContain(
+      'The current design uses the fonts Gloock and Jost, the colors #1d2742, #b8893b and #fbf8f2 and a light background. Make the new design look very different',
+    );
+  });
+
+  it('a new design gets none of the current look\'s tones and the other background', () => {
+    for (let i = 0; i < 20; i++) {
+      const avoid = { tones: pickLook().tones, dark: i % 2 === 0 };
+      const look = pickLook(Math.random, avoid);
+      expect(look.tones.some((tone) => avoid.tones.includes(tone))).toBe(false);
+      expect(look.dark).toBe(!avoid.dark);
+    }
   });
 
   it('names the logo apart from the photos of the business', () => {

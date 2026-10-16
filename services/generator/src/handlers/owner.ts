@@ -6,7 +6,7 @@ import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { outputAllowed } from '../core/bedrock';
 import { emitMetrics } from '../core/metrics';
 import { chatView, postChat } from '../core/chat';
-import { authenticate, deleteSite, editSite, ownerView, POLL_CAP, undo, type OwnerDeps } from '../core/owner';
+import { authenticate, chooseDesign, deleteSite, editSite, ownerView, POLL_CAP, undo, type OwnerDeps } from '../core/owner';
 import { createUrls, urlConfigFromEnv } from '../core/urls';
 import { json, parseBody, perIpLimit } from './http';
 
@@ -27,9 +27,9 @@ const deps: OwnerDeps = {
   newId: randomUUID,
 };
 
-const ERRORS: Record<number, string> = { 400: 'invalid', 402: 'no_designs', 409: 'not_available', 422: 'rejected', 429: 'rate_limited' };
+const ERRORS: Record<number, string> = { 400: 'invalid', 402: 'no_designs', 409: 'not_available', 422: 'rejected', 423: 'frozen', 429: 'rate_limited' };
 
-// GET /me · POST /me/edit · POST /me/undo · DELETE /me · GET /me/chat · POST /me/chat. The magic-link token is the credential.
+// GET /me · POST /me/edit · POST /me/undo · POST /me/design · DELETE /me · GET /me/chat · POST /me/chat. The magic-link token is the credential.
 export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event) => {
   const polling = event.routeKey === 'GET /me/chat';
   const site = await authenticate(event.headers.authorization, deps, polling ? POLL_CAP : undefined);
@@ -52,6 +52,11 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event
     case 'POST /me/undo': {
       const result = await undo(site, deps);
       return result.status === 200 ? json(200, await ownerView((await stores.getSite(site.slug))!, deps)) : json(409, { error: 'nothing_to_undo' });
+    }
+    case 'POST /me/design': {
+      const result = await chooseDesign(site, parseBody(event.body, event.isBase64Encoded), deps);
+      if (result.status === 200) return json(200, await ownerView((await stores.getSite(site.slug))!, deps));
+      return json(result.status, { error: result.status === 409 ? 'busy' : result.status === 404 ? 'not_found' : result.status === 423 ? 'frozen' : 'invalid' });
     }
     case 'GET /me/chat': {
       const after = Number(event.queryStringParameters?.after);

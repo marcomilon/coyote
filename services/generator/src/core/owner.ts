@@ -18,8 +18,6 @@ import { hasLogoSpot } from './logo';
 import type { Urls } from './urls';
 
 const OWNER_REQUESTS_PER_DAY = 60;
-/** Free-text edits call the model (about $0.50 each for a written page), so they have their own cap. */
-export const EDITS_PER_DAY = 5;
 /** Chat messages searched for the reply that made an undone draft (only the last few drafts are kept). */
 const UNDO_LOOKBACK = 100;
 
@@ -184,10 +182,9 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   const logoGoes = (oldLogo && current.page.includes(oldLogo)) || hasLogoSpot(current.page);
   const swapLogo = Boolean(uploadId && !instruction && !captions && !newCaptions && !replaceMade && logoGoes && !removePhotos?.some((file) => file !== oldLogo) && (await onlyLogo(uploadId, stores)));
   const swap = Boolean(replaceMade) || swapLogo;
-  // A paid-tier redesign needs one of the email's paid writes left (the claim itself is in the generate job).
+  // A paid-tier redesign needs one of the email's paid writes left (the claim itself is in the generate job); that is
+  // its only limit. A swap calls no model, so it needs none.
   if (redesign && !swap && (await designsLeft(site, deps)) === 0) return { status: 402 };
-  // A swap calls no model (uploads have their own daily cap), so it doesn't count as one of the day's redesigns.
-  if (redesign && !swap && !(await stores.hitRateLimit(`edits#${site.slug}#${day(now)}`, EDITS_PER_DAY, inTwoDays(now)))) return { status: 429 };
 
   let missing: string[] = [];
   if (texts) {

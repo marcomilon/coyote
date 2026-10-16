@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
-import { authenticate, deleteSite, EDITS_PER_DAY, editSite, ownerView, undo } from '../src/core/owner';
+import { authenticate, deleteSite, editSite, ownerView, undo } from '../src/core/owner';
 import { submit } from '../src/core/submit';
 import { body, harness, NOW, urls } from './harness';
 
@@ -169,14 +169,13 @@ describe('edits', () => {
     expect(t.site()).toMatchObject({ status: 'draft', currentDraftId: 'draft1' });
   });
 
-  it(`caps free-text edits at ${EDITS_PER_DAY} a day`, async () => {
+  it('has no day limit on redesigns while designs are left', async () => {
     const t = await withDraft();
     const finish = () => (t.jobs.get(t.site().jobIds!.at(-1)!)!.status = 'DONE'); // one redesign at a time
-    for (let i = 0; i < EDITS_PER_DAY; i++) {
+    for (let i = 0; i < 8; i++) {
       expect((await editSite(t.site(), { instruction: `cambio ${i}` }, t.ownerDeps)).status).toBe(202);
       finish();
     }
-    expect(await editSite(t.site(), { instruction: 'uno más' }, t.ownerDeps)).toEqual({ status: 429 });
     expect(await editSite(t.site(), { contact: { instagram: 'otra' } }, t.ownerDeps)).toMatchObject({ status: 200 }); // contact edits cost nothing
   });
 

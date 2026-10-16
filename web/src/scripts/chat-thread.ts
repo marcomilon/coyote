@@ -45,7 +45,6 @@ export interface ChatStrings {
   failed: string;
   busy: string;
   limit: string;
-  editLimit: string;
   noDesigns: string;
   frozen: string;
   frozenSupport: string;
@@ -254,7 +253,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
         return void (await followRedesign(body.jobId));
       }
       redesigning = false;
-      localNote(status === 423 ? strings.frozen + supportLine(strings.frozenSupport) : status === 402 ? strings.noDesigns : status === 429 ? strings.editLimit : status === 422 ? strings.rejected : status === 409 ? strings.busy : strings.failed, 'failed');
+      localNote(status === 423 ? strings.frozen + supportLine(strings.frozenSupport) : status === 402 ? strings.noDesigns : status === 429 ? strings.limit : status === 422 ? strings.rejected : status === 409 ? strings.busy : strings.failed, 'failed');
     } catch {
       redesigning = false;
       localNote(strings.error, 'failed');

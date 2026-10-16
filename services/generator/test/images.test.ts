@@ -1,8 +1,10 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import type { PageRequest } from '../src/core/page-writer';
 import { describe, expect, it } from 'vitest';
+import type { CallTool, ToolRequest, Usage } from '../src/core/bedrock';
+import { handsChecker } from '../src/core/hands';
 import { imageMaker, IMAGE_NEGATIVE, legibleWords, MAX_IMAGES, type ImageDeps } from '../src/core/images';
-import { anthropicWritePage, MAKE_IMAGE_TOOL, pageParams, pagePrompt, type MakeImage } from '../src/core/page-writer';
+import { anthropicWritePage, MAKE_IMAGE_TOOL, pageParams, pagePrompt, parsePage, type MakeImage } from '../src/core/page-writer';
 import { loadDraft } from '../src/core/drafts';
 import { runGenerateJob } from '../src/core/generate-job';
 import { editSite } from '../src/core/owner';
@@ -66,6 +68,28 @@ describe('make_image', () => {
     expect(await imageMaker('p/', lettered.d, made)({ description: 'A butcher shop', aspect: '3:2' })).toMatchObject({ error: expect.stringContaining('writing'), left: MAX_IMAGES - 1 });
     expect(lettered.deleted).toHaveLength(1);
     expect(made).toEqual([]);
+  });
+
+  it('refuses a photo with a hand drawn wrong', async () => {
+    const handed = deps({ checkHands: async () => true });
+    const made: string[] = [];
+    expect(await imageMaker('p/', handed.d, made)({ description: 'A baker kneading dough', aspect: '3:2' })).toMatchObject({ error: expect.stringContaining('hand'), left: MAX_IMAGES - 1 });
+    expect(handed.deleted).toHaveLength(1);
+    expect(made).toEqual([]);
+  });
+
+  it('the hands check asks the cheap model about the photo, counts its cost, and keeps the photo when it fails', async () => {
+    const usage: Usage[] = [];
+    const asked: ToolRequest<never>[] = [];
+    const answer = (wrong: boolean) => (async (request: ToolRequest<never>) => (asked.push(request), { value: { handsVisible: true, handDrawnWrong: wrong }, usage: { step: request.tool.name, modelId: request.modelId, inputTokens: 1600, outputTokens: 40 } })) as unknown as CallTool;
+    expect(await handsChecker(answer(true), DEFAULT_MODEL_ID, usage)(new Uint8Array([1]))).toBe(true);
+    expect(await handsChecker(answer(false), DEFAULT_MODEL_ID, usage)(new Uint8Array([1]))).toBe(false);
+    expect(asked[0]).toMatchObject({ modelId: DEFAULT_MODEL_ID, images: [{ format: 'jpeg' }], tool: { name: 'check_hands' } });
+    expect(usage.map((u) => u.step)).toEqual(['check_hands', 'check_hands']);
+    const broken = (async () => {
+      throw new Error('throttled');
+    }) as unknown as CallTool;
+    expect(await handsChecker(broken, DEFAULT_MODEL_ID, usage)(new Uint8Array([1]))).toBe(false);
   });
 
   it('counts only sure words of 3 or more letters as writing', () => {
@@ -159,8 +183,42 @@ describe('the page writer with make_image', () => {
     expect(sent[1]).not.toHaveProperty('tool_choice');
     expect(text(sent[2]!)).toBe('Saved as assets/gen-1.jpg. That was the last photo.');
     expect(sent[2]).not.toHaveProperty('tool_choice');
-    expect(sent[2]!.messages.at(-1)!.content).toContainEqual({ type: 'text', text: 'No photos are left. Write the page now.' });
+    expect(sent[2]!.messages.at(-1)!.content).toContainEqual(expect.objectContaining({ type: 'text', text: 'No photos are left. Write the page now.' }));
     expect(sent[1]!.messages.at(-1)!.content).toHaveLength(1);
+  });
+
+  it('caches the request: the skill, the first message, and each round\'s newest turn, and counts the cached tokens', async () => {
+    const page = '```html\n<!doctype html><html><body><img src="assets/gen-1.jpg"></body></html>\n```';
+    const replies: Partial<Anthropic.Message>[] = [
+      { stop_reason: 'tool_use', usage: { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 4000 } as Anthropic.Usage, content: [{ type: 'tool_use', id: 't1', name: 'make_image', input: { description: 'Bread', aspect: '3:2' } }] as Anthropic.ContentBlock[] },
+      { stop_reason: 'end_turn', usage: { input_tokens: 20, output_tokens: 7, cache_read_input_tokens: 4000, cache_creation_input_tokens: 300 } as Anthropic.Usage, content: [{ type: 'text', text: page }] as Anthropic.ContentBlock[] },
+    ];
+    const sent: Anthropic.MessageStreamParams[] = [];
+    const api = { messages: { stream: (params: Anthropic.MessageStreamParams) => (sent.push(structuredClone(params)), { finalMessage: async () => replies.shift() }) } } as unknown as Pick<Anthropic, 'messages'>;
+    const makeImage: MakeImage = async () => ({ file: 'assets/gen-1.jpg', bytes: new Uint8Array([9]) });
+    const reply = await anthropicWritePage({ ANTHROPIC_API_KEY: 'k' }, api)(request, { effort: 'high', model: 'claude-opus-5-5', makeImage });
+    expect(reply.usage).toMatchObject({ inputTokens: 30, outputTokens: 12, cacheReadTokens: 4000, cacheWriteTokens: 4300 });
+    const marked = (params: Anthropic.MessageStreamParams) =>
+      params.messages.flatMap((m, i) => (typeof m.content === 'string' ? [] : m.content.flatMap((b) => ('cache_control' in b && b.cache_control ? [i] : []))));
+    expect(marked(sent[0]!)).toEqual([0]);
+    expect(marked(sent[1]!)).toEqual([0, 2]);
+  });
+
+  it('stops when a round already holds the page, even inside a tool call, instead of writing it again', async () => {
+    const html = '<!doctype html><html><body>' + 'Pan '.repeat(200) + '</body></html>';
+    for (const content of [
+      [{ type: 'text', text: '```html\n' + html + '\n```' }, { type: 'tool_use', id: 't1', name: 'make_image', input: { description: 'Bread', aspect: '3:2' } }],
+      [{ type: 'tool_use', id: 't1', name: 'make_image', input: { html, aspect: '16:9' } }],
+    ]) {
+      const replies: Partial<Anthropic.Message>[] = [{ stop_reason: 'tool_use', usage: { input_tokens: 1, output_tokens: 1 } as Anthropic.Usage, content: content as Anthropic.ContentBlock[] }];
+      let calls = 0;
+      const api = { messages: { stream: () => (calls++, { finalMessage: async () => replies.shift() }) } } as unknown as Pick<Anthropic, 'messages'>;
+      const made: string[] = [];
+      const reply = await anthropicWritePage({ ANTHROPIC_API_KEY: 'k' }, api)(request, { effort: 'high', model: 'claude-opus-5-5', makeImage: async (input) => (made.push(input.description), { error: 'no' }) });
+      expect(calls).toBe(1);
+      expect(made).toEqual([]);
+      expect(parsePage(reply.text)).toContain('Pan Pan');
+    }
   });
 });
 
@@ -176,6 +234,15 @@ describe('runGenerateJob with made photos', () => {
     }
   });
 
+  it('leaves out a made photo with a hand drawn wrong', async () => {
+    const t = harness({ badHands: [1] });
+    Object.assign(t.writer.options, { images: ['Baker kneading', 'Bread'] });
+    await submit({ ...body, aiImages: true }, '1.2.3.4', t.submitDeps);
+    expect(await runGenerateJob('job-1', { ...t.generateDeps, generateImage, imageModelId: 'stability' })).toMatchObject({ outcome: 'DONE' });
+    const site = t.sites.get(t.jobs.get('job-1')!.slug!)!;
+    expect((await loadDraft(site.slug, site.currentDraftId!, t.generateDeps.stores)).media.generated).toHaveLength(1);
+  });
+
   it('keeps the made photos the page uses, in the draft and in later edits', async () => {
     const t = harness();
     Object.assign(t.writer.options, { images: ['Bread', 'Coffee', 'Oven'], useImages: 2 });
@@ -187,6 +254,7 @@ describe('runGenerateJob with made photos', () => {
     expect(doc.media.generated).toHaveLength(2);
     for (const file of doc.media.generated!) expect(t.objects.has(`_draft/${site.currentDraftId}/${file}`)).toBe(true);
     expect(t.jobs.get('job-1')!.usage.filter((u) => u.step === 'make_image')).toEqual(Array(3).fill({ step: 'make_image', modelId: 'stability', inputTokens: 0, outputTokens: 0 }));
+    expect(t.calls.filter((name) => name === 'check_hands')).toHaveLength(3);
 
     // A new design gets the made photos the page shows, and keeps the ones it uses instead of making new ones.
     Object.assign(t.writer.options, { images: [], page: (request: PageRequest) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Panadería Luna</title></head><body><main><h1>Panadería Luna</h1>${request.photos.filter((p) => p.file.includes('/gen-')).map((p) => `<img src="${p.file}" alt="">`).join('')}<p>${request.answers.about}</p><p>${'Pan recién horneado. '.repeat(20)}</p></main></body></html>` });

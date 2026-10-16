@@ -257,9 +257,9 @@ describe('contact details on a written page', () => {
   it('sends the chosen skill as the system prompt and names it in the request; with none, neither', () => {
     const request = { answers: { businessName: 'Luna', about: 'Pan', lang: 'es' as const, contact }, notes: [], photos: [] };
     const text = (p: ReturnType<typeof pageParams>) => JSON.stringify(p.messages);
-    expect(pageParams(request, 'claude-opus-5-5', 'high')).toMatchObject({ system: DEFAULT_PAGE_SKILL.text });
+    expect(pageParams(request, 'claude-opus-5-5', 'high')).toMatchObject({ system: [{ text: DEFAULT_PAGE_SKILL.text, cache_control: { type: 'ephemeral' } }] });
     const hallmark = pageParams(request, 'claude-opus-5-5', 'high', { name: 'hallmark', text: 'Be bold.' });
-    expect(hallmark).toMatchObject({ system: 'Be bold.' });
+    expect(hallmark).toMatchObject({ system: [{ text: 'Be bold.' }] });
     expect(text(hallmark)).toContain('Use the hallmark skill to create a one-page website');
     const none = pageParams(request, 'claude-opus-5-5', 'high', null);
     expect(none).not.toHaveProperty('system');

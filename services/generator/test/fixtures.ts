@@ -25,6 +25,8 @@ export interface FakeModelOptions {
   /** Template mode: the template pick_template picks (default: the first), and fill_page's words. */
   pick?: string;
   fill?: Record<string, unknown>;
+  /** check_hands: the photos (1, 2, …) whose hands are drawn wrong. */
+  badHands?: number[];
 }
 
 /** A scripted model. Every option can be changed between calls. */
@@ -80,6 +82,8 @@ export function fakeModel(options: FakeModelOptions = {}) {
           return { id: options.pick };
         case 'fill_page':
           return options.fill;
+        case 'check_hands':
+          return { handsVisible: true, handDrawnWrong: (options.badHands ?? []).includes(calls.filter((name) => name === 'check_hands').length) };
         default:
           throw new Error(`unexpected tool ${request.tool.name}`);
       }

@@ -35,7 +35,7 @@ export interface PageWriterStatus {
   ownerImages: boolean;
 }
 
-const STEPS: Record<string, string> = { prescreen: 'pre-screen', plan_site: 'preguntas', write_page: 'página', edit_page: 'página', pick_template: 'plantilla', fill_page: 'página', make_image: 'fotos' };
+const STEPS: Record<string, string> = { prescreen: 'pre-screen', plan_site: 'preguntas', write_page: 'página', edit_page: 'página', pick_template: 'plantilla', fill_page: 'página', make_image: 'fotos', check_hands: 'manos' };
 const usd = (n: number) => `$${n < 0.01 ? n.toFixed(3) : n.toFixed(2)}`;
 
 /** "Costo: $0.83" and one line per step (model prices only; Rekognition, the guardrail and Lambda are left out). */

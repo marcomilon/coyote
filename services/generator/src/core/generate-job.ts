@@ -9,6 +9,7 @@ import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './
 import type { Media } from './content';
 import { loadDraft, mediaPrefix, ownerText, saveDraft, type SiteDoc } from './drafts';
 import { voiceOf } from './i18n';
+import { handsChecker } from './hands';
 import { imageMaker, imageRatio, madeRatio, type GenerateImage } from './images';
 import type { Job, Stores } from './jobs';
 import { checkPage } from './page-check';
@@ -137,7 +138,7 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
   const { answers } = request;
   const made: string[] = [];
   const images = answers.aiImages === true && deps.pageImages !== false && deps.generateImage;
-  const makeImage = images ? imageMaker(mediaPrefix(slug), { ...deps, generateImage: images }, made) : undefined;
+  const makeImage = images ? imageMaker(mediaPrefix(slug), { ...deps, generateImage: images, checkHands: handsChecker(deps.callTool, deps.modelId, usage) }, made) : undefined;
   // A new design gets the frontend-design skill whatever page-skill says: it leaves the layout free, so the page can change.
   const skill = isRedesign(request) ? { skill: DEFAULT_PAGE_SKILL } : deps.pageSkill !== undefined && { skill: deps.pageSkill };
   const ask = (photos: PagePhoto[]) =>
@@ -245,7 +246,7 @@ async function fillCheckedPage(request: PageRequest, media: Media, current: Site
   const { answers } = request;
   const made: string[] = [];
   const images = answers.aiImages === true && deps.pageImages !== false && deps.generateImage;
-  const makeImage = images ? imageMaker(mediaPrefix(slug), { ...deps, generateImage: images }, made) : undefined;
+  const makeImage = images ? imageMaker(mediaPrefix(slug), { ...deps, generateImage: images, checkHands: handsChecker(deps.callTool, deps.modelId, usage) }, made) : undefined;
   let written;
   try {
     written = await writeTemplatePage(

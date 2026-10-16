@@ -10,7 +10,7 @@ export const MAX_IMAGES = 4;
 
 /**
  * The image model cannot spell, and a made-up shop sign or logo would be the business's name written wrong.
- * It also draws hands with extra or missing fingers.
+ * It also draws hands with extra or missing fingers, even with this list: scenes avoid hands, and hands.ts checks each photo.
  */
 export const IMAGE_NEGATIVE = 'text, letters, words, signage, logos, watermark, deformed hands, extra fingers, missing fingers, fused fingers';
 
@@ -33,6 +33,8 @@ export interface ImageDeps {
   readText?(key: string): Promise<string[]>;
   /** Output guardrail on the scene text. */
   outputAllowed(text: string): Promise<boolean>;
+  /** Resolves to true when a hand in the photo is drawn wrong (hands.ts). Unset: not checked. */
+  checkHands?(bytes: Uint8Array): Promise<boolean>;
 }
 
 /**
@@ -90,6 +92,10 @@ export function imageMaker(prefix: string, deps: ImageDeps, made: string[] = [])
     if (deps.readText && (await deps.readText(key)).length > 0) {
       await deps.stores.deletePrefix(key);
       return { error: 'the photo had writing in it (the image model misspells everything): pick a scene with no signs, labels, menus, or storefronts', left };
+    }
+    if (deps.checkHands && (await deps.checkHands(bytes))) {
+      await deps.stores.deletePrefix(key);
+      return { error: 'the photo drew a hand wrong (the image model often gets fingers wrong): pick a scene where no hands show', left };
     }
     made.push(file);
     return { file, bytes, left };

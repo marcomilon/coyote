@@ -120,7 +120,7 @@ export type MakeImage = (input: { description: string; aspect: ImageAspect }) =>
 export const MAKE_IMAGE_TOOL = {
   name: 'make_image',
   description:
-    `Makes a photo for the page with an image model and saves it next to the page. Describe one scene in English: subject, setting, light, framing. The model cannot write, and a photo with any words in it is refused: pick scenes with no text, signs, logos, labels, menus, packaging, or storefronts. Prefer scenes of the business's products, work, tools and place over people; show people only when the scene really needs them. When it does, people are from the business's country in Latin America and look like ordinary people there: describe them naturally, without exaggerated or stereotyped features or costumes. At most ${MAX_IMAGES} photos per page. Returns the file to use in the page, as a relative URL.`,
+    `Makes a photo for the page with an image model and saves it next to the page. Describe one scene in English: subject, setting, light, framing. The model cannot write, and a photo with any words in it is refused: pick scenes with no text, signs, logos, labels, menus, packaging, or storefronts. Prefer scenes of the business's products, work, tools and place over people; show people only when the scene really needs them. The model draws hands badly, and a photo with a hand drawn wrong is refused: pick scenes where no hands show. When it does, people are from the business's country in Latin America and look like ordinary people there: describe them naturally, without exaggerated or stereotyped features or costumes. At most ${MAX_IMAGES} photos per page. Returns the file to use in the page, as a relative URL.`,
   input_schema: {
     type: 'object' as const,
     properties: {
@@ -264,12 +264,13 @@ export function pageParams(request: PageRequest, model: string, effort: PageEffo
       { type: 'text', text: p.caption ? `${p.file}, the owner says: "${p.caption}"` : p.file },
       { type: 'image', source: { type: 'base64', media_type: p.mediaType, data: Buffer.from(p.bytes).toString('base64') } },
     ]),
-    { type: 'text', text: pagePrompt(request, skill?.name ?? null, images) },
+    { type: 'text', text: pagePrompt(request, skill?.name ?? null, images), cache_control: { type: 'ephemeral' } },
   ];
+  // Cached: a make_image round sends all of this again, and reads it at a tenth of the price.
   return {
     model,
     max_tokens: 64000,
-    ...(skill && { system: skill.text }),
+    ...(skill && { system: [{ type: 'text', text: skill.text, cache_control: { type: 'ephemeral' } }] }),
     messages: [{ role: 'user', content }],
     ...(images && { tools: [MAKE_IMAGE_TOOL] }),
     ...(takesEffort(model) && { output_config: { effort } }),
@@ -297,7 +298,9 @@ async function runImageTools(content: Anthropic.ContentBlock[], makeImage: MakeI
         call.name !== MAKE_IMAGE_TOOL.name || typeof input.description !== 'string'
           ? { error: 'unknown tool or no description' }
           : await makeImage({ description: input.description, aspect }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }));
-      console.info('make_image', { scene: input.description, aspect, ...('error' in made ? { error: made.error } : { file: made.file }) });
+      if (typeof input.description === 'string') console.info('make_image', { scene: input.description, aspect, ...('error' in made ? { error: made.error } : { file: made.file }) });
+      // What Opus sent instead of a scene (it once spent 2 minutes of output on calls like this).
+      else console.warn('make_image without a scene', { tool: call.name, fields: Object.keys(call.input ?? {}), size: JSON.stringify(call.input ?? {}).length });
       if (made.left === 0) done = true;
       if ('error' in made) return { type: 'tool_result', tool_use_id: call.id, is_error: true, content: `No photo: ${made.error}. Leave this image out of the page.${photosLeft(made.left)}` };
       return {
@@ -313,6 +316,18 @@ async function runImageTools(content: Anthropic.ContentBlock[], makeImage: MakeI
   return { results, done };
 }
 
+/**
+ * The messages with a cache breakpoint on the newest turn's last block, so the next round reads everything before it
+ * from the cache. The first request's breakpoint stays (pageParams); the skill has its own: three of the four allowed.
+ */
+function withCacheBreakpoint(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  if (messages.length < 2) return messages;
+  const newest = messages.at(-1)!;
+  if (typeof newest.content === 'string' || newest.content.length === 0) return messages;
+  const content = newest.content.map((block, i, all) => (i === all.length - 1 ? { ...block, cache_control: { type: 'ephemeral' as const } } : block));
+  return [...messages.slice(0, -1), { ...newest, content } as Anthropic.MessageParam];
+}
+
 /** Anthropic's API, streaming (a page is 10–30k tokens), thinking on at the given effort; with make_image, a tool loop. `api`: tests. */
 export function anthropicWritePage(env: Record<string, string | undefined> = process.env, api?: Pick<Anthropic, 'messages'>): WritePage {
   let client = api;
@@ -323,15 +338,35 @@ export function anthropicWritePage(env: Record<string, string | undefined> = pro
     const messages = [...params.messages];
     let inputTokens = 0;
     let outputTokens = 0;
+    let cacheReadTokens = 0;
+    let cacheWriteTokens = 0;
     const texts: string[] = []; // every round's text: parsePage takes the last HTML block
+    const usage = () => ({
+      step: request.current !== undefined ? 'edit_page' : 'write_page',
+      modelId: model,
+      inputTokens,
+      outputTokens,
+      ...(cacheReadTokens > 0 && { cacheReadTokens }),
+      ...(cacheWriteTokens > 0 && { cacheWriteTokens }),
+    });
     for (let round = 0; ; round++) {
       const last = round === MAX_TOOL_ROUNDS;
       const message = await client.messages
-        .stream({ ...params, messages, ...(last && { tool_choice: { type: 'none' } }) } as Anthropic.MessageStreamParams, { signal })
+        .stream({ ...params, messages: withCacheBreakpoint(messages), ...(last && { tool_choice: { type: 'none' } }) } as Anthropic.MessageStreamParams, { signal })
         .finalMessage();
       inputTokens += message.usage.input_tokens;
       outputTokens += message.usage.output_tokens;
-      texts.push(...message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])));
+      cacheReadTokens += message.usage.cache_read_input_tokens ?? 0;
+      cacheWriteTokens += message.usage.cache_creation_input_tokens ?? 0;
+      const said = message.content.flatMap((block) => (block.type === 'text' ? [block.text] : []));
+      // A page written into a tool call's input, instead of the reply, still counts as the page.
+      const inTools = message.content.flatMap((block) => (block.type === 'tool_use' ? Object.values((block.input ?? {}) as Record<string, unknown>).filter((v): v is string => typeof v === 'string' && parsePage(v) !== undefined) : []));
+      texts.push(...said, ...inTools);
+      // A round that already holds the page ends the job: another round would write it again.
+      if (message.stop_reason === 'tool_use' && [...said, ...inTools].some((text) => parsePage(text) !== undefined)) {
+        console.warn('page written with a tool call; not running another round', { round });
+        return { text: texts.join('\n'), stopReason: 'end_turn', usage: usage() };
+      }
       if (message.stop_reason === 'tool_use' && makeImage && !last) {
         const { results, done } = await runImageTools(message.content, makeImage);
         // The tool stays on when the photos are used up: with tool_choice none there, Opus thought briefly and
@@ -341,7 +376,7 @@ export function anthropicWritePage(env: Record<string, string | undefined> = pro
         messages.push({ role: 'assistant', content: message.content }, { role: 'user', content: [...results, ...next] });
         continue;
       }
-      return { text: texts.join('\n'), stopReason: message.stop_reason, usage: { step: request.current !== undefined ? 'edit_page' : 'write_page', modelId: model, inputTokens, outputTokens } };
+      return { text: texts.join('\n'), stopReason: message.stop_reason, usage: usage() };
     }
   };
 }

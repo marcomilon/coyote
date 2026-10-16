@@ -189,7 +189,8 @@ describe('template mode in the generate job', () => {
     expect(message).toContain(`  plantilla (${haiku}): $0.02`); // 5k × $1.1 + 2k × $5.5 per million = $0.0165
     expect(message).toContain(`  página (${haiku}): $0.02`);
     expect(message).toContain('  fotos (2 × stability.stable-image-core-v1:1): $0.08'); // the hero and the side photo
-    expect(message).toMatch(/^Costo: \$0\.13 \+ desconocido$/m); // questions, pick and fill on Haiku, 2 photos; the fake pre-screen has no price
+    expect(message).toContain(`  manos (${haiku}): $0.03`); // each made photo's hands checked on Haiku
+    expect(message).toMatch(/^Costo: \$0\.16 \+ desconocido$/m); // questions, pick, fill and 2 hand checks on Haiku, 2 photos; the fake pre-screen has no price
     expect(message).toContain(`Plantilla: bold, llenada por ${haiku} (gratis) · fotos IA on (dueño: on)`);
     expect(message).not.toContain('opus');
   });

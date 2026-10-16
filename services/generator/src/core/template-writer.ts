@@ -100,7 +100,7 @@ function fillPrompt(request: TemplateRequest, manifest: Manifest, templateId: st
       ? ''
       : `Photo slots: ${manifest.images.map((i) => `${i.name} (${i.aspect})`).join(', ')}. ${
           photos.length > 0 ? `The owner's photos: ${photos.join(', ')}. Put the owner's photos where they fit best (each one once). ` : 'The owner has no photos. '
-        }${request.makeImage ? 'For a slot no owner photo fits, describe a photo to make (scene, in English): the business\'s products, work, tools or place; people only when the scene needs them, ordinary people of the business\'s country.' : 'Leave photo and scene empty for a slot no owner photo fits: the template draws it.'}\n`;
+        }${request.makeImage ? 'For a slot no owner photo fits, describe a photo to make (scene, in English): the business\'s products, work, tools or place; people only when the scene needs them, ordinary people of the business\'s country; no hands in view (the image model draws them badly).' : 'Leave photo and scene empty for a slot no owner photo fits: the template draws it.'}\n`;
   const current = request.current?.id === templateId ? `\nThe page's current words (keep them, except what the owner's request changes):\n${JSON.stringify(request.current.fill)}\n` : request.current ? `\nThe page's current words, to reuse where they fit:\n${JSON.stringify(request.current.fill)}\n` : '';
   const keep = request.keep?.length ? `\nThe owner wrote these texts themselves; use them word for word where they fit, unless the owner's request asks otherwise:\n${request.keep.map((text) => `- ${text}`).join('\n')}\n` : '';
   return `Language of the site: ${siteLanguage(answers)}.

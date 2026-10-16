@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GuardrailBlocked, type CallTool } from '../src/core/bedrock';
 import { CHAT_MESSAGES_PER_DAY, chatView, postChat, runChatTurn } from '../src/core/chat';
 import { runGenerateJob } from '../src/core/generate-job';
-import { authenticate, deleteSite, editSite, POLL_CAP, undo } from '../src/core/owner';
+import { authenticate, deleteSite, editSite, POLL_CAP, READ_CAP, undo } from '../src/core/owner';
 import { submit } from '../src/core/submit';
 import { body, harness, NOW, urls } from './harness';
 
@@ -196,10 +196,13 @@ describe('chat', () => {
     expect(later.messages[0]!.status).toBe('failed');
   });
 
-  it('polling has its own cap, and deleting the site deletes the chat', async () => {
+  it('polling and reading have caps of their own, and deleting the site deletes the chat', async () => {
     const t = await withDraft();
+    const today = new Date(NOW).toISOString().slice(0, 10);
     await authenticate(`Bearer ${t.token}`, t.ownerDeps, POLL_CAP);
-    expect([...t.counters.keys()]).toContain(`poll#panaderia-luna#${new Date(NOW).toISOString().slice(0, 10)}`);
+    await authenticate(`Bearer ${t.token}`, t.ownerDeps, READ_CAP);
+    expect([...t.counters.keys()]).toEqual(expect.arrayContaining([`poll#panaderia-luna#${today}`, `read#panaderia-luna#${today}`]));
+    expect(t.counters.get(`owner#panaderia-luna#${today}`) ?? 0).toBe(0);
     await t.send('hola');
     expect(t.chat).toHaveLength(2);
     await deleteSite(t.site(), t.ownerDeps);

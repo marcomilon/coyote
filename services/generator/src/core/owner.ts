@@ -42,6 +42,8 @@ export const inTwoDays = (now: number) => Math.floor(now / 1000) + 2 * 86400;
 
 /** The chat and the result page poll GET /me/chat every few seconds: a cap of its own, far above the owner's. */
 export const POLL_CAP = { name: 'poll', max: 3000 };
+/** GET /me (Mi sitio, /ver, the reload after a change) only reads: a cap of its own, so looking never uses up changes. */
+export const READ_CAP = { name: 'read', max: 1000 };
 
 /**
  * `Authorization: Bearer <slug>.<secret>` → the site, or undefined. The secret is the site's magic link, or a

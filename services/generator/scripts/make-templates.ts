@@ -214,9 +214,6 @@ async function fill(id: string, b: Business): Promise<Filled> {
       ownerText: ownerText({ answers: b.answers, notes: b.notes, media }),
       businessName: b.answers.businessName,
       lang: b.answers.lang,
-      homeUrl: 'https://app.example/',
-      reportUrl: 'https://app.example/reportar',
-      privacyUrl: 'https://app.example/privacidad',
     });
     writeFileSync(resolve(dir, 'index.html'), checked.html);
     writeFileSync(resolve(dir, 'fill.json'), `${JSON.stringify(written.template.fill, null, 2)}\n`);

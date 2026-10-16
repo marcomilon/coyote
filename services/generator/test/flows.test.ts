@@ -123,7 +123,7 @@ describe('runGenerateJob: a detailed request goes straight to the draft', () => 
 
     const page = t.objects.get('_draft/draft1/index.html')!;
     expect(page).toContain('href="https://wa.me/573001234567"');
-    expect(page).toContain('Página web creada con ventas314.com');
+    expect(page).not.toContain('<footer'); // white label: no footer of ours
     const doc = JSON.parse(t.objects.get('_src/panaderia-luna/draft1.json')!);
     expect(doc).toMatchObject({ answers: { contact: { whatsapp: '573001234567' } }, media: { photos: [] } });
     expect(doc.page).toContain('<h1>Panadería Luna</h1>');

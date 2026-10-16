@@ -282,7 +282,7 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
       if (changed.missing.length > 0) result = { ...result, reply: `${result.reply} ${say.notOnPage}` };
     }
 
-    const options = { contact: next.answers.contact, ownerText: ownerText(next), businessName: next.answers.businessName, lang, ...deps.urls.pageLinks(slug, lang) };
+    const options = { contact: next.answers.contact, ownerText: ownerText(next), businessName: next.answers.businessName, lang };
     const checked = checkPage(next.page, options);
     if (checked.violations.length > 0) {
       console.warn('chat: page check failed', { slug, violations: checked.violations });

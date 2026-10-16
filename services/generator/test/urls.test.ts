@@ -17,7 +17,6 @@ describe('domainless mode', () => {
 
   it('builds app links without a double slash', () => {
     expect(urls.appUrl).toBe('https://dapp.cloudfront.test');
-    expect(urls.reportUrl('luna')).toBe('https://dapp.cloudfront.test/reportar?sitio=luna');
     expect(urls.miSitioUrl('a/b')).toBe('https://dapp.cloudfront.test/mi-pagina-web#token=a%2Fb');
   });
 });
@@ -42,14 +41,6 @@ describe('urlConfigFromEnv', () => {
   });
   it('throws when nothing is configured', () => {
     expect(() => urlConfigFromEnv({})).toThrow();
-  });
-});
-
-describe('pageLinks', () => {
-  it('points generated pages at the report and privacy pages in their language', () => {
-    const urls = createUrls({ mode: 'domain', domainName: 'brand.test' });
-    expect(urls.pageLinks('luna', 'es')).toEqual({ homeUrl: 'https://www.brand.test/', reportUrl: 'https://www.brand.test/reportar?sitio=luna', privacyUrl: 'https://www.brand.test/privacidad' });
-    expect(urls.pageLinks('lua', 'pt')).toEqual({ homeUrl: 'https://www.brand.test/pt/', reportUrl: 'https://www.brand.test/pt/denunciar?sitio=lua', privacyUrl: 'https://www.brand.test/pt/privacidade' });
   });
 });
 

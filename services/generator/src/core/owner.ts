@@ -260,7 +260,7 @@ export async function applyContact(
   const page = replaceContact(current.page, current.answers.contact, checked.data);
   const doc = { ...current, answers: { ...current.answers, contact: checked.data }, page };
   // A detail removed from the page can still be in its text; that change needs an edit request.
-  if (checkPage(page, { contact: checked.data, ownerText: ownerText(doc), businessName: doc.answers.businessName, lang: doc.answers.lang, homeUrl: '', reportUrl: '', privacyUrl: '' }).violations.length > 0) return { status: 422 };
+  if (checkPage(page, { contact: checked.data, ownerText: ownerText(doc), businessName: doc.answers.businessName, lang: doc.answers.lang }).violations.length > 0) return { status: 422 };
   // Saved either way; the owner is told when the page still shows the old detail (it can be changed in the chat).
   return { doc, missing: contactMissing(page, current.answers.contact, checked.data) };
 }
@@ -284,7 +284,7 @@ export async function applyTexts(
   const ownerTexts = ownerTextsAfter(current.page, edited.page, current.answers.contact, current.ownerTexts);
   const doc: SiteDoc = { ...current, page: edited.page, ownerTexts, ...(typed && { requests: [...(current.requests ?? []), typed] }) };
   const { contact, businessName, lang } = doc.answers;
-  const options = { contact, businessName, lang, homeUrl: '', reportUrl: '', privacyUrl: '' };
+  const options = { contact, businessName, lang };
   const checked = checkPage(doc.page, { ...options, ownerText: ownerText(doc) });
   if (checked.violations.length > 0) return { status: 422 };
   const before = new Set(checkPage(current.page, { ...options, ownerText: ownerText(current) }).texts);

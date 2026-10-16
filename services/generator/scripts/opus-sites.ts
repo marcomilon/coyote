@@ -234,9 +234,6 @@ async function run({ b, s, look, images, goal, tone, n }: (typeof jobs)[number])
       ownerText: ownerText({ answers: b.answers, notes: b.notes, media: { captions: Object.fromEntries(b.photos.flatMap((p) => (p.caption ? [[p.file, p.caption]] : []))) } }),
       businessName: b.answers.businessName,
       lang: b.answers.lang,
-      homeUrl: 'https://app.example/',
-      reportUrl: 'https://app.example/reportar',
-      privacyUrl: 'https://app.example/privacidad',
     });
     const file = folder ? `pages/${b.id}/${slug}/index.html` : `pages/${b.id}/${slug}.html`;
     writeFileSync(resolve(outDir, file), checked.html);

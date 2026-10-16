@@ -77,7 +77,7 @@ coyote/
     src/core/prompt.ts    # plan_site prompts
     src/core/site-writer.ts     # plan_site (follow-up questions)
     src/core/page-writer.ts     # Opus writes the page (frontend-design skill + a chat-like request)
-    src/core/page-check.ts      # checks, repairs, and the footer on the finished page; contact swaps
+    src/core/page-check.ts      # checks and repairs on the finished page; contact swaps
     src/core/chat.ts      # the QR chat: messages, Haiku text edits on the page
     src/core/page-outline.ts    # the page with placeholders for the chat model, find/replace changes
     src/core/bedrock.ts   # Converse tool call, effort, caching, images
@@ -166,7 +166,7 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
    - Any failure → `REJECTED`, nothing uploaded.
 
 4. **After publication**
-   - Every page has a footer "Sitio creado con ventas314.com · Reportar · Privacidad" (the first part links to our home page), added by the page checks, not by the page writer. Sites have no forms, so "Reportar" links to the app page `/reportar?sitio={slug}`, which calls `POST /report/{slug}`. Reports go to an SNS topic (email to the admin). Auto-unpublish only after N reports from distinct IP hashes (otherwise anonymous reports can be used against competitors). Quarantine moves the S3 prefix to `_quarantine/`, is reversible, and shows on the owner's "Mi sitio" page.
+   - Pages are white label: we add no footer, link or name of ours to them. Reports come through the app page `/reportar?sitio={slug}`, which calls `POST /report/{slug}`. Reports go to an SNS topic (email to the admin). Auto-unpublish only after N reports from distinct IP hashes (otherwise anonymous reports can be used against competitors). Quarantine moves the S3 prefix to `_quarantine/`, is reversible, and shows on the owner's "Mi sitio" page.
    - `jobs` stores the 3 answers, IP hash, guardrail outcome, and classifier decision for 90 days.
    - `./coyote.sh unpublish <slug>`: removes the pages and adds the slug to `blocklist` so it cannot be claimed again. `./coyote.sh restore <slug>` undoes a quarantine.
    - CloudWatch metric + alarm on `REJECTED` rate (a spike means probing).
@@ -177,7 +177,7 @@ Blocks adult, phishing, scams, hate, and illegal content. Four independent layer
 - Money: AWS Budget alert plus AWS Cost Anomaly Detection (free) on the account.
 - One CloudWatch dashboard with the metrics above.
 - `./coyote.sh abuse-report`: reads `jobs` for the last 24 h and prints the top IP hashes by requests, their decisions and categories, and the newest drafts. This is the tool for "who is doing this", since metrics only say "something is happening".
-- Visitor reports (footer link) arrive by email through `abuse-reports`.
+- Reports (the app page `/reportar`) arrive by email through `abuse-reports`.
 - The admin gets a notice (`notices.ts`, SNS topic `SiteNotices`) for every new site (business, slug, owner's email, draft link, cost by step from the list prices in `models.ts` (model calls and photos; Rekognition, guardrail, Lambda left out), the page writer's settings for that job (model, effort, skill, look, photos, the owner's photo choice; the values the job already read, no extra calls), models and tokens, description), every owner's change the page writer makes ("Rediseño" for a request from Mi sitio or the chat, "Cambio de fotos" for photos added, taken out or described: the request, the photo change, the new draft, the same cost and settings lines), and every rejected request or change (who rejected it and why: brand, pre-screen, guardrail, images, page checks; with the cost of the model calls it made, so a page written and then refused shows it), and every job that failed on our side ("Sitio falló" / "Cambio falló": the error and the cost recorded before it; a call that fails partway reports no tokens, and a timeout, caught by the `job-failed` Lambda, loses the run's calls, which the notice says). Chat text edits (Haiku, a fraction of a cent) send none. `./coyote.sh subscribe-alerts <email>` subscribes to it with the other topics.
 
 Policy text (es/pt) lives in the terms page, linked from the form. The submit button states acceptance.
@@ -249,7 +249,7 @@ The owner looks at the draft on a computer and asks for changes from their phone
 - The landing's "Negocios como el tuyo" cards show the example sites (Taller Ruiz, Panadería Rosa, Salón Luna; inputs in `examples/{mx-taller,co-panaderia,ar-salon}.json`), made by Opus with photos through `opus:sites --images on`. They are the only public pages before the publishing plan.
 - Residencial Oliva (`examples/peru-inmobiliaria.json`) is a fourth example, written from the owner's own logo and photos (`photos` in the example file, sent as production sends them). It is on the landing like the others: a fourth hero phone tab ("Inmobiliaria") and a fourth "Negocios como el tuyo" card (2 × 2, then one row).
 - Their slugs are `EXAMPLE_SITES` (`core/examples.ts`), reserved for owners. The pages live in `examples/sites/<slug>/`, deploy to the sites bucket's `_examples/<slug>/`, and serve at `urls.exampleUrl(slug)` = `{slug}.<domain>` (the sites rewrite allows top-level loads for those slugs only). The app gets their URLs from `config.js` (`examples`). Their footer links name the app's domain, so after a domain switch run `example-page` again for each one before deploying.
-- To replace one: run `opus:sites`, then `./coyote.sh example-page <run>/pages/<biz>/<page-dir> <slug>` (copies the page and its photos, swaps the footer's placeholder links for real ones), take a new 1200×900 screenshot into `web/public/ejemplos/<slug>.jpg`, and deploy.
+- To replace one: run `opus:sites`, then `./coyote.sh example-page <run>/pages/<biz>/<page-dir> <slug>` (copies the page and its photos), take a new 1200×900 screenshot into `web/public/ejemplos/<slug>.jpg`, and deploy.
 
 ## Spanish with vos
 - Visitors from Argentina, Uruguay and Paraguay (`VOSEO_COUNTRIES`, `core/i18n.ts`) read the app with vos instead of tú. `strings.ts` holds `esVos`, only the strings that differ; `t(lang, vos)` lays it over `es`.
@@ -259,7 +259,6 @@ The owner looks at the draft on a computer and asks for changes from their phone
 
 ## Privacy and legal
 - Privacy and terms pages (es/pt, written in Markdown): what we store (answers, owner WhatsApp number, IP hashes for rate limiting; later owner email and visitor messages for 30 d), why, retention, how to delete (magic-link page or email). Covers the basics of LGPD (BR), LFPDPPP (MX), Ley 1581 (CO), Ley 25.326 (AR).
-- Generated sites link to the platform privacy page in the footer.
 - IPs stored only as salted hashes. No cookies or analytics on generated sites.
 - The privacy page names Anthropic (answers and photos, never the phone number) and the public CDNs the sites load fonts and libraries from.
 
@@ -373,7 +372,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Preview iframe, "Publicar", "Genera otra versión" (`POST /jobs/{id}/regenerate`), cap of 2 regenerations per site. A regeneration varies the variety seed, so it offers other themes. Generation results live on the job; the site record and the live page change only on publish
 - [x] Magic link: token `<slug>.<secret>`, only the sha256 of the secret stored, 1-year expiry, returned once when the draft is ready; the create page opens Mi sitio with it
 - [x] "Mi sitio" page (`/mi-pagina-web`, `/pt/meu-site`) + one `owner` Lambda for `GET /me`, `POST /me/content|regenerate|unpublish|republish`, `DELETE /me`. An edit goes patch → policy → `ApplyGuardrail` → re-render, with no model call. 60 owner requests per site per day. "Delete my data" removes the pages and the site record and redacts the text of every job of that site. Publish, edit, unpublish, republish, and delete invalidate the CDN cache, so they show at once. Verified end to end on the deployed stack
-- [x] Privacy and terms pages (es/pt, Markdown), linked from the footer
+- [x] Privacy and terms pages (es/pt, Markdown)
 - [x] `reportar` page (es/pt). Generated pages link to the report and privacy pages in their own language (`urls.pageLinks`)
 - [ ] 👤 Before public launch: legal review of the privacy and terms texts, and a contact address in them
 
@@ -564,7 +563,7 @@ A site is published only on its own domain, chosen in Mi sitio → "Dominio". No
 - Safety:
   - Run the fixture set end to end. Every bad case ends `REJECTED` with nothing in S3; every good and borderline-legit case publishes.
   - A fake bank page ("Banco Azteca, verifica tu cuenta") → 422 from pre-screen.
-  - A published page has no `<form>` (MVP), only allowlisted links, and the report footer.
+  - A published page has no `<form>` (MVP), and only allowlisted links.
   - `POST /report/{slug}` N times from one IP does nothing; from N distinct IPs → prefix moved to `_quarantine/` and email received.
   - A Converse call without `guardrailConfig` is denied by IAM (`AccessDeniedException`).
 - Contact form (post-MVP): submit from a published site → 303 back to `#enviado`, owner notified (WhatsApp, or email with Reply-To set). Honeypot-filled and <3 s submissions produce no notification. The 6th submission in an hour from one IP is dropped. `curl` with a foreign `Origin` is rejected.

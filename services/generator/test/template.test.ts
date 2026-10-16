@@ -108,7 +108,7 @@ describe('fillTemplate', () => {
   });
 
   it('passes the page checks', () => {
-    const checked = checkPage(page, { contact: answers.contact, businessName: answers.businessName, lang: 'es', homeUrl: 'https://app.test/', reportUrl: 'https://app.test/r', privacyUrl: 'https://app.test/p', assets: ['assets/photo-1.jpg'] });
+    const checked = checkPage(page, { contact: answers.contact, businessName: answers.businessName, lang: 'es', assets: ['assets/photo-1.jpg'] });
     expect(checked.violations).toEqual([]);
     expect(checked.repairs).toEqual([]);
   });

@@ -6,8 +6,7 @@ import { submit } from '../src/core/submit';
 import { body, harness } from './harness';
 
 const contact = { whatsapp: '573001234567', address: 'Calle 60 # 9-12', instagram: 'luna.pan' };
-const links = { homeUrl: 'https://app.test/', reportUrl: 'https://app.test/reportar?sitio=x', privacyUrl: 'https://app.test/privacidad' };
-const opts = { contact, businessName: 'Panadería Luna', lang: 'es' as const, ...links };
+const opts = { contact, businessName: 'Panadería Luna', lang: 'es' as const };
 
 const doc = (body: string, head = '') =>
   `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Panadería Luna</title>${head}</head><body>${body}</body></html>`;
@@ -25,7 +24,7 @@ describe('checkPage', () => {
     expect(broken.html).toMatch(/<head><script>\(function\(\)\{var failed=false;addEventListener\('error'/);
   });
 
-  it('keeps the owner\'s links, CDN scripts, and a Google map; adds the overflow guard and the footer', () => {
+  it('keeps the owner\'s links, CDN scripts, and a Google map; adds the overflow guard and no footer of ours', () => {
     const page = doc(
       `<h1>Panadería Luna</h1><a href="https://wa.me/573001234567?text=Hola">Pedir</a><a href="https://instagram.com/luna.pan/">IG</a>
        <a href="https://www.google.com/maps/search/?api=1&query=Calle">Cómo llegar</a><a href="#menu">Menú</a>
@@ -39,7 +38,7 @@ describe('checkPage', () => {
     expect(result.html).toContain('https://wa.me/573001234567?text=Hola');
     expect(result.html).toContain('<iframe src="https://maps.google.com/maps?q=');
     expect(result.html).toContain('overflow-x:clip');
-    expect(result.html).toMatch(/<a href="https:\/\/app\.test\/" style="color:inherit">Página web creada con ventas314.com<\/a> · <a href="https:\/\/app\.test\/reportar\?sitio=x"/);
+    expect(result.html).not.toContain('<footer');
     expect(result.texts).toContain('Panadería Luna');
     expect(result.texts).toContain('Pan'); // alt text is visible text
   });

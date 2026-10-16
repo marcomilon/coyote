@@ -87,7 +87,7 @@ export async function refreshPreview(slug: string, draftId: string, deps: Pick<D
 export function renderDraft(doc: SiteDoc, slug: string, urls: Urls): string {
   const { contact, businessName, lang } = doc.answers;
   const assets = [doc.media.logo, ...doc.media.photos, ...(doc.media.generated ?? [])].filter((file): file is string => !!file);
-  const checked = checkPage(doc.page, { contact, ownerText: ownerText(doc), businessName, lang, ...urls.pageLinks(slug, lang), assets });
+  const checked = checkPage(doc.page, { contact, ownerText: ownerText(doc), businessName, lang, assets });
   if (checked.violations.length > 0) throw new Error(`written page breaks the page checks: ${JSON.stringify(checked.violations)}`);
   return checked.html;
 }

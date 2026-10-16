@@ -201,7 +201,7 @@ async function checkWrittenPage(written: string, made: string[], request: Pick<P
   const { answers } = request;
   // The logo spot, tagged for later logo changes with no page writer (logo.ts).
   const page = tagLogo(written, answers.businessName);
-  const checked = checkPage(page, { contact: answers.contact, ownerText: ownerText({ answers, notes: request.notes, requests, media: { captions: Object.fromEntries(request.photos.flatMap((p) => (p.caption ? [[p.file, p.caption]] : []))) } }), businessName: answers.businessName, lang: answers.lang, ...deps.urls.pageLinks(slug, answers.lang) });
+  const checked = checkPage(page, { contact: answers.contact, ownerText: ownerText({ answers, notes: request.notes, requests, media: { captions: Object.fromEntries(request.photos.flatMap((p) => (p.caption ? [[p.file, p.caption]] : []))) } }), businessName: answers.businessName, lang: answers.lang });
   if (checked.violations.length > 0) return { problem: 'policy', detail: JSON.stringify(checked.violations).slice(0, 300), violations: checked.violations };
   if (!(await deps.outputAllowed(checked.texts.join('\n')))) return { problem: 'guardrail', detail: 'page text' };
   if (checked.repairs.length > 0) console.info('page repaired', { slug, repairs: checked.repairs });

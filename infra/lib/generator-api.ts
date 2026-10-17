@@ -351,7 +351,6 @@ export class GeneratorApi extends Construct {
         actions: [
           'cloudfront:CreateDistributionTenant',
           'cloudfront:GetDistributionTenant',
-          'cloudfront:GetDistributionTenantByDomain',
           'cloudfront:UpdateDistributionTenant',
           'cloudfront:DeleteDistributionTenant',
           'cloudfront:GetManagedCertificateDetails',

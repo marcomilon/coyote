@@ -31,7 +31,7 @@ function fakeDns() {
 
 function fakeTenants() {
   const all = new Map<string, Tenant>();
-  const cert = { status: 'pending-validation' as string | undefined, requests: 0 };
+  const cert = { status: 'pending-validation' as string | undefined, requests: 0, arn: 'arn:cert/1' };
   const tenants: Tenants = {
     async create({ name, domains }) {
       if ([...all.values()].some((t) => t.domains.some((d) => domains.includes(d.domain)))) throw new TenantTaken('CNAMEAlreadyExists');
@@ -40,9 +40,14 @@ function fakeTenants() {
       cert.requests++;
       return id;
     },
-    get: async (id) => structuredClone(all.get(id)),
-    findByDomain: async (domain) => structuredClone([...all.values()].find((t) => t.domains.some((d) => d.domain === domain))),
-    certificate: async () => cert.status,
+    get: async (id) => structuredClone(all.get(id) ?? [...all.values()].find((t) => t.name === id)),
+    certificate: async () => ({ status: cert.status, arn: cert.arn }),
+    async useCertificate(id, arn) {
+      const t = all.get(id)!;
+      t.certificateArn = arn;
+      // CloudFront turns the domains on once an issued certificate is attached.
+      if (cert.status === 'issued') for (const d of t.domains) d.status = 'active';
+    },
     async requestCertificate() {
       cert.requests++;
       cert.status = 'pending-validation';
@@ -53,7 +58,6 @@ function fakeTenants() {
   };
   const issue = () => {
     cert.status = 'issued';
-    for (const t of all.values()) for (const d of t.domains) d.status = 'active';
   };
   return { tenants, all, cert, issue };
 }
@@ -97,6 +101,8 @@ describe('hosting setup', () => {
     expect(hostingView(t.record())).toBe('setting_up');
 
     t.issue();
+    await expect(runHostingSetup('luna', t.deps)).rejects.toBeInstanceOf(RetryLater); // attaches the certificate
+    expect(t.all.get('dt_1')!.certificateArn).toBe('arn:cert/1');
     expect(await runHostingSetup('luna', t.deps)).toBe('live');
     expect(t.record().hosting).toMatchObject({ step: 'live', liveAt: NOW });
     expect(hostingView(t.record())).toBe('live');
@@ -167,6 +173,7 @@ describe('a published site', () => {
     const t = setup();
     await expect(runHostingSetup('luna', t.deps)).rejects.toBeInstanceOf(RetryLater);
     t.issue();
+    await expect(runHostingSetup('luna', t.deps)).rejects.toBeInstanceOf(RetryLater);
     expect(await runHostingSetup('luna', t.deps)).toBe('live');
     const deps: PaymentDeps = { stores: t.stores, payments: {} as PaymentDeps['payments'], designsPriceId: 'pri_d', hostingPriceId: 'pri_h', now: () => NOW };
     const event = (status: string, at: string) => ({

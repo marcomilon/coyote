@@ -243,7 +243,10 @@ switch (command) {
     const cert = h?.tenantId ? await tenants.certificate(h.tenantId) : undefined;
     console.log(`  ${record.domain} · ${record.status} · site ${site.status} · plan ${site.billing?.status ?? 'none'}`);
     console.log(`  hosting ${h ? `${h.step}${h.failed ? ` (failed: ${h.failed})` : ''} since ${new Date(h.at).toISOString()}` : '-'}`);
-    if (tenant) console.log(`  tenant ${tenant.id} · certificate ${cert ?? '-'} · ${tenant.domains.map((d) => `${d.domain} ${d.status}`).join(', ')}`);
+    if (tenant) {
+      const attached = cert?.arn && tenant.certificateArn === cert.arn ? 'attached' : 'not attached';
+      console.log(`  tenant ${tenant.id} · certificate ${cert?.status ?? '-'} (${attached}) · ${tenant.domains.map((d) => `${d.domain} ${d.status}`).join(', ')}`);
+    }
     console.log(`  DNS → ${outputs.LiveRoutingEndpoint ?? '?'} (ALIAS @, CNAME www, TXT _cf-challenge)`);
     if (rest[0] !== 'resend') break;
     if (h?.failed) await stores.saveDomain({ domain: record.domain, hosting: { ...h, failed: undefined, at: Date.now() } });

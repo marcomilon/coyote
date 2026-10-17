@@ -6,7 +6,6 @@ import {
   CreateDistributionTenantCommand,
   DeleteDistributionTenantCommand,
   EntityAlreadyExists,
-  GetDistributionTenantByDomainCommand,
   GetDistributionTenantCommand,
   GetManagedCertificateDetailsCommand,
   ResourceNotDisabled,
@@ -24,7 +23,9 @@ const env = (name: string) => {
 };
 
 const view = (t: DistributionTenant | undefined): Tenant | undefined =>
-  t?.Id ? { id: t.Id, name: t.Name ?? '', domains: (t.Domains ?? []).map((d) => ({ domain: d.Domain ?? '', status: d.Status })) } : undefined;
+  t?.Id
+    ? { id: t.Id, name: t.Name ?? '', domains: (t.Domains ?? []).map((d) => ({ domain: d.Domain ?? '', status: d.Status })), certificateArn: t.Customizations?.Certificate?.Arn }
+    : undefined;
 
 const notFound = (error: unknown) => (error as { name?: string }).name === 'EntityNotFound';
 
@@ -65,18 +66,10 @@ export const tenants: Tenants = {
     return view((await getWithTag(id))?.DistributionTenant);
   },
 
-  async findByDomain(domain) {
-    try {
-      return view((await cloudfront.send(new GetDistributionTenantByDomainCommand({ Domain: domain }))).DistributionTenant);
-    } catch (error) {
-      if (notFound(error)) return undefined;
-      throw error;
-    }
-  },
-
   async certificate(id) {
     try {
-      return (await cloudfront.send(new GetManagedCertificateDetailsCommand({ Identifier: id }))).ManagedCertificateDetails?.CertificateStatus;
+      const details = (await cloudfront.send(new GetManagedCertificateDetailsCommand({ Identifier: id }))).ManagedCertificateDetails;
+      return details && { status: details.CertificateStatus, arn: details.CertificateArn };
     } catch (error) {
       if (notFound(error)) return undefined; // not requested yet, or still being set up
       throw error;
@@ -92,6 +85,20 @@ export const tenants: Tenants = {
         IfMatch: current.ETag,
         Domains: current.DistributionTenant.Domains?.map((d) => ({ Domain: d.Domain })),
         ManagedCertificateRequest: { ValidationTokenHost: 'cloudfront', PrimaryDomainName: domain, CertificateTransparencyLoggingPreference: 'enabled' },
+      }),
+    );
+  },
+
+  async useCertificate(id, arn) {
+    const current = await getWithTag(id);
+    if (!current?.DistributionTenant || !current.ETag) throw new Error(`tenant ${id} not found`);
+    const { Domains, Customizations } = current.DistributionTenant;
+    await cloudfront.send(
+      new UpdateDistributionTenantCommand({
+        Id: id,
+        IfMatch: current.ETag,
+        Domains: Domains?.map((d) => ({ Domain: d.Domain })),
+        Customizations: { ...Customizations, Certificate: { Arn: arn } },
       }),
     );
   },

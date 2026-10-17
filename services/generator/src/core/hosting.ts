@@ -3,7 +3,8 @@
 //   publish: the current draft → `_live/<slug>/` (drafts.ts; later edits follow it)
 //   dns:     at Porkbun, the apex ALIAS and `www` CNAME → the live connection group's routing endpoint
 //   tenant:  a CloudFront distribution tenant for the domain (origin path `/_live/{{slug}}`) with a managed certificate
-//   cert:    wait until CloudFront has validated it (over HTTP, through the records above) and the domains are active
+//   cert:    wait until CloudFront has validated it (over HTTP, through the records above), attach it to the tenant,
+//            then wait until the domains are active
 // A step that has to wait throws RetryLater. One that can't succeed is kept as `hosting.failed` (we get an alert).
 import { publishLive } from './drafts';
 import { RetryLater } from './retry';
@@ -30,16 +31,20 @@ export interface Tenant {
   id: string;
   name: string;
   domains: { domain: string; status?: string }[];
+  /** The certificate the tenant serves, if one is attached. */
+  certificateArn?: string;
 }
 
 /** CloudFront distribution tenants on the live distribution (aws/tenants.ts). */
 export interface Tenants {
   /** Throws TenantTaken when one of the domains is already on another tenant. */
   create(input: { name: string; domains: string[]; slug: string }): Promise<string>;
+  /** By id or by name. */
   get(id: string): Promise<Tenant | undefined>;
-  findByDomain(domain: string): Promise<Tenant | undefined>;
-  /** The managed certificate's status: pending-validation, issued, validation-timed-out, failed, revoked… */
-  certificate(id: string): Promise<string | undefined>;
+  /** The managed certificate: status pending-validation, issued, validation-timed-out, failed, revoked… */
+  certificate(id: string): Promise<{ status?: string; arn?: string } | undefined>;
+  /** Serves the issued managed certificate on the tenant: CloudFront doesn't attach it by itself. */
+  useCertificate(id: string, arn: string): Promise<void>;
   requestCertificate(id: string, domain: string): Promise<void>;
   /** Disables it, then deletes it once CloudFront allows (throws RetryLater meanwhile). */
   remove(id: string): Promise<void>;
@@ -104,16 +109,18 @@ export async function runHostingSetup(slug: string, deps: HostingDeps): Promise<
           tenantId = await deps.tenants.create({ name: tenantName(slug), domains: [record.domain, `www.${record.domain}`], slug });
         } catch (error) {
           if (!(error instanceof TenantTaken)) throw error;
-          // A redelivery after create succeeded, or someone else's tenant.
-          const existing = await deps.tenants.findByDomain(record.domain);
-          if (existing?.name !== tenantName(slug)) return fail('domain_in_use');
+          // A redelivery after create succeeded, or someone else's tenant. By name: a lookup by domain
+          // finds nothing while the domain is still inactive.
+          const existing = await deps.tenants.get(tenantName(slug));
+          if (!existing?.domains.some((d) => d.domain === record.domain)) return fail('domain_in_use');
           tenantId = existing.id;
         }
         await save({ step: 'cert', tenantId, certRequests: hosting.certRequests ?? 1 });
         break;
       }
       case 'cert': {
-        const status = await deps.tenants.certificate(hosting.tenantId!);
+        const cert = await deps.tenants.certificate(hosting.tenantId!);
+        const status = cert?.status;
         if (status && CERT_DEAD.has(status)) {
           if ((hosting.certRequests ?? 1) >= CERT_REQUESTS) return fail(`certificate_${status}`);
           await deps.tenants.requestCertificate(hosting.tenantId!, record.domain);
@@ -122,7 +129,12 @@ export async function runHostingSetup(slug: string, deps: HostingDeps): Promise<
         }
         if (status !== 'issued') throw new RetryLater(`hosting ${slug}: certificate ${status ?? 'unknown'}`);
         const tenant = await deps.tenants.get(hosting.tenantId!);
-        if (!tenant || tenant.domains.some((d) => d.status !== 'active')) throw new RetryLater(`hosting ${slug}: domains not active yet`);
+        if (!tenant) throw new RetryLater(`hosting ${slug}: tenant ${hosting.tenantId} not found`);
+        if (cert?.arn && tenant.certificateArn !== cert.arn) {
+          await deps.tenants.useCertificate(tenant.id, cert.arn);
+          throw new RetryLater(`hosting ${slug}: certificate attached, waiting for the domains`);
+        }
+        if (tenant.domains.some((d) => d.status !== 'active')) throw new RetryLater(`hosting ${slug}: domains not active yet`);
         const now = deps.now();
         await save({ step: 'live', liveAt: now });
         return 'live';
@@ -151,7 +163,7 @@ async function pointDns(record: DomainRecord, deps: HostingDeps) {
 
 /** Undoes the setup (domain-detach, for testing): the tenant, our DNS records. The live copy goes with takeDownLive. */
 export async function removeHosting(record: DomainRecord, deps: HostingDeps): Promise<void> {
-  const tenant = record.hosting?.tenantId ? await deps.tenants.get(record.hosting.tenantId) : await deps.tenants.findByDomain(record.domain);
+  const tenant = await deps.tenants.get(record.hosting?.tenantId ?? tenantName(record.slug));
   if (tenant) await deps.tenants.remove(tenant.id);
   const wanted = WANTED(deps.routingEndpoint);
   const full = (name: string) => (name ? `${name}.${record.domain}` : record.domain);

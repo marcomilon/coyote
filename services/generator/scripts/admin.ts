@@ -196,7 +196,7 @@ switch (command) {
       }
     }
     // What no site points to any more: old jobs, leftover files, counters, domain records.
-    for (const prefix of ['_draft/', '_src/', '_media/', '_uploads/']) await stores.deletePrefix(prefix);
+    for (const prefix of ['_draft/', '_src/', '_media/', '_uploads/', '_live/', '_quarantine/']) await stores.deletePrefix(prefix);
     const jobs = await emptyTable(config.jobsTable, 'jobId');
     const counters = await emptyTable(config.rateLimitTable, 'ip');
     const domains = await emptyTable(config.domainsTable, 'domain');

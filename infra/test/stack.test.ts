@@ -208,6 +208,7 @@ describe('CoyoteStack, domainless', () => {
     expect(config.Origins[0].OriginPath).toBe('/_live/{{slug}}');
     expect(config.Aliases).toBeUndefined();
     expect(config.IPV6Enabled).toBeUndefined();
+    expect(config.ViewerCertificate).toMatchObject({ SslSupportMethod: 'sni-only', MinimumProtocolVersion: 'TLSv1.2_2021' });
     template.hasResourceProperties('AWS::CloudFront::ConnectionGroup', { Enabled: true, Ipv6Enabled: true });
     const [, headers] = Object.entries(template.findResources('AWS::CloudFront::ResponseHeadersPolicy')).find(([id]) => id.startsWith('LiveHeaders'))!;
     const policy = JSON.stringify(headers);

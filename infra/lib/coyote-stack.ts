@@ -394,6 +394,9 @@ export class CoyoteStack extends Stack {
       ParameterDefinitions: [{ Name: 'slug', Definition: { StringSchema: { Required: true, Comment: 'The site: its pages are under _live/<slug>/' } } }],
     });
     liveCfn.addPropertyDeletionOverride('DistributionConfig.IPV6Enabled'); // set on the connection group instead
+    // Tenants are SNI-only, and left unset CloudFront fills in SSLv3 as the minimum, which it then refuses. Each
+    // tenant's managed certificate is served under this policy.
+    liveCfn.addPropertyOverride('DistributionConfig.ViewerCertificate', { CloudFrontDefaultCertificate: true, SslSupportMethod: 'sni-only', MinimumProtocolVersion: 'TLSv1.2_2021' });
 
     new s3deploy.BucketDeployment(this, 'SitesErrorPages', {
       sources: [s3deploy.Source.asset(asset('../assets/sites-errors'))],

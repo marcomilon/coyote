@@ -11,6 +11,20 @@ export interface UsageCount {
   free: number;
   /** Model prices only (usageCost); calls with no listed price add nothing. */
   microUsd: number;
+  /** The same, per model id. A page job is one call however many rounds it took; each made photo is one. */
+  models: Record<string, { calls: number; microUsd: number }>;
+}
+
+export const noUsage = (): UsageCount => ({ paid: 0, free: 0, microUsd: 0, models: {} });
+
+export function addCounts(a: UsageCount, b: UsageCount): UsageCount {
+  const models = structuredClone(a.models);
+  for (const [id, m] of Object.entries(b.models)) {
+    const now = (models[id] ??= { calls: 0, microUsd: 0 });
+    now.calls += m.calls;
+    now.microUsd += m.microUsd;
+  }
+  return { paid: a.paid + b.paid, free: a.free + b.free, microUsd: a.microUsd + b.microUsd, models };
 }
 
 /** Kept like the free draft: years. A month's count is kept a little over a year. */
@@ -22,10 +36,10 @@ const allKey = (id: string) => `usage#${id}`;
 const monthKey = (id: string, now: number) => `usage#${id}#${month(now)}`;
 
 export function tally(usage: Usage[]): UsageCount {
-  const count: UsageCount = { paid: 0, free: 0, microUsd: 0 };
+  let count = noUsage();
   for (const u of usage) {
-    count[modelTier(u.modelId)]++;
-    count.microUsd += Math.round((usageCost(u) ?? 0) * 1_000_000);
+    const microUsd = Math.round((usageCost(u) ?? 0) * 1_000_000);
+    count = addCounts(count, { ...noUsage(), [modelTier(u.modelId)]: 1, microUsd, models: { [u.modelId]: { calls: 1, microUsd } } });
   }
   return count;
 }

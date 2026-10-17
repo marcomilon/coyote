@@ -1,4 +1,4 @@
-import type { UsageCount } from '../src/core/email-usage';
+import { addCounts, noUsage, type UsageCount } from '../src/core/email-usage';
 import type { Account, AccountToken, ChatMessage, DomainRecord, Job, SiteRecord, Stores } from '../src/core/jobs';
 
 /** In-memory Stores for tests. Exposes its state for assertions. */
@@ -49,10 +49,9 @@ export function memoryStores() {
       return true;
     },
     async addUsage(key, count) {
-      const now = usageCounts.get(key) ?? { paid: 0, free: 0, microUsd: 0 };
-      usageCounts.set(key, { paid: now.paid + count.paid, free: now.free + count.free, microUsd: now.microUsd + count.microUsd });
+      usageCounts.set(key, addCounts(usageCounts.get(key) ?? noUsage(), count));
     },
-    getUsage: async (key) => usageCounts.get(key) ?? { paid: 0, free: 0, microUsd: 0 },
+    getUsage: async (key) => usageCounts.get(key) ?? noUsage(),
     async claimSlug(site) {
       if (sites.has(site.slug)) return false;
       sites.set(site.slug, site);

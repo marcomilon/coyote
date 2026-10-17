@@ -29,6 +29,7 @@ import { createStores } from '../src/aws/stores';
 import { livePrefix, refillDraft, takeDownLive } from '../src/core/drafts';
 import { deleteSite } from '../src/core/owner';
 import { usageOf, type UsageCount } from '../src/core/email-usage';
+import { modelTier } from '../src/core/models';
 import { returnFreeDraft } from '../src/core/free-draft';
 import { isFrozen, unfreeze } from '../src/core/freeze';
 import { addBoughtDesigns, boughtDesigns, PAID_WRITES_PER_EMAIL, paidWritesLeft, resetPaidWrites } from '../src/core/paid-writes';
@@ -163,6 +164,14 @@ switch (command) {
     console.log(`${slug.trim().toLowerCase()}: model calls`);
     console.log(line('all time', all));
     console.log(line(monthName, month));
+    // Per model, this month and all time.
+    const models = Object.entries(all.models).sort(([, a], [, b]) => b.microUsd - a.microUsd || b.calls - a.calls);
+    if (models.length) console.log(`  by model     ${monthName.padStart(17)}            all time`);
+    for (const [id, m] of models) {
+      const now = month.models[id] ?? { calls: 0, microUsd: 0 };
+      const cell = (c: { calls: number; microUsd: number }) => `${String(c.calls).padStart(5)} calls $${(c.microUsd / 1_000_000).toFixed(2).padStart(6)}`;
+      console.log(`    ${id}\n      ${modelTier(id).padEnd(9)}${cell(now)}  ${cell(m)}`);
+    }
     console.log(`  designs left: ${await paidWritesLeft(stores, emailId(slug))} (${PAID_WRITES_PER_EMAIL} free + ${await boughtDesigns(stores, emailId(slug))} bought)`);
     if (await isFrozen(stores, emailId(slug))) console.log(`  FROZEN: too many refused requests (./coyote.sh unfreeze ${slug.trim().toLowerCase()})`);
     break;

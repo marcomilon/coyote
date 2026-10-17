@@ -2,6 +2,7 @@ import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-clo
 import { ConditionalCheckFailedException, DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import { BatchWriteCommand, DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import type { UsageCount } from '../core/email-usage';
 import type { Account, AccountToken, Billing, ChatMessage, DomainOrder, DomainRecord, Job, SiteRecord, Stores } from '../core/jobs';
 
 export interface StoreConfig {
@@ -36,6 +37,8 @@ export function storeConfigFromEnv(env: Record<string, string | undefined> = pro
   };
 }
 
+const USAGE_CALLS = 'calls#';
+const USAGE_USD = 'usd#';
 const isConditionFailure = (error: unknown) => error instanceof ConditionalCheckFailedException || error instanceof TransactionCanceledException;
 
 /** Builds "SET #a = :a, #b = :b" for the defined fields of a patch. */
@@ -164,21 +167,34 @@ export function createStores(config: StoreConfig): Stores {
     },
 
     async addUsage(key, count, ttl) {
+      // Per model: top-level `calls#<model id>` and `usd#<model id>` numbers, so ADD needs no map to exist first.
+      const models = Object.entries(count.models);
       await db.send(
         new UpdateCommand({
           TableName: config.rateLimitTable,
           Key: { ip: key },
           // `free` is a DynamoDB reserved word: every attribute goes through a name placeholder.
-          UpdateExpression: 'SET #ttl = if_not_exists(#ttl, :ttl) ADD #paid :paid, #free :free, #microUsd :microUsd',
-          ExpressionAttributeNames: { '#ttl': 'ttl', '#paid': 'paid', '#free': 'free', '#microUsd': 'microUsd' },
-          ExpressionAttributeValues: { ':paid': count.paid, ':free': count.free, ':microUsd': count.microUsd, ':ttl': ttl },
+          UpdateExpression: `SET #ttl = if_not_exists(#ttl, :ttl) ADD #paid :paid, #free :free, #microUsd :microUsd${models.map((_, i) => `, #c${i} :c${i}, #u${i} :u${i}`).join('')}`,
+          ExpressionAttributeNames: {
+            '#ttl': 'ttl', '#paid': 'paid', '#free': 'free', '#microUsd': 'microUsd',
+            ...Object.fromEntries(models.flatMap(([id], i) => [[`#c${i}`, `${USAGE_CALLS}${id}`], [`#u${i}`, `${USAGE_USD}${id}`]])),
+          },
+          ExpressionAttributeValues: {
+            ':paid': count.paid, ':free': count.free, ':microUsd': count.microUsd, ':ttl': ttl,
+            ...Object.fromEntries(models.flatMap(([, m], i) => [[`:c${i}`, m.calls], [`:u${i}`, m.microUsd]])),
+          },
         }),
       );
     },
 
     async getUsage(key) {
       const { Item } = await db.send(new GetCommand({ TableName: config.rateLimitTable, Key: { ip: key } }));
-      return { paid: Number(Item?.paid ?? 0), free: Number(Item?.free ?? 0), microUsd: Number(Item?.microUsd ?? 0) };
+      const models: UsageCount['models'] = {};
+      for (const [name, value] of Object.entries(Item ?? {})) {
+        if (name.startsWith(USAGE_CALLS)) (models[name.slice(USAGE_CALLS.length)] ??= { calls: 0, microUsd: 0 }).calls = Number(value);
+        if (name.startsWith(USAGE_USD)) (models[name.slice(USAGE_USD.length)] ??= { calls: 0, microUsd: 0 }).microUsd = Number(value);
+      }
+      return { paid: Number(Item?.paid ?? 0), free: Number(Item?.free ?? 0), microUsd: Number(Item?.microUsd ?? 0), models };
     },
 
     async claimSlug(site) {

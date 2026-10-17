@@ -16,6 +16,12 @@ describe('model calls per email', () => {
       paid: 2,
       free: 2,
       microUsd: 4_000_000 + 40_000 + 1_100_000 + 330_000,
+      models: {
+        'claude-opus-5-5': { calls: 1, microUsd: 4_000_000 },
+        [DEFAULT_IMAGE_MODEL_ID]: { calls: 1, microUsd: 40_000 },
+        [DEFAULT_MODEL_ID]: { calls: 1, microUsd: 1_100_000 },
+        [DEFAULT_PRESCREEN_MODEL_ID]: { calls: 1, microUsd: 330_000 },
+      },
     });
   });
 
@@ -25,8 +31,8 @@ describe('model calls per email', () => {
     await countUsage(stores, id, [call('claude-opus-5-5')], Date.UTC(2026, 9, 15));
     await countUsage(stores, id, [call(DEFAULT_MODEL_ID)], Date.UTC(2026, 10, 2));
     expect(await usageOf(stores, id, Date.UTC(2026, 10, 20))).toEqual({
-      all: { paid: 1, free: 1, microUsd: 5_100_000 },
-      month: { paid: 0, free: 1, microUsd: 1_100_000 },
+      all: { paid: 1, free: 1, microUsd: 5_100_000, models: { 'claude-opus-5-5': { calls: 1, microUsd: 4_000_000 }, [DEFAULT_MODEL_ID]: { calls: 1, microUsd: 1_100_000 } } },
+      month: { paid: 0, free: 1, microUsd: 1_100_000, models: { [DEFAULT_MODEL_ID]: { calls: 1, microUsd: 1_100_000 } } },
       monthName: '2026-11',
     });
   });
@@ -42,5 +48,6 @@ describe('model calls per email', () => {
     const { all } = await usageOf(t.stores, emailId(body.ownerEmail), t.generateDeps.now());
     expect(all.paid + all.free).toBe(calls);
     expect(all.paid).toBeGreaterThan(0);
+    expect(Object.values(all.models).reduce((n, m) => n + m.calls, 0)).toBe(calls);
   });
 });

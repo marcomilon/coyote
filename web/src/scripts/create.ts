@@ -10,6 +10,7 @@ import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from 
 import { readSession } from './session';
 import { humanCheck } from './turnstile';
 import { captionsOf, showThumbs, UploadLimitError, uploadImages } from './upload';
+import { setBusy } from './busy';
 
 type State = 'form' | 'working' | 'questions' | 'message';
 /** `action`: a button back to the form, with the owner's answers filled in again. */
@@ -213,8 +214,9 @@ function showQuestions(jobId: string, job: JobView) {
   renderQuestions($<HTMLElement>('[data-question-list]'), job.questions ?? [], strings.question, job.requiredQuestion);
   $('[data-questions-intro]').textContent = required ? strings.question.requiredIntro : strings.question.intro;
   $<HTMLButtonElement>('[data-skip]').hidden = required;
-  const submitAnswers = async (body: Parameters<typeof sendAnswers>[1]) => {
+  const submitAnswers = async (body: Parameters<typeof sendAnswers>[1], clicked?: HTMLButtonElement | null) => {
     questionsForm.querySelectorAll('button').forEach((b) => (b.disabled = true));
+    if (clicked) setBusy(clicked, true);
     try {
       const { status, body: result } = await sendAnswers(jobId, body);
       if (status === 202) return void follow(jobId);
@@ -225,14 +227,15 @@ function showQuestions(jobId: string, job: JobView) {
     } catch {
       showMessage(strings.failed);
     } finally {
+      if (clicked) setBusy(clicked, false);
       questionsForm.querySelectorAll('button').forEach((b) => (b.disabled = false));
     }
   };
   questionsForm.onsubmit = (event) => {
     event.preventDefault();
-    void submitAnswers({ answers: readAnswers($<HTMLElement>('[data-question-list]')) });
+    void submitAnswers({ answers: readAnswers($<HTMLElement>('[data-question-list]')) }, event.submitter as HTMLButtonElement | null);
   };
-  $<HTMLButtonElement>('[data-skip]').onclick = () => void submitAnswers({ skip: true });
+  $<HTMLButtonElement>('[data-skip]').onclick = (event) => void submitAnswers({ skip: true }, event.currentTarget as HTMLButtonElement);
   show('questions');
   $<HTMLElement>('[data-question-list] input, [data-question-list] textarea')?.focus({ preventScroll: true });
 }

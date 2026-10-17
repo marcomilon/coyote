@@ -2,7 +2,7 @@ import { CloudFrontClient, CreateInvalidationCommand } from '@aws-sdk/client-clo
 import { ConditionalCheckFailedException, DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dynamodb';
 import { BatchWriteCommand, DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { CopyObjectCommand, DeleteObjectsCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import type { Account, AccountToken, ChatMessage, DomainRecord, Job, SiteRecord, Stores } from '../core/jobs';
+import type { Account, AccountToken, Billing, ChatMessage, DomainOrder, DomainRecord, Job, SiteRecord, Stores } from '../core/jobs';
 
 export interface StoreConfig {
   jobsTable: string;
@@ -534,6 +534,51 @@ export function createStores(config: StoreConfig): Stores {
     async getDomain(domain) {
       const { Item } = await db.send(new GetCommand({ TableName: config.domainsTable, Key: { domain } }));
       return Item as DomainRecord | undefined;
+    },
+
+    async saveBilling(slug, billing: Billing) {
+      try {
+        await db.send(
+          new UpdateCommand({
+            TableName: config.sitesTable,
+            Key: { slug },
+            UpdateExpression: 'SET billing = :billing',
+            ConditionExpression: 'attribute_exists(slug) AND (attribute_not_exists(billing) OR billing.updatedAt < :at)',
+            ExpressionAttributeValues: { ':billing': billing, ':at': billing.updatedAt },
+          }),
+        );
+        return true;
+      } catch (error) {
+        if (isConditionFailure(error)) return false;
+        throw error;
+      }
+    },
+
+    async orderDomain(slug, order: DomainOrder) {
+      try {
+        await db.send(
+          new UpdateCommand({
+            TableName: config.sitesTable,
+            Key: { slug },
+            UpdateExpression: 'SET domainOrder = :order',
+            ConditionExpression: 'attribute_exists(slug) AND attribute_not_exists(domainOrder) AND attribute_not_exists(#domain)',
+            ExpressionAttributeNames: { '#domain': 'domain' },
+            ExpressionAttributeValues: { ':order': order },
+          }),
+        );
+        return true;
+      } catch (error) {
+        if (isConditionFailure(error)) return false;
+        throw error;
+      }
+    },
+
+    async clearDomainOrder(slug) {
+      try {
+        await db.send(new UpdateCommand({ TableName: config.sitesTable, Key: { slug }, UpdateExpression: 'REMOVE domainOrder', ConditionExpression: 'attribute_exists(slug)' }));
+      } catch (error) {
+        if (!isConditionFailure(error)) throw error; // the site is gone
+      }
     },
   };
 }

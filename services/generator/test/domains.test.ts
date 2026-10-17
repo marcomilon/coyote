@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkDomains, domainPage, normalizeQuery, REGISTRATIONS_PER_DAY, registerDomain, RegistrarError, type DomainDeps, type Quote, type Registrar } from '../src/core/domains';
+import { checkDomains, domainIdeas, domainPage, normalizeQuery, REGISTRATIONS_PER_DAY, registerDomain, RegistrarError, RetryLater, runDomainOrder, type DomainDeps, type Quote, type Registrar } from '../src/core/domains';
 import { deleteSite } from '../src/core/owner';
 import { harness, NOW } from './harness';
 
@@ -28,12 +28,14 @@ function fakeRegistrar() {
   return { registrar, owned, calls, fail };
 }
 
-function setup(open = true) {
+const plan = (status: string) => ({ subscriptionId: 'sub_1', customerId: 'ctm_1', status, updatedAt: NOW });
+
+function setup(open = true, billing: string | null = 'active') {
   const t = harness();
   const fake = fakeRegistrar();
   t.sites.set('luna', { slug: 'luna', status: 'draft', jobId: 'job-0', createdAt: NOW, ownerWhatsApp: '+525512345678' });
   void t.stores.linkAccountSite('e1', 'luna@example.com', 'es', { slug: 'luna', businessName: 'Luna', createdAt: NOW });
-  t.sites.set('luna', { ...t.sites.get('luna')!, ownerEmailId: 'e1' });
+  t.sites.set('luna', { ...t.sites.get('luna')!, ownerEmailId: 'e1', ...(billing && { billing: plan(billing) }) });
   let now = NOW;
   const deps: DomainDeps = { stores: t.stores, registrar: fake.registrar, registerOpen: async () => open, now: () => now };
   const site = () => t.sites.get('luna')!;
@@ -45,6 +47,21 @@ describe('search', () => {
     expect(normalizeQuery('  Luna ')).toEqual({ label: 'luna' });
     expect(normalizeQuery('https://www.luna.com/')).toEqual({ label: 'luna', tld: 'com' });
     for (const bad of ['', '-luna', 'luna-', 'lu na', 'luna.net', 'luna.com.mx', 'luna.co', 'xn--lna-4ka', 'ñandú', 'a'.repeat(64)]) expect(normalizeQuery(bad), bad).toBeUndefined();
+  });
+
+  it('suggests names without "-": the business name joined, then with endings', () => {
+    expect(domainIdeas('Panadería de la Luna')).toEqual(['panaderialuna', 'panaderiadelaluna', 'panaderialunaonline', 'panaderialunaweb', 'panaderialunaoficial']);
+    expect(domainIdeas('Café & Té')).toEqual(['cafete', 'cafeteonline', 'cafeteweb', 'cafeteoficial']);
+    expect(domainIdeas('!!')).toEqual([]);
+  });
+
+  it('opens the tab with up to 3 suggestions, free ones first, in one registry check', async () => {
+    const t = setup();
+    const page = await domainPage(t.site(), t.deps);
+    expect(page.suggestions?.map((q) => q.domain)).toEqual(['lunaonline.com', 'lunaweb.com', 'lunaoficial.com']);
+    expect(t.calls).toEqual(['check luna.com,lunaonline.com,lunaweb.com,lunaoficial.com']);
+    t.registrar.check = async () => { throw new Error('registrar down'); };
+    expect((await domainPage(t.site(), t.deps)).suggestions).toEqual([]);
   });
 
   it('checks .com; an unanswered name is unknown, not taken', async () => {
@@ -97,7 +114,7 @@ describe('registering', () => {
     const t = setup();
     for (let i = 0; i < REGISTRATIONS_PER_DAY; i++) {
       const slug = `site${i}`;
-      t.sites.set(slug, { slug, status: 'draft', jobId: 'job-0', createdAt: NOW });
+      t.sites.set(slug, { slug, status: 'draft', jobId: 'job-0', createdAt: NOW, billing: plan('active') });
       expect(await registerDomain(t.sites.get(slug)!, { domain: `${slug}.com` }, t.deps)).toMatchObject({ status: 201 });
     }
     expect(await registerDomain(t.site(), { domain: 'sol.com' }, t.deps)).toEqual({ status: 429 });
@@ -141,10 +158,61 @@ describe('registering', () => {
   });
 });
 
+describe('the monthly plan', () => {
+  it('registering needs it, with nothing asked of the registrar', async () => {
+    for (const billing of [null, 'canceled', 'paused']) {
+      const t = setup(true, billing);
+      expect(await registerDomain(t.site(), { domain: 'sol.com' }, t.deps)).toEqual({ status: 402 });
+      expect(t.calls).toEqual([]);
+    }
+  });
+
+  it('a card Paddle is still retrying (past_due) may register', async () => {
+    const t = setup(true, 'past_due');
+    expect((await registerDomain(t.site(), { domain: 'sol.com' }, t.deps)).status).toBe(201);
+  });
+});
+
+describe('a paid domain order', () => {
+  function ordered(domain = 'sol.com') {
+    const t = setup();
+    t.sites.set('luna', { ...t.site(), domainOrder: { domain, at: NOW } });
+    return t;
+  }
+
+  it('registers the domain and clears the order; the tab follows it', async () => {
+    const t = ordered();
+    expect(await domainPage(t.site(), t.deps)).toMatchObject({ order: { domain: 'sol.com' } });
+    expect(await runDomainOrder('luna', t.deps)).toBe('registered');
+    expect(t.site()).toMatchObject({ domain: 'sol.com', domainOrder: undefined });
+    expect(await domainPage(t.site(), t.deps)).toMatchObject({ domain: { domain: 'sol.com', status: 'registered' } });
+    expect(await runDomainOrder('luna', t.deps)).toBe('none'); // a redelivered message does nothing
+    expect(t.calls.filter((c) => c.startsWith('register'))).toEqual(['register sol.com 1108']);
+  });
+
+  it('throws to be retried while the registrar is down, and leaves nothing claimed', async () => {
+    const t = ordered();
+    t.fail.register = new RegistrarError('ERROR', 'down');
+    await expect(runDomainOrder('luna', t.deps)).rejects.toBeInstanceOf(RetryLater);
+    expect(t.site()).toMatchObject({ domain: undefined, domainOrder: { domain: 'sol.com' } });
+    t.fail.register = undefined;
+    expect(await runDomainOrder('luna', t.deps)).toBe('registered');
+  });
+
+  it('a name taken meanwhile is a failure retrying cannot fix: kept on the order, shown on the tab', async () => {
+    const t = ordered('luna.com');
+    expect(await runDomainOrder('luna', t.deps)).toBe('failed');
+    expect(t.site().domainOrder).toEqual({ domain: 'luna.com', at: NOW, failed: 'not_available' });
+    expect(await domainPage(t.site(), t.deps)).toMatchObject({ order: { domain: 'luna.com', failed: true } });
+    expect(await runDomainOrder('luna', t.deps)).toBe('none');
+  });
+});
+
 describe('Dominio tab', () => {
-  it('shows whether registering is open', async () => {
-    const t = setup(false);
-    expect(await domainPage(t.site(), t.deps)).toEqual({ domain: undefined, registerOpen: false });
+  it('shows whether registering is open, and the plan', async () => {
+    expect(await domainPage(setup(false).site(), setup(false).deps)).toMatchObject({ registerOpen: false, plan: 'active' });
+    const t = setup(true, null);
+    expect(await domainPage(t.site(), t.deps)).toMatchObject({ registerOpen: true, plan: 'none' });
   });
 
   it('keeps the domain row when the site is deleted (the domain stays registered)', async () => {

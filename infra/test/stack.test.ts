@@ -71,11 +71,11 @@ describe('CoyoteStack, domainless', () => {
     template.hasResourceProperties('AWS::Lambda::Function', { Timeout: 600, Environment: { Variables: Match.objectLike({ ANTHROPIC_SECRET_NAME: 'coyote/anthropic-api-key' }) } });
   });
 
-  it('keeps the page-model switch in SSM, starting on Opus, readable only by generate, submit and owner (its tier)', () => {
+  it('keeps the page-model switch in SSM, starting on Opus, readable only by generate, submit, owner and chat (its tier)', () => {
     template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/page-model', Value: 'opus' });
     template.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PAGE_MODEL_PARAMETER: '/coyote/page-model' }) } });
     const readers = Object.keys(template.findResources('AWS::IAM::Policy')).filter((id) => JSON.stringify(template.findResources('AWS::IAM::Policy')[id]).includes('GeneratorApiPageModel'));
-    expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, '')).sort()).toEqual(['GeneratorApiGenerate', 'GeneratorApiOwner', 'GeneratorApiSubmit']);
+    expect(readers.map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, '')).sort()).toEqual(['GeneratorApiChat', 'GeneratorApiGenerate', 'GeneratorApiOwner', 'GeneratorApiSubmit']);
   });
 
   it('refuses a model with no tier', () => {
@@ -176,13 +176,28 @@ describe('CoyoteStack, domainless', () => {
   it('has no checkout without Paddle config, and with it a payments Lambda that alone reads the Paddle secret', () => {
     const routesOf = (t: Template) => Object.values(t.findResources('AWS::ApiGatewayV2::Route')).map((r) => r.Properties.RouteKey);
     expect(routesOf(template)).not.toContain('POST /me/checkout');
-    const paid = synth({ paddle: { env: 'sandbox', clientToken: 'test_token', designsPriceId: 'pri_designs' } });
-    expect(routesOf(paid)).toEqual(expect.arrayContaining(['POST /me/checkout', 'POST /paddle/webhook']));
+    const paid = synth({ paddle: { env: 'sandbox', clientToken: 'test_token', designsPriceId: 'pri_designs', hostingPriceId: 'pri_hosting' } });
+    expect(routesOf(paid)).toEqual(expect.arrayContaining(['POST /me/checkout', 'POST /me/billing/portal', 'POST /paddle/webhook']));
     const readers = Object.entries(paid.findResources('AWS::IAM::Policy'))
       .filter(([, p]) => JSON.stringify(p.Properties.PolicyDocument).includes(':secret:coyote/paddle'))
       .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
     expect(readers).toEqual(['GeneratorApiPayments']);
-    paid.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PADDLE_ENV: 'sandbox', PADDLE_DESIGNS_PRICE_ID: 'pri_designs' }) } });
+    paid.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ PADDLE_ENV: 'sandbox', PADDLE_DESIGNS_PRICE_ID: 'pri_designs', PADDLE_HOSTING_PRICE_ID: 'pri_hosting' }) } });
+  });
+
+  it('registers a paid domain through a queue with retries, a dead-letter queue and alarms', () => {
+    const paid = synth({ paddle: { env: 'sandbox', clientToken: 'test_token', designsPriceId: 'pri_designs', hostingPriceId: 'pri_hosting' } });
+    paid.hasResourceProperties('AWS::SQS::Queue', { VisibilityTimeout: 600, RedrivePolicy: Match.objectLike({ maxReceiveCount: 6 }) });
+    paid.hasResourceProperties('AWS::Lambda::EventSourceMapping', { BatchSize: 1, FunctionResponseTypes: ['ReportBatchItemFailures'] });
+    paid.hasResourceProperties('AWS::Lambda::Function', { Environment: { Variables: Match.objectLike({ DOMAIN_ORDERS_QUEUE_URL: Match.anyValue() }) } });
+    const alarms = Object.keys(paid.findResources('AWS::CloudWatch::Alarm'));
+    expect(alarms.some((id) => id.includes('DomainOrderFailed'))).toBe(true);
+    expect(alarms.some((id) => id.includes('DomainOrdersStuck'))).toBe(true);
+    const porkbunReaders = Object.entries(paid.findResources('AWS::IAM::Policy'))
+      .filter(([, p]) => JSON.stringify(p.Properties.PolicyDocument).includes(':secret:coyote/porkbun-api'))
+      .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))
+      .sort();
+    expect(porkbunReaders).toEqual(['GeneratorApiDomainOrder', 'GeneratorApiDomains', 'GeneratorApiPayments']);
   });
 
   it('hands the Turnstile site key to the web when one is set', () => {
@@ -291,7 +306,7 @@ describe('CoyoteStack, domainless', () => {
   });
 
   it('alarms on abuse and cost; email subscriptions are managed by coyote.sh, not the stack', () => {
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 9);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 10);
     template.resourceCountIs('AWS::Budgets::Budget', 1);
     template.resourceCountIs('AWS::CE::AnomalyMonitor', 1);
     template.resourceCountIs('AWS::SNS::Subscription', 0);

@@ -344,6 +344,15 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 @keyframes dots-in { to { opacity: 1; } }
 @keyframes dot-bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-1.2rem); } }
 @media (prefers-reduced-motion: reduce) { .dots i { animation: none; } }
+/* A button waiting on the server (busy.ts): small dots over its hidden label, right away. */
+button[aria-busy='true'] { position: relative; color: transparent !important; cursor: progress; }
+button[aria-busy='true']:disabled { opacity: 1 !important; }
+button[aria-busy='true'] .dots { position: absolute; inset: 0; justify-content: center; align-items: center; gap: .35rem; opacity: 1; animation: none; }
+button[aria-busy='true'] .dots i { width: .6rem; height: .6rem; border-width: 2px; animation-name: dot-bounce-small; }
+@keyframes dot-bounce-small { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-.35rem); } }
+/* A small block still loading (a tab's data, a reply being written): the dots, smaller. */
+.dots.small { gap: .45rem; opacity: 1; animation: none; }
+.dots.small i { width: .7rem; height: .7rem; border-width: 2px; animation-name: dot-bounce-small; }
 .worksteps { list-style: none; padding: 0; margin: 0 0 1.4rem; display: grid; gap: .55rem; font-weight: 600; }
 .worksteps li { opacity: .35; transition: opacity .4s; }
 .worksteps li::before { content: '○  '; }
@@ -476,7 +485,7 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 .tabs [role='tab'] { font: 400 .95rem/1 var(--display); letter-spacing: .04em; text-transform: uppercase; color: var(--ink); background: var(--paper-deep); border: 0; padding: 1rem 1.6rem; min-width: 9rem; min-height: 44px; cursor: pointer; flex: 1 1 auto; }
 .tabs [role='tab'][aria-selected='true'] { background: #fffaf0; color: var(--rojo); }
 .tabs [role='tab']:hover { background: #fffaf0; }
-/* "Activa tu página web": the paid step, blue like the "Negocio completo" plan on the home page. */
+/* "Publica tu página web": the paid step, blue like the "Negocio completo" plan on the home page. */
 .tabs [role='tab'][data-tab='domain'] { background: var(--azul); color: var(--paper-light); }
 .tabs [role='tab'][data-tab='domain']:hover { background: #2a5fb8; }
 .tabs [role='tab'][data-tab='domain'][aria-selected='true'] { color: var(--amarillo); }
@@ -596,12 +605,19 @@ input[type='file']::file-selector-button { font: 400 .8rem/1 var(--display); bac
 .domain:not([hidden]) { display: grid; gap: 1.2rem; }
 .domain [data-domain-view] { display: none; }
 .domain[data-domain='owned'] [data-domain-view='owned'], .domain[data-domain='search'] [data-domain-view='search'], .domain[data-domain='confirm'] [data-domain-view='confirm'] { display: block; }
-.domain[data-domain='loading']::before { content: ''; display: block; height: 6rem; }
+.domain[data-domain='loading'] [data-domain-view='loading'] { display: flex; justify-content: center; padding-block: 3rem; }
 .domain h2 { font-size: clamp(1.5rem, 4vw, 2.2rem); margin: 1rem 0 .6rem; }
 .mysite .domain-owned, .mysite .domain-confirm { margin: 1rem auto 0; }
 .domain-owned header h2, .domain-confirm header h2 { margin: 0; overflow-wrap: anywhere; }
 .domain-owned .lead, .domain-confirm .lead { font-size: 1.15rem; font-weight: 600; }
 .domain-confirm .submit-row { margin-top: 1.4rem; }
+.domain-plan { margin: 1.2rem 0 0; padding: 1rem 1.2rem; border: 3px solid var(--ink); border-radius: 10px; background: var(--amarillo); }
+.domain-plan p { margin: 0; }
+.domain-plan .chosen { font-weight: 700; font-size: 1.15rem; overflow-wrap: anywhere; }
+.domain-plan [data-domain-plan] { margin-top: .7rem; padding-top: .7rem; border-top: 2px dashed var(--ink); }
+.domain-plan .price { margin-bottom: .3rem; font-size: 1.05rem; }
+.domain-plan .price strong { font-family: var(--display); font-weight: 400; font-size: 1.9rem; letter-spacing: .01em; }
+.domain-owned [data-domain-manage] { margin-top: 1rem; }
 .domain-owned .next { margin: 1.6rem 0 0; padding-top: 1.1rem; border-top: 3px dashed var(--ink); font-size: .95rem; opacity: .8; }
 .domain-art { display: block; width: min(16rem, 80%); height: auto; margin-bottom: 1.4rem; overflow: visible; }
 .domain-art .window { transform-box: fill-box; transform-origin: center bottom; animation: domain-rise .5s cubic-bezier(.2, .8, .3, 1.2) both; }
@@ -625,3 +641,4 @@ input[type='file']::file-selector-button { font: 400 .8rem/1 var(--display); bac
 .domain-results li[data-status='taken'] { opacity: .65; }
 .domain-results .btn { margin-left: auto; }
 .domain-results .btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+.domain-suggested { margin: 1.25rem 0 1.75rem; }

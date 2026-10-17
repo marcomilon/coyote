@@ -1,4 +1,5 @@
 import { snsAnnounce } from '../aws/notices';
+import { pageTier } from '../aws/page-tier';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { callTool, outputAllowed } from '../core/bedrock';
 import { runChatTurn } from '../core/chat';
@@ -12,7 +13,7 @@ const announce = snsAnnounce(process.env.SITE_NOTICES_TOPIC_ARN);
 
 // Invoked asynchronously with { slug, at } by POST /me/chat: writes one Coyote reply.
 export const handler = async (event: { slug: string; at: number }): Promise<void> => {
-  const result = await runChatTurn(event.slug, event.at, { stores, urls, callTool, modelId: modelId(), prescreenModelId: prescreenModelId(), outputAllowed, now: Date.now, announce });
+  const result = await runChatTurn(event.slug, event.at, { stores, urls, callTool, modelId: modelId(), prescreenModelId: prescreenModelId(), outputAllowed, now: Date.now, announce, pageTier: () => pageTier() });
   if (result.outcome === 'SKIPPED') return;
   const tokensIn = result.usage.reduce((n, u) => n + u.inputTokens, 0);
   const tokensOut = result.usage.reduce((n, u) => n + u.outputTokens, 0);

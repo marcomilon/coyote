@@ -9,6 +9,7 @@ import {
   aws_iam as iam,
   aws_lambda as lambda,
   aws_sns as sns,
+  type aws_sqs as sqs,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -20,6 +21,8 @@ export interface MonitoringProps {
   /** Turns email off when an SES reputation alarm fires (unset without a sender). */
   mailEvents?: lambda.IFunction;
   monthlyBudgetUsd: number;
+  /** Paid domains whose registration ran out of retries. */
+  domainOrdersDeadLetters?: sqs.IQueue;
 }
 
 /**
@@ -75,6 +78,11 @@ export class Monitoring extends Construct {
       new cw.MathExpression({ expression: 'tin + tout', usingMetrics: { tin: metric('TokensIn', Duration.days(1)), tout: metric('TokensOut', Duration.days(1)) }, period: Duration.days(1) }),
       2_000_000,
     );
+    // A paid plan whose domain we couldn't register: fix the cause, then ./coyote.sh domain-order <slug>.
+    alarm('DomainOrderFailed', 'A paid domain was refused by the registrar (taken, invalid). Run ./coyote.sh domain-order <slug>.', metric('DomainOrderFailed', Duration.minutes(5)), 0);
+    if (props.domainOrdersDeadLetters) {
+      alarm('DomainOrdersStuck', 'A paid domain is still not registered after an hour of retries. Check the DomainOrder logs, then ./coyote.sh domain-order <slug>.', props.domainOrdersDeadLetters.metricApproximateNumberOfMessagesVisible({ period: Duration.minutes(5), statistic: 'Maximum' }), 0);
+    }
     alarm('GenerateErrors', 'The generate Lambda crashed or timed out.', props.generate.metricErrors({ period: Duration.minutes(5), statistic: 'Sum' }), 0);
     alarm('Api5xx', 'The API is returning server errors.', apiMetric('5xx'), 5);
     alarm('Api4xx', 'Unusual number of client errors (includes 422 and 429).', apiMetric('4xx'), 200);

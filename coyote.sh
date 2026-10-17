@@ -44,6 +44,7 @@ Commands:
   example-page <page-dir> <slug> Make a page from an opus:sites run a landing example site (examples/sites/<slug>/; then deploy)
   refill-all                     Finish every site's current draft again (after page-check or domain changes; no model call)
   domains                        List the domains owners registered (Mi sitio → Dominio)
+  domain-order <slug> [resend]   Show the domain a paid plan ordered; resend queues it again (after a DomainOrder alarm)
   domain-register [on|off]       Show or switch whether owners may register a domain (Coyote pays from the Porkbun balance).
                                  Search works either way. No deploy needed. Survives deploys
   captcha [on|off]               Show or switch the CAPTCHA (Cloudflare Turnstile) on the create, sign-in link and report forms.
@@ -427,7 +428,7 @@ case "$command" in
   deploy) cmd_deploy "$@" ;;
   destroy) cmd_destroy ;;
   delete-all-sites) cmd_delete_all_sites ;;
-  abuse-report | unpublish | restore | refill-all | domains | free-draft | usage | add-designs | unfreeze) cmd_admin "$command" "$@" ;;
+  abuse-report | unpublish | restore | refill-all | domains | domain-order | free-draft | usage | add-designs | unfreeze) cmd_admin "$command" "$@" ;;
   domain-register) cmd_domain_register "$@" ;;
   captcha) cmd_captcha "$@" ;;
   email) cmd_email "$@" ;;

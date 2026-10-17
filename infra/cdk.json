@@ -16,7 +16,7 @@
     "domainName": "ventas314.com",
     "account": "887799775985",
     "turnstileSiteKey": "0x4AAAAAAFU3UMZOLrYHhjX3",
-    "paddle": { "env": "sandbox", "clientToken": "test_70731bda2e915f858e6f6dd226f", "designsPriceId": "pri_01m52dtjk2q1x2bjtwnrewj2zv" },
+    "paddle": { "env": "sandbox", "clientToken": "test_70731bda2e915f858e6f6dd226f", "designsPriceId": "pri_01m52dtjk2q1x2bjtwnrewj2zv", "hostingPriceId": "pri_01m53b686n6kh07a2y814bb5jh" },
     "mailMx": [
       { "priority": 10, "hostName": "mx1.improvmx.com" },
       { "priority": 20, "hostName": "mx2.improvmx.com" }

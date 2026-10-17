@@ -17,6 +17,7 @@ import {
   aws_secretsmanager as secretsmanager,
   type aws_ses as ses,
   aws_sns as sns,
+  aws_sqs as sqs,
   aws_ssm as ssm,
 } from 'aws-cdk-lib';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -84,7 +85,7 @@ export interface GeneratorApiProps {
   rateLimitPerDay: number;
   /** URL env vars from the stack (see urls.ts `urlConfigFromEnv`). */
   urlEnv: Record<string, string>;
-  /** Paddle (design packs). Unset = no checkout routes. */
+  /** Paddle (design packs, the site's monthly plan). Unset = no checkout routes. */
   paddle?: PaddleConfig;
 }
 
@@ -93,6 +94,8 @@ export interface PaddleConfig {
   env: 'sandbox' | 'production';
   clientToken: string;
   designsPriceId: string;
+  /** The monthly plan a site needs before registering a domain. */
+  hostingPriceId: string;
 }
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -101,6 +104,10 @@ const handlers = `${root}services/generator/src/handlers`;
 /** The Lambdas behind the HTTP API: submit → (async) generate → status (→ answers → generate) → owner. */
 export class GeneratorApi extends Construct {
   readonly generate: lambda.IFunction;
+  /** Paid domains whose registration ran out of retries (Paddle config only). */
+  readonly domainOrdersDeadLetters?: sqs.IQueue;
+  /** Paid domains to register (Paddle config only); `./coyote.sh domain-order` resends to it. */
+  readonly domainOrders?: sqs.IQueue;
   /** SES bounces and complaints → suppression; the reputation alarms → email off. Unset without a sender. */
   readonly mailEvents?: lambda.IFunction;
   /** Every route by its key ("POST /generate"): the stage gives some their own throttle and must wait for them. */
@@ -202,7 +209,8 @@ export class GeneratorApi extends Construct {
     const withInvalidation = { ...environment, SITES_DISTRIBUTION_ID: props.sitesDistribution.distributionId };
     // The chat's replies (chat.ts): Haiku changes the page's text, a new draft. Started by the owner Lambda.
     const chat = fn('Chat', 'chat', {
-      environment: { ...environment, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn }, // the notice when an account gets frozen (freeze.ts)
+      // the notice when an account gets frozen (freeze.ts); the page switches for designs left (paid-writes.ts)
+      environment: { ...environment, SITE_NOTICES_TOPIC_ARN: props.siteNotices.topicArn, PAGE_MODE_PARAMETER, PAGE_MODEL_PARAMETER },
       memorySize: 1024,
       timeout: Duration.minutes(2),
       retryAttempts: 0, // a retry would pay for the model calls twice; a stuck reply reads as failed
@@ -210,8 +218,10 @@ export class GeneratorApi extends Construct {
     // Mi sitio and the chat: the draft, contact edits, free-text edits (started here, run by generate), undo, delete, chat messages.
     const owner = fn('Owner', 'owner', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, GENERATE_FUNCTION_NAME: generate.functionName, CHAT_FUNCTION_NAME: chat.functionName, PAGE_MODE_PARAMETER, PAGE_MODEL_PARAMETER } });
     // Redesigns left (paid-writes.ts) follow the writer's tier too.
-    pageMode.grantRead(owner);
-    pageModel.grantRead(owner);
+    for (const f of [owner, chat]) {
+      pageMode.grantRead(f);
+      pageModel.grantRead(f);
+    }
 
     // Data access, least privilege per function. generate and jobFailed: the free draft per email (free-draft.ts);
     // submit, generate and chat: the model calls per email (email-usage.ts).
@@ -290,7 +300,8 @@ export class GeneratorApi extends Construct {
       environment: { ...environment, IP_HASH_SALT: ipSalt, PORKBUN_SECRET_NAME, DOMAIN_REGISTER_PARAMETER },
     });
     domainRegister.grantRead(domains);
-    secretsmanager.Secret.fromSecretNameV2(this, 'PorkbunKey', PORKBUN_SECRET_NAME).grantRead(domains);
+    const porkbunKey = secretsmanager.Secret.fromSecretNameV2(this, 'PorkbunKey', PORKBUN_SECRET_NAME);
+    porkbunKey.grantRead(domains);
     props.domainsTable.grantReadWriteData(domains);
     props.sitesTable.grantReadWriteData(domains);
     props.accountsTable.grantReadData(domains); // checkSession, and the email that prefills the form
@@ -372,19 +383,48 @@ export class GeneratorApi extends Construct {
     route('/me/domain', apigwv2.HttpMethod.POST, domains);
     route('/me/domain/check', apigwv2.HttpMethod.GET, domains);
 
-    // Design packs (payments.ts): a checkout for Mi sitio, and Paddle's webhook that adds the designs once paid.
+    // Design packs and the monthly plan (payments.ts): a checkout and the plan's portal for Mi sitio, and Paddle's
+    // webhook that adds the designs once paid and writes the plan onto the site.
     if (props.paddle) {
       const payments = fn('Payments', 'payments', {
         memorySize: 256,
-        environment: { ...environment, IP_HASH_SALT: ipSalt, PADDLE_SECRET_NAME, PADDLE_ENV: props.paddle.env, PADDLE_DESIGNS_PRICE_ID: props.paddle.designsPriceId, PAGE_MODE_PARAMETER, PAGE_MODEL_PARAMETER },
+        environment: { ...environment, IP_HASH_SALT: ipSalt, PADDLE_SECRET_NAME, PADDLE_ENV: props.paddle.env, PADDLE_DESIGNS_PRICE_ID: props.paddle.designsPriceId, PADDLE_HOSTING_PRICE_ID: props.paddle.hostingPriceId, PAGE_MODE_PARAMETER, PAGE_MODEL_PARAMETER, PORKBUN_SECRET_NAME },
       });
       secretsmanager.Secret.fromSecretNameV2(this, 'PaddleKey', PADDLE_SECRET_NAME).grantRead(payments);
+      porkbunKey.grantRead(payments); // the plan's domain is still free before its checkout
+
+      // The domain a paid plan ordered: the webhook queues it, DomainOrder registers it. A failed try comes back
+      // after the visibility timeout; after 6 (about an hour) it goes to the dead-letter queue, which alarms.
+      const deadLetters = new sqs.Queue(this, 'DomainOrdersDeadLetters', { retentionPeriod: Duration.days(14), enforceSSL: true });
+      const orders = new sqs.Queue(this, 'DomainOrders', {
+        visibilityTimeout: Duration.minutes(10),
+        retentionPeriod: Duration.days(4),
+        enforceSSL: true,
+        deadLetterQueue: { queue: deadLetters, maxReceiveCount: 6 },
+      });
+      this.domainOrdersDeadLetters = deadLetters;
+      this.domainOrders = orders;
+      orders.grantSendMessages(payments);
+      payments.addEnvironment('DOMAIN_ORDERS_QUEUE_URL', orders.queueUrl);
+      const domainOrder = fn('DomainOrder', 'domain-order', {
+        memorySize: 256,
+        timeout: Duration.minutes(1),
+        environment: { ...environment, IP_HASH_SALT: ipSalt, PORKBUN_SECRET_NAME, DOMAIN_REGISTER_PARAMETER },
+      });
+      domainRegister.grantRead(domainOrder);
+      porkbunKey.grantRead(domainOrder);
+      props.domainsTable.grantReadWriteData(domainOrder);
+      props.sitesTable.grantReadWriteData(domainOrder);
+      props.accountsTable.grantReadData(domainOrder); // the owner's email on the domain record
+      props.rateLimitTable.grantReadWriteData(domainOrder);
+      domainOrder.addEventSource(new eventSources.SqsEventSource(orders, { batchSize: 1, reportBatchItemFailures: true }));
       pageMode.grantRead(payments);
       pageModel.grantRead(payments);
-      props.sitesTable.grantReadData(payments);
+      props.sitesTable.grantReadWriteData(payments); // the plan (billing) on the site
       props.accountsTable.grantReadData(payments); // checkSession, and the email that prefills the checkout
       props.rateLimitTable.grantReadWriteData(payments);
       route('/me/checkout', apigwv2.HttpMethod.POST, payments);
+      route('/me/billing/portal', apigwv2.HttpMethod.POST, payments);
       route('/paddle/webhook', apigwv2.HttpMethod.POST, payments);
     }
   }

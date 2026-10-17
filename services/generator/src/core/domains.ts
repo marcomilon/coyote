@@ -1,10 +1,12 @@
 // The site's own domain (Mi sitio → Dominio): search names, register one per site. Coyote is the registrant (our
 // Porkbun account's contact, verified once), so the owner fills in nothing; on request we move a domain to the owner.
-// The registrar is behind `Registrar` (aws/porkbun.ts). Coyote pays for now, so registering only works while the
-// `./coyote.sh domain-register` switch is on, and a daily cap limits it. Pointing the domain at the site waits for publishing.
+// The registrar is behind `Registrar` (aws/porkbun.ts). Registering needs the site's monthly plan (payments.ts), the
+// `./coyote.sh domain-register` switch on (Coyote pays the registrar), and is under a daily cap. Pointing the domain at the site waits for publishing.
 import { z } from 'zod';
+import { normalizeForMatch } from './brands';
 import type { DomainRecord, SiteRecord, Stores } from './jobs';
 import { day, inTwoDays } from './owner';
+import { isSubscribed, planOf } from './plan';
 
 /** The TLDs offered: `.com` only for now (WHOIS privacy everywhere; the local ones Porkbun sells are `.com.mx`, `.mx`, `.co`). */
 export const TLDS = ['com'] as const;
@@ -12,6 +14,8 @@ export type Tld = (typeof TLDS)[number];
 
 /** Availability checks per site per day (each one asks the registry about every TLD). */
 export const CHECKS_PER_DAY = 100;
+/** Names the Dominio tab suggests, all free when the registry has that many. */
+export const SUGGESTIONS = 3;
 /** Registrations per day for the whole stack, while Coyote pays. */
 export const REGISTRATIONS_PER_DAY = 3;
 /** A registration still `registering` after this long was cut off: GET asks the registrar how it ended. */
@@ -71,7 +75,7 @@ const RegisterBody = z.object({ domain: z.string().max(80) }).strict();
 export type RegisterResult =
   | { status: 201; domain: DomainView }
   | { status: 400 }
-  | { status: 403 | 429 }
+  | { status: 402 | 403 | 429 }
   | { status: 409; error: 'has_domain' | 'not_available' | 'price_changed' }
   | { status: 502 };
 
@@ -81,6 +85,7 @@ export type RegisterResult =
  */
 export async function registerDomain(site: SiteRecord, input: unknown, deps: DomainDeps): Promise<RegisterResult> {
   if (!(await deps.registerOpen())) return { status: 403 };
+  if (!isSubscribed(site)) return { status: 402 };
   const parsed = RegisterBody.safeParse(input);
   if (!parsed.success) return { status: 400 };
   const domain = parsed.data.domain.trim().toLowerCase();
@@ -147,12 +152,73 @@ export const domainView = (record: DomainRecord): DomainView => ({
   expiresAt: record.expiresAt,
 });
 
-/** GET /me/domain: the site's domain (finishing a setup left halfway) and whether registering is open. */
+/** Small words left out of a suggestion ("Panadería de la Luna" → panaderialuna). */
+const SMALL_WORDS = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'e', 'da', 'do', 'das', 'dos', 'a', 'o', 'en', 'em']);
+const ENDINGS = ['online', 'web', 'oficial'];
+
+/** Labels to suggest for a business name, best first, with no "-": the name's words joined, then with a few endings. */
+export function domainIdeas(businessName: string): string[] {
+  const words = normalizeForMatch(businessName).split(' ').filter(Boolean);
+  const core = words.filter((word) => !SMALL_WORDS.has(word));
+  const base = (core.length ? core : words).join('');
+  if (!base) return [];
+  const ideas = [base, words.join(''), ...ENDINGS.map((ending) => base + ending)];
+  return [...new Set(ideas)].filter((label) => label.length >= 3 && LABEL.test(label) && !label.includes('-'));
+}
+
+/** The first free suggestions (taken ones fill in when fewer are free). One registry check, counted like a search. */
+async function suggestDomains(site: SiteRecord, deps: Pick<DomainDeps, 'stores' | 'registrar' | 'now'>): Promise<Quote[]> {
+  try {
+    // The slug is the business name's words (slug.ts), so no draft read is needed.
+    const ideas = domainIdeas(site.slug.replace(/-/g, ' '));
+    if (!ideas.length) return [];
+    if (!(await deps.stores.hitRateLimit(`domain-check#${site.slug}#${day(deps.now())}`, CHECKS_PER_DAY, inTwoDays(deps.now())))) return [];
+    const domains = ideas.map((label) => `${label}.com`);
+    const quotes = await deps.registrar.check(domains);
+    const found = domains.map((domain) => quotes.find((q) => q.domain === domain) ?? { domain, status: 'unknown' as const });
+    return [...found.filter((q) => q.status === 'available'), ...found.filter((q) => q.status !== 'available')].slice(0, SUGGESTIONS);
+  } catch (error) {
+    console.error('domain suggestions failed', error);
+    return [];
+  }
+}
+
+/** GET /me/domain: the site's domain (finishing a setup left halfway), or names to suggest; whether registering is open; the site's plan. */
 export async function domainPage(site: SiteRecord, deps: DomainDeps) {
   let record = site.domain ? await deps.stores.getDomain(site.domain) : undefined;
   if (record?.status === 'setup_pending') record = await finishSetup(record, deps);
   else if (record?.status === 'registering' && deps.now() - record.createdAt > STUCK_MS) record = await recover(record, deps);
-  return { domain: record ? domainView(record) : undefined, registerOpen: await deps.registerOpen() };
+  const registerOpen = await deps.registerOpen();
+  const plan = planOf(site);
+  if (record) return { domain: domainView(record), registerOpen, plan };
+  // Paid, the registration queued (or refused: we were alerted).
+  if (site.domainOrder) return { order: { domain: site.domainOrder.domain, ...(site.domainOrder.failed && { failed: true }) }, registerOpen, plan };
+  return { suggestions: await suggestDomains(site, deps), registerOpen, plan };
+}
+
+/** Thrown for a refusal that may pass later, so the queue delivers the order again (and alerts when it gives up). */
+export class RetryLater extends Error {}
+
+/**
+ * The domain-orders queue: registers the domain the plan paid for (payments.ts orders it). A refusal that may pass
+ * later throws RetryLater; one that can't is kept on the order as `failed` (the handler emits DomainOrderFailed).
+ */
+export async function runDomainOrder(slug: string, deps: DomainDeps): Promise<'registered' | 'failed' | 'none'> {
+  const site = await deps.stores.getSite(slug);
+  const order = site?.domainOrder;
+  if (!site || !order || order.failed) return 'none';
+  const result = await registerDomain(site, { domain: order.domain }, deps);
+  if (result.status === 201 || (result.status === 409 && result.error === 'has_domain')) {
+    await deps.stores.clearDomainOrder(slug);
+    return 'registered';
+  }
+  // The registrar is down, the price moved, today's cap or the switch: all can pass.
+  if (result.status === 502 || result.status === 429 || result.status === 403 || (result.status === 409 && result.error === 'price_changed')) {
+    throw new RetryLater(`domain order ${slug} ${order.domain}: ${result.status}`);
+  }
+  const failed = result.status === 409 ? result.error : result.status === 402 ? 'needs_plan' : 'invalid';
+  await deps.stores.saveSite({ slug, domainOrder: { ...order, failed } });
+  return 'failed';
 }
 
 /** A refusal from the registrar, with its machine-readable code (e.g. COST_MISMATCH). */

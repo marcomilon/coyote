@@ -6,6 +6,7 @@ import { api as apiCall, apiUrl } from './jobs';
 import { followDraft } from './live-preview';
 import { readSession, saveSession, type Session } from './session';
 import { humanCheck } from './turnstile';
+import { setBusy } from './busy';
 
 interface Site {
   slug: string;
@@ -130,7 +131,7 @@ form.addEventListener('submit', async (event) => {
   error.textContent = '';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return void (error.textContent = strings.invalid);
   const button = form.querySelector('button') as HTMLButtonElement;
-  button.disabled = true;
+  setBusy(button, true);
   try {
     const { status } = await apiCall('/account/login', json({ email, lang: strings.lang, turnstileToken: await human.token() }));
     human.reset();
@@ -140,7 +141,7 @@ form.addEventListener('submit', async (event) => {
     human.reset();
     error.textContent = strings.error;
   } finally {
-    button.disabled = false;
+    setBusy(button, false);
   }
 });
 

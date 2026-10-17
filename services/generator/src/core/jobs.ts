@@ -103,6 +103,30 @@ export interface SiteRecord {
   previewId?: string;
   /** The owner's own domain (domains.ts), set when its registration starts. */
   domain?: string;
+  /** The site's monthly plan (payments.ts), mirrored from Paddle's subscription webhooks. */
+  billing?: Billing;
+  /** The domain paid for with the plan, until it is registered (domains.ts `runDomainOrder`). */
+  domainOrder?: DomainOrder;
+}
+
+/** A domain to register once the plan is paid. `failed`: the refusal that retrying can't fix (we get an alert). */
+export interface DomainOrder {
+  domain: string;
+  /** ms since epoch */
+  at: number;
+  failed?: string;
+}
+
+/** A Paddle subscription, as its latest webhook described it. */
+export interface Billing {
+  subscriptionId: string;
+  customerId: string;
+  /** Paddle's status: active, trialing, past_due, paused, canceled. */
+  status: string;
+  /** ISO date of the next charge, while there is one. */
+  nextBilledAt?: string;
+  /** ms since epoch: when Paddle sent the event this came from (older events never overwrite newer ones). */
+  updatedAt: number;
 }
 
 /**
@@ -162,6 +186,8 @@ export interface ChatMessage {
   redesign?: string;
   /** The owner pressed "Rediseñar" on this reply (POST /me/edit with `from`): the button is spent. */
   redesignStarted?: boolean;
+  /** A redesign asked for with no designs left: the reply offers the design pack instead. */
+  buyDesigns?: boolean;
   /** A redesign's note (chat-notes.ts): the edit job it follows. */
   jobId?: string;
   /** DynamoDB TTL, seconds since epoch. */
@@ -268,6 +294,11 @@ export interface Stores {
   releaseDomain(domain: string, slug: string): Promise<void>;
   saveDomain(patch: DomainPatch): Promise<void>;
   getDomain(domain: string): Promise<DomainRecord | undefined>;
+  /** Sets the site's plan unless a newer event already did, or the site is gone. Resolves to false then. */
+  saveBilling(slug: string, billing: Billing): Promise<boolean>;
+  /** Atomic: sets the site's domain order unless it has one, or a domain. Resolves to false then (or when the site is gone). */
+  orderDomain(slug: string, order: DomainOrder): Promise<boolean>;
+  clearDomainOrder(slug: string): Promise<void>;
 }
 
 export const JOB_TTL_SECONDS = 90 * 24 * 60 * 60;

@@ -1,6 +1,9 @@
 // The chat with the site: each message is a change request; the reply arrives a few seconds later (polled from
 // GET /me/chat). A change too big for the chat comes with a "Rediseñar" button that starts the usual page-writer
 // edit (POST /me/edit), followed here. Used full-page on the phone (chat.ts) and inside Mi sitio (my-site.ts).
+import { setBusy } from './busy';
+import { buyDesignPack, type BuyStrings } from './buy-designs';
+import { checkoutAvailable } from './paddle';
 import { supportLine } from './support';
 import { api as apiCall, apiUrl, sendAnswers, waitForJob } from './jobs';
 import { markInvalid, readAnswers, renderQuestions, type QuestionStrings } from './questions';
@@ -21,6 +24,8 @@ interface Message {
   jobId?: string;
   /** A finished redesign: the note links to the full-screen page. */
   redesigned?: boolean;
+  /** A redesign asked for with no designs left: the reply offers the design pack. */
+  buyDesigns?: boolean;
 }
 export interface ChatView {
   draftUrl?: string;
@@ -46,6 +51,7 @@ export interface ChatStrings {
   busy: string;
   limit: string;
   noDesigns: string;
+  designsOut: BuyStrings;
   frozen: string;
   frozenSupport: string;
   error: string;
@@ -64,12 +70,14 @@ export interface ChatOptions {
   previewLink: () => string;
   /** Each answer from GET /me/chat: the host shows the business name or follows the draft. */
   onView?: (view: ChatView) => void;
+  /** A design pack bought from a chat reply arrived: the owner's view (GET /me) with the designs. */
+  onDesignsBought?: (view: { designsLeft?: number }) => void;
   /** The chat can't start: no token or a bad token. */
   onNote: (note: Note, reason: 'noToken' | 'badToken' | 'limited' | 'error') => void;
 }
 
 /** Starts the chat in a ChatThread.astro element. */
-export function startChat(el: HTMLElement, { token, strings, scroll, previewLink, onView, onNote }: ChatOptions) {
+export function startChat(el: HTMLElement, { token, strings, scroll, previewLink, onView, onDesignsBought, onNote }: ChatOptions) {
   const $ = <T extends Element>(selector: string) => el.querySelector(selector) as T;
   const thread = $<HTMLOListElement>('[data-thread]');
   const composer = $<HTMLFormElement>('form[data-composer]');
@@ -81,6 +89,8 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
   let redesigning = false;
   /** "Deshacer" was tapped: the bubble asks before undoing. */
   let confirmingUndo = false;
+  /** The design pack's checkout from a reply: its line under the button, and whether the button waits. */
+  let buying = { note: '', error: false, busy: false };
   let active = false;
   let pollTimer: number | undefined;
   /** What the thread last showed: a poll that changes nothing leaves the page (and its scroll) alone. */
@@ -121,19 +131,23 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
    */
   function render(follow = false) {
     const sorted = [...messages.values()].sort((a, b) => a.at - b.at);
-    const state = JSON.stringify([sorted, canUndo, redesigning, confirmingUndo]);
+    const state = JSON.stringify([sorted, canUndo, redesigning, confirmingUndo, buying]);
     if (state === shown) return;
     shown = state;
     follow ||= nearBottom();
     const lastChange = sorted.filter((m) => m.changed).at(-1);
     const lastRedesign = sorted.filter((m) => m.redesign).at(-1);
+    const lastBuy = sorted.filter((m) => m.buyDesigns).at(-1);
     thread.replaceChildren(
       ...[{ at: 0, role: 'coyote', text: strings.intro, status: 'done' } as Message, ...sorted].map((m) => {
         const li = document.createElement('li');
         li.className = `bubble ${m.role}`;
         li.dataset.status = m.status;
         const p = document.createElement('p');
-        p.textContent = m.status === 'pending' && !m.text ? strings.thinking : m.text;
+        if (m.status === 'pending' && !m.text) {
+          // Still writing: the loading dots, read out as "thinking".
+          Object.assign(p, { role: 'status', ariaLabel: strings.thinking, innerHTML: '<span class="dots small" aria-hidden="true"><i></i><i></i><i></i></span>' });
+        } else p.textContent = m.text;
         li.append(p);
         if (m.changed) {
           const tag = Object.assign(document.createElement('span'), { className: m.undone ? 'tag undone' : 'tag', textContent: m.undone ? `↩ ${strings.undoneTag}` : `✓ ${strings.changed}` });
@@ -155,7 +169,16 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
         if (m.redesign && m === lastRedesign) {
           const start = button(strings.redesign, 'btn small', () => void redesign(m));
           start.disabled = m.redesignStarted || redesigning || pending();
+          if (redesigning && !m.redesignStarted) setBusy(start, true);
           li.append(start);
+        }
+        if (m.buyDesigns && m === lastBuy && checkoutAvailable()) {
+          const buy = button(strings.designsOut.buy, 'btn small', () => void buyPack());
+          setBusy(buy, buying.busy);
+          const note = Object.assign(document.createElement('span'), { className: 'notice', textContent: buying.note });
+          note.setAttribute('aria-live', 'polite');
+          note.dataset.kind = buying.error ? 'error' : '';
+          li.append(buy, ' ', note);
         }
         if (m.at) {
           const time = Object.assign(document.createElement('time'), { dateTime: new Date(m.at).toISOString(), textContent: when.format(m.at) });
@@ -204,7 +227,8 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
   async function send(text: string) {
     if (!text || pending() || redesigning) return;
     notice('');
-    composer.querySelector('button')!.disabled = true;
+    const sendButton = composer.querySelector('button')!;
+    setBusy(sendButton, true);
     try {
       const { status, body } = await api<{ messages?: Message[] }>('/me/chat', 'POST', { text });
       if (status === 202 && body.messages) {
@@ -216,8 +240,10 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
       notice(status === 423 ? strings.frozen + supportLine(strings.frozenSupport) : status === 429 ? strings.limit : status === 409 ? strings.busy : strings.error);
     } catch {
       notice(strings.error);
+    } finally {
+      setBusy(sendButton, false);
+      render();
     }
-    render();
   }
 
   function localNote(text: string, status: Message['status'] = 'done') {
@@ -240,6 +266,18 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
     const last = [...messages.values()].filter((m) => m.changed && !m.undone).sort((a, b) => a.at - b.at).at(-1);
     if (last) last.undone = true; // as the server now has it
     void poll(); // the server's note, and the host follows the draft
+  }
+
+  function buyPack() {
+    const update = (patch: Partial<typeof buying>) => {
+      buying = { ...buying, ...patch };
+      render();
+    };
+    return buyDesignPack(api, document.documentElement.lang.startsWith('pt') ? 'pt' : 'es', strings.designsOut, {
+      say: (note, error = false) => update({ note, error }),
+      busy: (on) => update({ busy: on }),
+      arrived: (view: { designsLeft?: number }) => onDesignsBought?.(view),
+    });
   }
 
   async function redesign(offer: Message) {

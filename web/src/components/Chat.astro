@@ -13,7 +13,7 @@ const { lang, vos = false } = Astro.props;
 const s = t(lang, vos);
 const c = s.chat;
 const other = t(s.otherLang.code);
-const clientStrings = { ...c, question: s.questions, previewPath: s.paths.preview };
+const clientStrings = { ...c, designsOut: s.mySite.designsOut, question: s.questions, previewPath: s.paths.preview };
 ---
 
 <Layout lang={lang} vos={vos} title={c.title} description={c.description} alternate={other.paths.chat} withConfig noindex>

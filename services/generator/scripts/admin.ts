@@ -5,6 +5,7 @@
  *   abuse-report        who did what in the last 24 h
  *   refill-all          finish every site's current draft again (after a page-check or domain change); no model call
  *   domains             the domains registered for owners (Mi sitio → Dominio)
+ *   domain-order <slug> the domain a paid plan ordered; with `resend`, clears its failure and queues it again
  *   free-draft <email>  give an email its free draft and its 3 free designs back (support: a second business; testing)
  *   usage <email>       the email's model calls by tier (paid/free) and their cost: all time and this month
  *   unfreeze <email>    lift the freeze an account got for too many refused requests (freeze.ts)
@@ -13,6 +14,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { BatchWriteCommand, DynamoDBDocumentClient, paginateScan } from '@aws-sdk/lib-dynamodb';
 import { createStores } from '../src/aws/stores';
 import { refillDraft } from '../src/core/drafts';
@@ -193,7 +195,20 @@ switch (command) {
     console.log(`${domains.length} domain(s).`);
     break;
   }
+  case 'domain-order': {
+    const site = slug ? await stores.getSite(slug) : undefined;
+    if (!site) throw new Error(`no site ${slug}`);
+    const order = site.domainOrder;
+    console.log(`  plan ${site.billing?.status ?? 'none'} · domain ${site.domain ?? '-'} · order ${order ? `${order.domain}${order.failed ? ` (failed: ${order.failed})` : ' (queued)'}` : '-'}`);
+    if (rest[0] !== 'resend') break;
+    if (!order) throw new Error('no order to resend');
+    if (!outputs.DomainOrdersQueueUrl) throw new Error('infra/cdk-outputs.json has no DomainOrdersQueueUrl. Run ./coyote.sh deploy first.');
+    await stores.saveSite({ slug: site.slug, domainOrder: { domain: order.domain, at: order.at } });
+    await new SQSClient({}).send(new SendMessageCommand({ QueueUrl: outputs.DomainOrdersQueueUrl, MessageBody: JSON.stringify({ slug: site.slug, domain: order.domain }) }));
+    console.log(`Queued ${order.domain} again; ./coyote.sh domain-order ${site.slug} shows the outcome.`);
+    break;
+  }
   default:
-    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | refill-all | domains | free-draft <email> | usage <email> | unfreeze <email>');
+    console.error('commands: unpublish <slug> | restore <slug> | abuse-report | refill-all | domains | domain-order <slug> [resend] | free-draft <email> | usage <email> | unfreeze <email>');
     process.exit(1);
 }

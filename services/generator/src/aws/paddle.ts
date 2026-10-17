@@ -42,18 +42,30 @@ export function signatureMatches(rawBody: string, header: string | undefined, se
   });
 }
 
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const { apiKey } = await paddleKeys();
+  const response = await fetch(`${apiBase()}${path}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const result = (await response.json().catch(() => ({}))) as { data?: T; error?: { code?: string; detail?: string } };
+  if (!response.ok || !result.data) throw new Error(`Paddle ${path}: HTTP ${response.status} ${result.error?.code ?? ''} ${result.error?.detail ?? ''}`);
+  return result.data;
+}
+
 export const paddle: Payments = {
   async createTransaction(priceId, customData) {
-    const { apiKey } = await paddleKeys();
-    const response = await fetch(`${apiBase()}/transactions`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ items: [{ price_id: priceId, quantity: 1 }], custom_data: customData }),
-      signal: AbortSignal.timeout(10_000),
-    });
-    const result = (await response.json().catch(() => ({}))) as { data?: { id?: string }; error?: { code?: string; detail?: string } };
-    if (!response.ok || !result.data?.id) throw new Error(`Paddle transaction: HTTP ${response.status} ${result.error?.code ?? ''} ${result.error?.detail ?? ''}`);
-    return result.data.id;
+    const result = await post<{ id?: string }>('/transactions', { items: [{ price_id: priceId, quantity: 1 }], custom_data: customData });
+    if (!result.id) throw new Error('Paddle transaction: no id');
+    return result.id;
+  },
+
+  async portalUrl(customerId, subscriptionId) {
+    const result = await post<{ urls?: { general?: { overview?: string } } }>(`/customers/${encodeURIComponent(customerId)}/portal-sessions`, { subscription_ids: [subscriptionId] });
+    if (!result.urls?.general?.overview) throw new Error('Paddle portal session: no url');
+    return result.urls.general.overview;
   },
 
   async verify(rawBody, signature) {

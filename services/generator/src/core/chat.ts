@@ -8,10 +8,10 @@ import { isFrozen, noteRefusal } from './freeze';
 import type { Announce } from './notices';
 import { publicJob, type ChatMessage, type SiteRecord } from './jobs';
 import { CHAT_TTL_SECONDS, noteRedesignDone } from './chat-notes';
-import { applyContact, day, inTwoDays, previewUrl, runningEdit, type ContactInput, type OwnerDeps } from './owner';
+import { applyContact, day, designsLeft, inTwoDays, previewUrl, runningEdit, type ContactInput, type OwnerDeps } from './owner';
 import { checkPage } from './page-check';
 import { applyChanges, elide, type Change } from './page-outline';
-import { ownerTextsAfter } from './page-texts';
+import { ownerTextsAfter, pageTexts } from './page-texts';
 import { isRejected, prescreen } from './prescreen';
 
 /**
@@ -36,6 +36,8 @@ const REPLIES = {
     couldNot: 'No logré hacer ese cambio con precisión. Prueba decirlo de otra forma, o pide un rediseño de la página.',
     contact: 'Ese dato de contacto no parece válido. Revísalo y escríbemelo de nuevo.',
     notOnPage: 'Guardé el dato, pero no encontré dónde cambiarlo en la página. Dime en qué parte aparece y lo cambio.',
+    textsTip: 'También puedes cambiar cualquier texto tú mismo en «Tus textos», en Mi página web.',
+    noDesigns: 'Ya usaste todos tus diseños, así que no puedo hacer uno nuevo. Si quieres otro diseño, compra 3 más con el botón de abajo. Mientras tanto, sí puedo cambiar tus textos y tus datos de contacto.',
   },
   vos: {
     failed: 'Algo salió mal y no pude hacer el cambio. Intentalo de nuevo.',
@@ -43,6 +45,8 @@ const REPLIES = {
     couldNot: 'No logré hacer ese cambio con precisión. Probá decirlo de otra forma, o pedí un rediseño de la página.',
     contact: 'Ese dato de contacto no parece válido. Revisalo y escribímelo de nuevo.',
     notOnPage: 'Guardé el dato, pero no encontré dónde cambiarlo en la página. Decime en qué parte aparece y lo cambio.',
+    textsTip: 'También podés cambiar cualquier texto vos mismo en «Tus textos», en Mi página web.',
+    noDesigns: 'Ya usaste todos tus diseños, así que no puedo hacer uno nuevo. Si querés otro diseño, comprá 3 más con el botón de abajo. Mientras tanto, sí puedo cambiar tus textos y tus datos de contacto.',
   },
   pt: {
     failed: 'Algo deu errado e não consegui fazer a mudança. Tente de novo.',
@@ -50,6 +54,8 @@ const REPLIES = {
     couldNot: 'Não consegui fazer essa mudança com precisão. Tente dizer de outro jeito, ou peça um redesenho da página.',
     contact: 'Esse dado de contato não parece válido. Confira e me mande de novo.',
     notOnPage: 'Guardei o dado, mas não encontrei onde mudá-lo na página. Me diga em que parte aparece e eu mudo.',
+    textsTip: 'Você também pode mudar qualquer texto direto em «Seus textos», em Meu site.',
+    noDesigns: 'Você já usou todos os seus designs, então não posso fazer um novo. Se quiser outro design, compre mais 3 no botão abaixo. Enquanto isso, posso mudar seus textos e seus contatos.',
   },
 } as const;
 const REFUSALS = new Set<string>(Object.values(REPLIES).map((r) => r.refused));
@@ -67,6 +73,7 @@ export function publicMessage(message: ChatMessage, now: number) {
     undone: message.undone === true,
     redesign: message.redesign,
     redesignStarted: message.redesignStarted === true,
+    buyDesigns: message.buyDesigns === true,
     jobId: message.status === 'pending' ? message.jobId : undefined,
     redesigned: message.jobId !== undefined && message.draftId !== undefined,
   };
@@ -170,6 +177,8 @@ export interface ChatDeps extends DraftDeps {
   prescreenModelId: string;
   outputAllowed(text: string): Promise<boolean>;
   now(): number;
+  /** The page writer's tier: with free-tier writes, redesigns are not counted (paid-writes.ts). */
+  pageTier?: OwnerDeps['pageTier'];
   /** Notices for the admin (a frozen account, freeze.ts). */
   announce?: Announce;
 }
@@ -259,6 +268,8 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
     }
 
     if (result.action === 'redesign') {
+      // No designs left: no redesign button, but the design pack's.
+      if ((await designsLeft(site, deps)) === 0) return await answer('REPLIED', { text: say.noDesigns, buyDesigns: true });
       if (!(await deps.outputAllowed(result.reply))) return await answer('REJECTED', { text: say.refused });
       return await answer('REPLIED', { text: result.reply, redesign: (result.instruction || request.text).slice(0, 1000) });
     }
@@ -288,6 +299,9 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
       console.warn('chat: page check failed', { slug, violations: checked.violations });
       return await answer('REPLIED', { text: say.couldNot, redesign: request.text });
     }
+    // A text edit the owner could have made in Tus textos (no model call): say so, once in a while.
+    const tipped = history.some((m) => m.role === 'coyote' && m.text?.endsWith(say.textsTip));
+    if (edited !== undefined && !tipped && pageTexts(next.page, next.answers.contact).length > 0) result = { ...result, reply: `${result.reply} ${say.textsTip}` };
     const before = new Set(checkPage(doc.page, { ...options, contact: doc.answers.contact, ownerText: ownerText(doc) }).texts);
     const added = checked.texts.filter((text) => !before.has(text));
     if (!(await deps.outputAllowed([...added, result.reply].join('\n')))) return await answer('REJECTED', { text: say.refused });

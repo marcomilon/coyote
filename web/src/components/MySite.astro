@@ -19,7 +19,7 @@ const x = m.texts;
 const g = m.designs;
 // The Dominio tab is hidden (global.css) unless PUBLIC_DOMAIN_TAB=on, e.g. in web/.env.development.local, which only `npm run dev` reads.
 const domainTab = import.meta.env.PUBLIC_DOMAIN_TAB === 'on';
-const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, question: s.questions } };
+const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, designsOut: m.designsOut, question: s.questions } };
 ---
 
 <Layout lang={lang} vos={vos} title={m.title} description={m.description} alternate={other.paths.mySite} withConfig noindex>
@@ -75,10 +75,10 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
       </details>
       <div class="tabs" role="tablist" aria-label={m.tabs.label}>
         <button type="button" role="tab" id="tab-preview" aria-controls="panel-preview" aria-selected="true" data-tab="preview">{m.tabs.preview}</button>
-        <button type="button" role="tab" id="tab-change" aria-controls="panel-change" aria-selected="false" tabindex="-1" data-tab="change">{m.tabs.change}</button>
         <button type="button" role="tab" id="tab-designs" aria-controls="panel-designs" aria-selected="false" tabindex="-1" data-tab="designs">{m.tabs.designs}</button>
         <button type="button" role="tab" id="tab-texts" aria-controls="panel-texts" aria-selected="false" tabindex="-1" data-tab="texts">{m.tabs.texts}</button>
         <button type="button" role="tab" id="tab-photos" aria-controls="panel-photos" aria-selected="false" tabindex="-1" data-tab="photos">{m.tabs.photos}</button>
+        <button type="button" role="tab" id="tab-change" aria-controls="panel-change" aria-selected="false" tabindex="-1" data-tab="change">{m.tabs.change}</button>
         <button type="button" role="tab" id="tab-domain" aria-controls="panel-domain" aria-selected="false" tabindex="-1" data-tab="domain">{m.tabs.domain}</button>
       </div>
       <!-- Under the tabs: the Celular/Computador switch, only on Vista previa. -->
@@ -176,6 +176,7 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
       </div>
 
       <div class="tabpanel domain" role="tabpanel" id="panel-domain" aria-labelledby="tab-domain" data-panel="domain" data-domain="loading" hidden>
+        <div data-domain-view="loading" role="status" aria-label={s.loading}><span class="dots small" aria-hidden="true"><i></i><i></i><i></i></span></div>
         <section class="ticket domain-owned" data-domain-view="owned">
           {/* A browser at the new address, stamped with a check. */}
           <svg class="domain-art" viewBox="0 0 260 165" width="260" height="165" aria-hidden="true">
@@ -209,13 +210,18 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
           </header>
           <p class="lead" data-domain-status></p>
           <p class="next">{d.later}</p>
+          <button class="linkbtn" type="button" data-domain-manage hidden>{d.plan.manage}</button>
         </section>
 
         <section data-domain-view="search">
           <h2>{d.title}</h2>
           <p>{d.intro}</p>
+          <div class="domain-suggested" data-domain-suggested hidden>
+            <p class="sub">{d.suggested}</p>
+            <ul class="domain-results" data-domain-suggestions></ul>
+          </div>
           <form class="domain-search" data-domain-search role="search">
-            <label class="sub" for="domain-q">{d.searchLabel}</label>
+            <label class="sub" for="domain-q" data-domain-search-label>{d.searchLabel}</label>
             <div class="domain-row">
               <span class="domain-input">
                 <input type="text" id="domain-q" name="q" maxlength="63" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" inputmode="url" required />
@@ -234,8 +240,19 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
             <h2 data-domain-chosen></h2>
           </header>
           <p class="lead">{d.confirm.intro}</p>
+          {/* The chosen name, and, without the site's monthly plan, its price ("Activar plan" below). */}
+          <div class="domain-plan">
+            <p class="chosen" data-domain-chosen-name></p>
+            <div data-domain-plan hidden>
+              <p class="price"><strong>{d.plan.price}</strong> {d.plan.per}</p>
+              <p>{d.plan.intro}</p>
+            </div>
+          </div>
+          <p class="notice" data-domain-plan-notice role="status"></p>
           <p class="notice" data-kind="error" data-domain-error role="alert"></p>
           <div class="submit-row">
+            <button class="btn" type="button" data-domain-subscribe hidden>{d.plan.subscribe}</button>
+            <button class="linkbtn" type="button" data-domain-plan-manage hidden>{d.plan.manage}</button>
             <button class="btn" type="submit" data-domain-submit>{d.confirm.submit}</button>
             <button class="linkbtn" type="button" data-domain-back>{d.confirm.back}</button>
           </div>

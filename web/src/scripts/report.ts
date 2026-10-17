@@ -1,5 +1,6 @@
 // Generated sites have no JavaScript and no forms, so their "Reportar" link points here: /reportar?sitio=<slug>.
 import { humanCheck } from './turnstile';
+import { setBusy } from './busy';
 
 type Message = { title: string; text: string };
 
@@ -22,7 +23,7 @@ else $('[data-slug]').textContent = slug;
 $<HTMLFormElement>('form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const button = $<HTMLButtonElement>('button[type="submit"]');
-  button.disabled = true;
+  setBusy(button, true);
   try {
     const response = await fetch(`${apiUrl}/report/${slug}`, {
       method: 'POST',
@@ -37,7 +38,7 @@ $<HTMLFormElement>('form').addEventListener('submit', async (event) => {
     human.reset();
     $('[data-notice]').textContent = strings.error;
   } finally {
-    button.disabled = false;
+    setBusy(button, false);
   }
 });
 

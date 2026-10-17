@@ -11,7 +11,9 @@ import { startDomainTab, type DomainStrings } from './domain';
 import { qrCode } from './live-preview';
 import { captionField, captionsOf, showThumbs, UploadLimitError, uploadImages } from './upload';
 import { forgetOwnerTokens, ownerHash, ownerToken, tokenHash } from './owner-token';
-import { buyDesigns, checkoutAvailable } from './paddle';
+import { buyDesignPack, type BuyStrings } from './buy-designs';
+import { checkoutAvailable } from './paddle';
+import { setBusy } from './busy';
 
 interface View {
   slug: string;
@@ -55,7 +57,7 @@ interface SiteImage {
 }
 type Message = { title: string; text: string };
 interface Strings {
-  designsOut: { opening: string; waiting: string; done: string; late: string; failed: string };
+  designsOut: BuyStrings;
   noToken: Message;
   badToken: Message;
   limited: Message;
@@ -80,7 +82,6 @@ interface DesignStrings {
   inUse: string;
   view: string;
   use: string;
-  using: string;
   used: string;
   busy: string;
   failed: string;
@@ -93,7 +94,6 @@ interface TextStrings {
   roles: Record<string, string>;
   locked: string;
   save: string;
-  saving: string;
   saved: string;
   empty: string;
   stale: string;
@@ -106,7 +106,6 @@ interface PhotoStrings {
   caption: { label: string; placeholder: string };
   remove: string;
   keep: string;
-  saving: string;
   save: string;
   started: string;
   busy: string;
@@ -167,8 +166,7 @@ function showDesigns(designs: DesignView[]) {
       actions.append(open);
       if (!design.current) {
         const use = button(g.use, 'btn small', async () => {
-          use.disabled = true;
-          use.textContent = g.using;
+          setBusy(use, true);
           message('');
           try {
             const { status, body } = await api<View>('/me/design', 'POST', { design: design.id });
@@ -182,8 +180,7 @@ function showDesigns(designs: DesignView[]) {
           } catch {
             message(g.failed);
           }
-          use.disabled = false;
-          use.textContent = g.use;
+          setBusy(use, false);
         });
         actions.append(use);
       }
@@ -205,10 +202,7 @@ function showDesignsOut(out: boolean) {
   $<HTMLElement>('[data-buy-designs]').hidden = !out || !checkoutAvailable();
 }
 
-/** How long Mi sitio waits for Paddle's webhook to add the designs after a payment. */
-const PAID_WAIT_MS = 60_000;
-
-/** "Comprar 3 diseños": a transaction from our API → Paddle's overlay → GET /me until the designs arrive. */
+/** "Comprar 3 diseños" in the banner (buy-designs.ts). */
 function setUpBuyDesigns() {
   const line = $<HTMLElement>('[data-buy-designs]');
   const button = line.querySelector('button')!;
@@ -217,36 +211,14 @@ function setUpBuyDesigns() {
     note.textContent = text;
     note.dataset.kind = error ? 'error' : '';
   };
-  button.onclick = async () => {
-    button.disabled = true;
-    say(strings.designsOut.opening);
-    try {
-      const { status, body } = await api<{ transactionId?: string; email?: string }>('/me/checkout', 'POST', {});
-      const opened = status === 200 && body?.transactionId && (await buyDesigns({ transactionId: body.transactionId, email: body.email }, strings.lang, () => void waitForDesigns()));
-      say(opened ? '' : strings.designsOut.failed, !opened);
-    } catch {
-      say(strings.designsOut.failed, true);
-    } finally {
-      button.disabled = false;
-    }
-  };
-  async function waitForDesigns() {
-    say(strings.designsOut.waiting);
-    button.disabled = true;
-    for (const started = Date.now(); Date.now() - started < PAID_WAIT_MS; ) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      const { status, body } = await api<View>('/me').catch(() => ({ status: 0, body: undefined }));
-      if (status === 200 && body && (body.designsLeft ?? 1) > 0) {
-        button.disabled = false;
-        say('');
-        fill(body); // hides the banner
-        notice(strings.designsOut.done);
-        return;
-      }
-    }
-    button.disabled = false;
-    say(strings.designsOut.late);
-  }
+  button.onclick = () => void buyDesignPack<View>(api, strings.lang, strings.designsOut, { say, busy: (on) => setBusy(button, on), arrived: designsArrived });
+}
+
+/** A design pack arrived, bought from the banner or the chat: the banner goes. */
+function designsArrived(view: View) {
+  $<HTMLElement>('[data-buy-notice]').textContent = '';
+  fill(view); // hides the banner
+  notice(strings.designsOut.done);
 }
 
 function notice(text: string) {
@@ -331,6 +303,7 @@ function startSiteChat() {
     },
     // Mi sitio checks the token itself (GET /me) and shows its own message.
     onNote() {},
+    onDesignsBought: (view) => designsArrived(view as View),
   });
 }
 
@@ -424,8 +397,7 @@ photosForm.onsubmit = async (event) => {
   const save = $<HTMLButtonElement>('[data-photos-save]');
   const logo = logoInput.files?.[0];
   const photos = [...(photosInput.files ?? [])];
-  save.disabled = true;
-  save.textContent = strings.photos.saving;
+  setBusy(save, true);
   photoError('');
   try {
     const uploadId = logo || photos.length > 0 ? await uploadImages(apiUrl, logo, photos) : undefined;
@@ -455,7 +427,7 @@ photosForm.onsubmit = async (event) => {
   } catch (error) {
     photoError(error instanceof UploadLimitError ? strings.photos.limited : strings.photos.failed);
   } finally {
-    save.textContent = strings.photos.save;
+    setBusy(save, false);
     photosChanged();
   }
 };
@@ -543,8 +515,7 @@ textsForm.onsubmit = async (event) => {
   if (changed.length === 0) return;
   if (changed.some(({ to }) => !to)) return textsError(x.empty);
   const save = $<HTMLButtonElement>('[data-texts-save]');
-  save.disabled = true;
-  save.textContent = x.saving;
+  setBusy(save, true);
   textsError('');
   try {
     const { status, body } = await api<View & { error?: string }>('/me/edit', 'POST', { texts: changed });
@@ -564,7 +535,7 @@ textsForm.onsubmit = async (event) => {
   } catch {
     textsError(x.failed);
   } finally {
-    save.textContent = x.save;
+    setBusy(save, false);
     textsChanged();
   }
 };
@@ -653,8 +624,7 @@ function madeChanged() {
 $<HTMLButtonElement>('[data-made-save]').onclick = async () => {
   const save = $<HTMLButtonElement>('[data-made-save]');
   const picks = [...chosen];
-  save.disabled = true;
-  save.textContent = strings.photos.saving;
+  setBusy(save, true);
   madeError('');
   try {
     const uploadId = await uploadImages(apiUrl, undefined, picks.map(([, pick]) => pick.file));
@@ -671,7 +641,7 @@ $<HTMLButtonElement>('[data-made-save]').onclick = async () => {
   } catch (error) {
     madeError(error instanceof UploadLimitError ? strings.photos.limited : strings.photos.failed);
   } finally {
-    save.textContent = strings.photos.made.save;
+    setBusy(save, false);
     madeChanged();
   }
 };

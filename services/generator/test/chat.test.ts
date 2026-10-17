@@ -4,14 +4,16 @@ import { CHAT_MESSAGES_PER_DAY, chatView, postChat, runChatTurn } from '../src/c
 import { runGenerateJob } from '../src/core/generate-job';
 import { authenticate, deleteSite, editSite, POLL_CAP, READ_CAP, undo } from '../src/core/owner';
 import { submit } from '../src/core/submit';
+import { claimPaidWrite } from '../src/core/paid-writes';
 import { body, harness, NOW, urls } from './harness';
 
 const ABOUT = 'Panadería de masa madre en Chapinero, Bogotá.';
+const TIP = 'También puedes cambiar cualquier texto tú mismo en «Tus textos», en Mi página web.';
 
 /** A site with its first draft, plus the owner's token. */
-async function withDraft(model: Parameters<typeof harness>[0] = {}) {
+async function withDraft(model: Parameters<typeof harness>[0] = {}, form: object = body) {
   const t = harness(model);
-  await submit(body, '1.2.3.4', t.submitDeps);
+  await submit(form, '1.2.3.4', t.submitDeps);
   await runGenerateJob('job-1', t.generateDeps);
   const token = (await t.stores.takeOwnerToken('job-1'))!;
   const site = () => t.sites.get('panaderia-luna')!;
@@ -51,13 +53,31 @@ describe('chat', () => {
     expect(request.guarded).toContain('<request>abrimos también los domingos</request>');
     expect(request.user).toContain('<h1>Panadería Luna</h1>');
     expect(request.user).toContain('573001234567');
-    expect(reply).toMatchObject({ role: 'coyote', status: 'done', text: 'Listo, agregué los domingos.', draftId: 'draft2' });
+    expect(reply).toMatchObject({ role: 'coyote', status: 'done', text: `Listo, agregué los domingos. ${TIP}`, draftId: 'draft2' });
     expect(t.site()).toMatchObject({ currentDraftId: 'draft2' });
     const page = t.objects.get('_draft/draft2/index.html')!;
     expect(page).toContain('Abrimos también los domingos.');
     expect(page).toContain('https://wa.me/573001234567'); // the real number is back
     expect(JSON.parse(t.objects.get('_src/panaderia-luna/draft2.json')!)).toMatchObject({ requests: ['abrimos también los domingos'], ownerTexts: [`${ABOUT} Abrimos también los domingos.`] });
     expect(t.writer.requests).toHaveLength(1); // no page writer call
+  });
+
+  it('a text edit points to Tus textos, once; contact changes and plain replies do not', async () => {
+    const edit = { action: 'edit' as const, reply: 'Listo.', changes: [{ find: ABOUT, replace: `${ABOUT} Abrimos los domingos.` }] };
+    const t = await withDraft({ chat: (n: number) => (n === 1 ? edit : { ...edit, changes: [{ find: 'Abrimos los domingos.', replace: 'Abrimos los domingos y feriados.' }] }) });
+    expect((await t.send('abrimos los domingos')).reply.text).toBe(`Listo. ${TIP}`);
+    t.ownerDeps.now = () => NOW + 60_000;
+    expect((await t.send('y feriados')).reply.text).toBe('Listo.');
+
+    const contact = await withDraft({ chat: { action: 'edit', reply: 'Listo, cambié tu WhatsApp.', contact: { whatsapp: '+57 311 999 8877' } } });
+    expect((await contact.send('mi nuevo whatsapp es +57 311 999 8877')).reply.text).toBe('Listo, cambié tu WhatsApp.');
+    const none = await withDraft({ chat: { action: 'none', reply: 'Claro.' } });
+    expect((await none.send('gracias')).reply.text).toBe('Claro.');
+
+    const vos = await withDraft({ chat: edit }, { ...body, whatsapp: '+54 9 11 5555 0193' });
+    expect((await vos.send('abrimos los domingos')).reply.text).toBe('Listo. También podés cambiar cualquier texto vos mismo en «Tus textos», en Mi página web.');
+    const pt = await withDraft({ chat: edit }, { ...body, lang: 'pt' });
+    expect((await pt.send('abrimos aos domingos')).reply.text).toBe('Listo. Você também pode mudar qualquer texto direto em «Seus textos», em Meu site.');
   });
 
   it('an undone change is marked, so the next reply is told it is no longer on the page', async () => {
@@ -96,6 +116,17 @@ describe('chat', () => {
     expect(await editSite(t.site(), { instruction: 'otra idea', from: 12345 }, t.ownerDeps)).toEqual({ status: 409, error: 'busy' });
     t.jobs.get(t.site().jobIds!.at(-1)!)!.status = 'DONE';
     expect(await editSite(t.site(), { instruction: 'otra idea', from: 12345 }, t.ownerDeps)).toMatchObject({ status: 202 }); // unknown reply: no harm
+  });
+
+  it('with no designs left, a redesign request gets the way to buy more instead of a redesign offer', async () => {
+    const t = await withDraft({ chat: { action: 'redesign', reply: 'Perfecto, voy a crear un diseño nuevo.', instruction: 'Un diseño nuevo' } });
+    while (await claimPaidWrite(t.stores, t.site().ownerEmailId!, NOW)); // the first design used one; use the rest
+    const { outcome, reply } = await t.send('quiero un diseño completamente diferente');
+    expect(outcome).toMatchObject({ outcome: 'REPLIED' });
+    expect(reply.text).toBe('Ya usaste todos tus diseños, así que no puedo hacer uno nuevo. Si quieres otro diseño, compra 3 más con el botón de abajo. Mientras tanto, sí puedo cambiar tus textos y tus datos de contacto.');
+    expect(reply).toMatchObject({ buyDesigns: true });
+    expect(reply.redesign).toBeUndefined();
+    expect((await chatView(t.site(), undefined, t.ownerDeps)).messages.at(-1)).toMatchObject({ buyDesigns: true, redesign: undefined });
   });
 
   it('a redesign and an undo leave notes in the chat, so a reload shows them', async () => {

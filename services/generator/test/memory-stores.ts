@@ -176,6 +176,22 @@ export function memoryStores() {
       domains.set(domain, { ...record, ...fields });
     },
     getDomain: async (domain) => structuredClone(domains.get(domain)),
+    async saveBilling(slug, billing) {
+      const site = sites.get(slug);
+      if (!site || (site.billing && site.billing.updatedAt >= billing.updatedAt)) return false;
+      sites.set(slug, { ...site, billing: structuredClone(billing) });
+      return true;
+    },
+    async orderDomain(slug, order) {
+      const site = sites.get(slug);
+      if (!site || site.domainOrder || site.domain) return false;
+      sites.set(slug, { ...site, domainOrder: structuredClone(order) });
+      return true;
+    },
+    async clearDomainOrder(slug) {
+      const site = sites.get(slug);
+      if (site) sites.set(slug, { ...site, domainOrder: undefined });
+    },
   };
   return { stores, jobs, sites, counters, blocked, objects, invalidated, pageCache, chat, accounts, accountTokens, domains };
 }

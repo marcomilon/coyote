@@ -496,7 +496,7 @@ export class CoyoteStack extends Stack {
       'GET /me/chat': [25, 50],
       'GET /me/domain/check': [2, 5], // each check asks the registry about every TLD; the registrar allows 10 per 10 s
       'POST /me/domain': [1, 2],
-      ...(props.paddle && { 'POST /me/checkout': [2, 5] as [number, number], 'POST /paddle/webhook': [20, 50] as [number, number] }),
+      ...(props.paddle && { 'POST /me/checkout': [2, 5] as [number, number], 'POST /me/billing/portal': [2, 5] as [number, number], 'POST /paddle/webhook': [20, 50] as [number, number] }),
     };
     (apiStage.node.defaultChild as apigwv2.CfnStage).addPropertyOverride(
       'RouteSettings',
@@ -513,6 +513,7 @@ export class CoyoteStack extends Stack {
       generate: generatorApi.generate,
       abuseReports: this.abuseReports,
       mailEvents: generatorApi.mailEvents,
+      domainOrdersDeadLetters: generatorApi.domainOrdersDeadLetters,
       monthlyBudgetUsd: 20,
     });
 
@@ -533,6 +534,7 @@ export class CoyoteStack extends Stack {
     new CfnOutput(this, 'ChatTableName', { value: this.chatTable.tableName });
     new CfnOutput(this, 'AccountsTableName', { value: this.accountsTable.tableName });
     new CfnOutput(this, 'DomainsTableName', { value: this.domainsTable.tableName });
+    if (generatorApi.domainOrders) new CfnOutput(this, 'DomainOrdersQueueUrl', { value: generatorApi.domainOrders.queueUrl });
     new CfnOutput(this, 'GuardrailId', { value: this.guardrail.guardrailId });
     new CfnOutput(this, 'GuardrailVersion', { value: this.guardrail.version });
   }

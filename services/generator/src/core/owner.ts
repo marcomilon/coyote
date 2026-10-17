@@ -71,7 +71,7 @@ export const previewUrl = (site: SiteRecord, urls: Urls) => (site.previewId ? ur
 
 /** What "Mi sitio" shows. Never the token hash. */
 /** Paid-tier page writes the site's owner has left; undefined when page writes are free-tier now (no limit). */
-async function designsLeft(site: SiteRecord, deps: Pick<OwnerDeps, 'stores' | 'pageTier'>): Promise<number | undefined> {
+export async function designsLeft(site: SiteRecord, deps: Pick<OwnerDeps, 'stores' | 'pageTier'>): Promise<number | undefined> {
   if (!site.ownerEmailId || (await deps.pageTier?.()) === 'free') return undefined;
   return paidWritesLeft(deps.stores, site.ownerEmailId);
 }

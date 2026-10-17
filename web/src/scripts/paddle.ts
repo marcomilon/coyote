@@ -45,8 +45,8 @@ function loadPaddle(): Promise<PaddleJs | undefined> {
 
 export const checkoutAvailable = () => Boolean(window.COYOTE_CONFIG?.paddle);
 
-/** Opens the checkout for one design pack. Resolves to false when it couldn't open; `completed` runs once paid. */
-export async function buyDesigns(transaction: { transactionId: string; email?: string }, lang: string, completed: () => void): Promise<boolean> {
+/** Opens the checkout for a transaction from POST /me/checkout. Resolves to false when it couldn't open; `completed` runs once paid. */
+export async function openCheckout(transaction: { transactionId: string; email?: string }, lang: string, completed: () => void): Promise<boolean> {
   const paddle = await loadPaddle();
   if (!paddle) return false;
   onCompleted = completed;

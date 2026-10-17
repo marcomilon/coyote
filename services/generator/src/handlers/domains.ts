@@ -19,7 +19,7 @@ async function registerOpen(): Promise<boolean> {
   }
 }
 
-const deps: DomainDeps = { stores, registrar: porkbun, registerOpen, now: Date.now };
+export const deps: DomainDeps = { stores, registrar: porkbun, registerOpen, now: Date.now };
 
 // GET /me/domain · GET /me/domain/check?q= · POST /me/domain. Same credential as Mi sitio.
 export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event) => {
@@ -42,6 +42,8 @@ export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event
           return json(201, { domain: result.domain });
         case 400:
           return json(400, { error: 'invalid' });
+        case 402:
+          return json(402, { error: 'needs_plan' });
         case 403:
           return json(403, { error: 'closed' });
         case 409:

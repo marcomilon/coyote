@@ -21,6 +21,9 @@ interface Page {
   suggestions?: Quote[];
   registerOpen: boolean;
   plan: 'none' | 'active' | 'past_due' | 'paused' | 'canceled';
+  /** The site on its domain (core/hosting.ts), once the domain is registered. */
+  hosting?: 'setting_up' | 'live' | 'failed';
+  liveUrl?: string;
   /** Paid, being registered on the server; `failed`: it couldn't be, and we were alerted. */
   order?: { domain: string; failed?: true };
 }
@@ -34,6 +37,7 @@ export interface DomainStrings {
   plan: { waiting: string; late: string; failed: string; paused: string };
   owned: Record<DomainView['status'], string>;
   order: { pending: string; failed: string };
+  hosting: { setting_up: string; live: string; failed: string };
   errors: Record<string, string>;
 }
 /**
@@ -84,13 +88,39 @@ export function startDomainTab(panel: HTMLElement, { api, strings, lang, slug }:
     const date = domain.expiresAt ? new Date(domain.expiresAt).toLocaleDateString(lang, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
     $('[data-domain-status]').textContent = strings.owned[domain.status].replace('{date}', date);
     $<HTMLButtonElement>('[data-domain-manage]').hidden = page.plan === 'none';
+    showHosting(domain.domain);
     view('owned');
+  }
+
+  // Publishing on the domain: a line, the link once live; while it is being set up, GET /me/domain every 15 s.
+  let hostingTimer: number | undefined;
+  function showHosting(domain: string) {
+    const line = $<HTMLElement>('[data-domain-hosting]');
+    const link = $<HTMLAnchorElement>('[data-domain-live]');
+    line.hidden = !page.hosting;
+    if (page.hosting) line.textContent = strings.hosting[page.hosting].replace('{domain}', domain);
+    link.hidden = page.hosting !== 'live' || !page.liveUrl;
+    if (page.liveUrl) {
+      link.href = page.liveUrl;
+      link.textContent = domain;
+    }
+    window.clearTimeout(hostingTimer);
+    if (page.hosting === 'setting_up') {
+      hostingTimer = window.setTimeout(async () => {
+        const { status, body } = await api<Page>('/me/domain').catch(() => ({ status: 0, body: undefined }));
+        if (status === 200 && body?.domain) {
+          page = body;
+          showOwned(body.domain);
+        } else showHosting(domain);
+      }, 15_000);
+    }
   }
 
   function showOrder(order: NonNullable<Page['order']>) {
     $('[data-domain-name]').textContent = order.domain;
     $('[data-domain-status]').textContent = order.failed ? strings.order.failed : strings.order.pending;
     $<HTMLButtonElement>('[data-domain-manage]').hidden = page.plan === 'none';
+    $<HTMLElement>('[data-domain-hosting]').hidden = $<HTMLElement>('[data-domain-live]').hidden = true;
     view('owned');
   }
 

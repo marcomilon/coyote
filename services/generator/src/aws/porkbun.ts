@@ -1,6 +1,7 @@
 // The registrar behind domains.ts: Porkbun's API v3 (https://porkbun.com/api/json/v3/documentation).
 // Its DNS is free, so a domain costs only its registration. The key lives in Secrets Manager (👤 created by hand).
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import type { Dns } from '../core/hosting';
 import { RegistrarError, type Quote, type Registrar } from '../core/domains';
 
 const BASE = 'https://api.porkbun.com/api/json/v3/';
@@ -83,5 +84,32 @@ export const porkbun: Registrar = {
       if (error instanceof RegistrarError && error.code === 'DOMAIN_NOT_FOUND') return undefined;
       throw error;
     }
+  },
+};
+
+interface PorkbunRecord {
+  id: string;
+  name: string;
+  type: string;
+  content: string;
+}
+
+/** The domain's DNS at Porkbun (hosting.ts). Free, and our API key manages it. */
+export const porkbunDns: Dns = {
+  async list(domain) {
+    const { records } = await call<{ records?: PorkbunRecord[] }>(`dns/retrieve/${domain}`);
+    return (records ?? []).map(({ id, name, type, content }) => ({ id: String(id), name, type, content }));
+  },
+
+  async create(domain, { name, type, content }) {
+    try {
+      await call(`dns/create/${domain}`, { name, type, content, ttl: '600' });
+    } catch (error) {
+      if (!(error instanceof RegistrarError && error.code === 'DUPLICATE_RECORD')) throw error;
+    }
+  },
+
+  async remove(domain, id) {
+    await call(`dns/delete/${domain}/${id}`);
   },
 };

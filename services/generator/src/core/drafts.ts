@@ -50,9 +50,11 @@ export const newDraftId = () => randomBytes(16).toString('hex');
 export const mediaPrefix = (slug: string) => `_media/${slug}/`;
 export const draftPrefix = (draftId: string) => `_draft/${draftId}/`;
 export const sourcePrefix = (slug: string) => `_src/${slug}/`;
+/** The published copy, served on the owner's domain (the live distribution's origin path is `/_live/{{slug}}`). */
+export const livePrefix = (slug: string) => `_live/${slug}/`;
 const docKey = (slug: string, draftId: string) => `${sourcePrefix(slug)}${draftId}.json`;
 
-const CONTENT_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' };
+const CONTENT_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', html: 'text/html; charset=utf-8' };
 const contentType = (path: string) => CONTENT_TYPES[path.split('.').pop() ?? ''] ?? 'application/octet-stream';
 
 export interface DraftDeps {
@@ -80,7 +82,43 @@ export async function refreshPreview(slug: string, draftId: string, deps: Pick<D
   }
   await stores.putPage(`${to}index.html`, page, 'no-cache');
   if (!site?.previewId) await stores.saveSite({ slug, previewId });
+  // A published site follows every change (cached 5 minutes on the owner's domain).
+  if (site?.status === 'published') await copyLive(slug, draftId, stores);
   return previewId;
+}
+
+/** Makes `_live/<slug>/` an exact copy of a draft, plus our 404 page. */
+async function copyLive(slug: string, draftId: string, stores: Stores) {
+  const from = draftPrefix(draftId);
+  const to = livePrefix(slug);
+  const page = await stores.getText(`${from}index.html`);
+  if (page === undefined) throw new Error(`draft ${draftId} of ${slug} has no page`);
+  const keep = new Set([`${to}index.html`, `${to}404.html`]);
+  for (const key of await stores.listKeys(from)) {
+    if (key === `${from}index.html`) continue;
+    await stores.copyObject(key, `${to}${key.slice(from.length)}`, contentType(key));
+    keep.add(`${to}${key.slice(from.length)}`);
+  }
+  await stores.putPage(`${to}index.html`, page);
+  await stores.copyObject(NOT_FOUND_PAGE, `${to}404.html`, contentType(NOT_FOUND_PAGE));
+  for (const key of await stores.listKeys(to)) if (!keep.has(key)) await stores.deletePrefix(key); // photos the page no longer uses
+}
+
+/** Deployed with the sites (infra `SitesErrorPages`). */
+const NOT_FOUND_PAGE = '_errors/404.html';
+
+/** Paying for the plan publishes the site on its domain (hosting.ts). Idempotent. */
+export async function publishLive(site: SiteRecord, stores: Stores): Promise<void> {
+  if (!site.currentDraftId) throw new Error(`${site.slug} has no draft to publish`);
+  await copyLive(site.slug, site.currentDraftId, stores);
+  if (site.status !== 'published') await stores.saveSite({ slug: site.slug, status: 'published' });
+}
+
+/** The plan ended (canceled, paused): the domain serves nothing until it is paid again. */
+export async function takeDownLive(slug: string, stores: Stores): Promise<void> {
+  await stores.deletePrefix(livePrefix(slug));
+  const site = await stores.getSite(slug);
+  if (site?.status === 'published') await stores.saveSite({ slug, status: 'draft' });
 }
 
 /** Finishes the written page (checks, repairs, footer). A violation here is our bug. */

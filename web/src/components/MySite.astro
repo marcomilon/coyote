@@ -209,7 +209,9 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
             <h2 data-domain-name></h2>
           </header>
           <p class="lead" data-domain-status></p>
-          <p class="next">{d.later}</p>
+          {/* Paying publishes: the site's hosting on the domain (core/hosting.ts). */}
+          <p class="next" data-domain-hosting hidden></p>
+          <a class="btn blue domain-live" data-domain-live target="_blank" rel="noopener" hidden></a>
           <button class="linkbtn" type="button" data-domain-manage hidden>{d.plan.manage}</button>
         </section>
 

@@ -2,6 +2,7 @@
 // or keys. The plan (one subscription per site) pays for the domain chosen at its checkout: once Paddle says it is
 // active, the webhook orders that domain, and a queue registers it (domains.ts `runDomainOrder`), with retries.
 import { tldOf, type Registrar } from './domains';
+import { publishLive, takeDownLive } from './drafts';
 import type { Billing, SiteRecord, Stores } from './jobs';
 import { isSubscribed } from './plan';
 import type { ModelTier } from './models';
@@ -107,10 +108,12 @@ export async function handleEvent(event: PaddleEvent, deps: PaymentDeps): Promis
     if (typeof slug !== 'string' || !slug || !data?.id || !data.customer_id || !data.status || !Number.isFinite(updatedAt) || !hasPrice(data, deps.hostingPriceId)) return 'ignored';
     const billing: Billing = { subscriptionId: data.id, customerId: data.customer_id, status: data.status, updatedAt, ...(data.next_billed_at && { nextBilledAt: data.next_billed_at }) };
     const saved = await deps.stores.saveBilling(slug, billing);
-    // From the site's plan as stored, not this event: a retried event (stale by then) still orders the domain.
+    // From the site's plan as stored, not this event: a retried event (stale by then) still does what it should.
+    const site = await deps.stores.getSite(slug);
+    if (!site) return saved ? 'billed' : 'stale';
     const domain = custom.domain;
-    const site = typeof domain === 'string' && tldOf(domain) ? await deps.stores.getSite(slug) : undefined;
-    if (site && isSubscribed(site) && !site.domain && !site.domainOrder) await orderDomain(slug, domain as string, deps);
+    if (isSubscribed(site) && !site.domain && !site.domainOrder && typeof domain === 'string' && tldOf(domain)) await orderDomain(slug, domain, deps);
+    await followPlan(site, deps);
     return saved ? 'billed' : 'stale';
   }
   return 'ignored';
@@ -125,4 +128,15 @@ async function orderDomain(slug: string, domain: string, deps: PaymentDeps) {
     await deps.stores.clearDomainOrder(slug); // Paddle retries the webhook, which orders it again
     throw error;
   }
+}
+
+/** Paying publishes: a plan that ends takes the site off its domain; paying again puts it back (once hosting is set up). */
+async function followPlan(site: SiteRecord, deps: PaymentDeps) {
+  if (!isSubscribed(site)) {
+    if (site.status === 'published') await takeDownLive(site.slug, deps.stores);
+    return;
+  }
+  if (site.status === 'published' || !site.domain) return;
+  const record = await deps.stores.getDomain(site.domain);
+  if (record?.hosting?.step === 'live') await publishLive(site, deps.stores);
 }

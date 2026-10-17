@@ -1,3 +1,4 @@
+import { livePrefix } from './drafts';
 import { passesCaptcha, type VerifyHuman } from './captcha';
 import type { Stores } from './jobs';
 import { hashIp } from './ratelimit';
@@ -39,8 +40,8 @@ export async function reportSite(slug: string, reason: string, ip: string, deps:
 
   const quarantined = count >= QUARANTINE_AFTER;
   if (quarantined) {
-    await stores.copyPrefix(`${slug}/`, `_quarantine/${slug}/`);
-    await stores.deletePrefix(`${slug}/`);
+    await stores.copyPrefix(livePrefix(slug), `_quarantine/${slug}/`);
+    await stores.deletePrefix(livePrefix(slug)); // the owner's domain serves 404 once its 5-minute cache ends
     await stores.saveSite({ slug, status: 'quarantined' });
     await stores.invalidateSite(slug);
   }

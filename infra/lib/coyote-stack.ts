@@ -336,6 +336,65 @@ export class CoyoteStack extends Stack {
     });
     const sitesBaseUrl = `https://${sitesDistribution.distributionDomainName}`;
 
+    // ---------------------------------------------------------------------------------------
+    // Live distribution (published sites on their owners' domains): CloudFront SaaS Manager
+    // ---------------------------------------------------------------------------------------
+    // Multi-tenant: one distribution tenant per domain (made at runtime by hosting.ts, with a CloudFront-managed
+    // certificate), its origin path /_live/<slug> from the tenant's `slug` parameter. Owners' DNS points at the
+    // connection group's routing endpoint. Separate from the sites distribution: these pages are public and indexed,
+    // and a multi-tenant distribution takes no aliases of its own.
+    const liveConnections = new cloudfront.CfnConnectionGroup(this, 'LiveConnections', { name: 'coyote-live', enabled: true, ipv6Enabled: true });
+    const liveDistribution = new cloudfront.Distribution(this, 'LiveDistribution', {
+      comment: 'coyote live sites (multi-tenant)',
+      defaultRootObject: 'index.html',
+      httpVersion: cloudfront.HttpVersion.HTTP2_AND_3,
+      // A private bucket answers 403 for a missing key. The page is the 404.html publishLive copies into each site.
+      errorResponses: [403, 404].map((httpStatus) => ({ httpStatus, responseHttpStatus: 404, responsePagePath: '/404.html', ttl: Duration.minutes(1) })),
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(this.sitesBucket, { originPath: '/_live/{{slug}}' }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        // An owner's edit reaches the live copy at once (drafts.ts refreshPreview) and shows within 5 minutes.
+        cachePolicy: new cloudfront.CachePolicy(this, 'LiveCache', {
+          minTtl: Duration.seconds(0),
+          defaultTtl: Duration.minutes(5),
+          maxTtl: Duration.days(1),
+          enableAcceptEncodingGzip: true,
+          enableAcceptEncodingBrotli: true,
+        }),
+        functionAssociations: [
+          {
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+            function: new cloudfront.Function(this, 'LiveWww', {
+              runtime: cloudfront.FunctionRuntime.JS_2_0,
+              code: cloudfront.FunctionCode.fromInline(readFileSync(asset('./cf-live.js'), 'utf8')),
+            }),
+          },
+        ],
+        responseHeadersPolicy: new cloudfront.ResponseHeadersPolicy(this, 'LiveHeaders', {
+          securityHeadersBehavior: {
+            contentSecurityPolicy: {
+              override: true,
+              contentSecurityPolicy: sitesCsp({
+                formAction: domain ? domain.urls.apiUrl : `https://*.execute-api.${this.region}.amazonaws.com`,
+                // Public pages: nobody frames them (Mi sitio shows the draft, on the sites distribution).
+                frameAncestors: ["'none'"],
+                scriptHosts: PAGE_SCRIPT_HOSTS,
+                styleHosts: PAGE_STYLE_HOSTS,
+                fontHosts: PAGE_FONT_HOSTS,
+              }),
+            },
+            ...commonSecurityHeaders,
+          },
+        }),
+      },
+    });
+    const liveCfn = liveDistribution.node.defaultChild as cloudfront.CfnDistribution;
+    liveCfn.addPropertyOverride('DistributionConfig.ConnectionMode', 'tenant-only');
+    liveCfn.addPropertyOverride('DistributionConfig.TenantConfig', {
+      ParameterDefinitions: [{ Name: 'slug', Definition: { StringSchema: { Required: true, Comment: 'The site: its pages are under _live/<slug>/' } } }],
+    });
+    liveCfn.addPropertyDeletionOverride('DistributionConfig.IPV6Enabled'); // set on the connection group instead
+
     new s3deploy.BucketDeployment(this, 'SitesErrorPages', {
       sources: [s3deploy.Source.asset(asset('../assets/sites-errors'))],
       destinationBucket: this.sitesBucket,
@@ -472,6 +531,7 @@ export class CoyoteStack extends Stack {
       sitesBucket: this.sitesBucket,
       pageSkillsBucket,
       sitesDistribution,
+      live: { distributionId: liveDistribution.distributionId, connectionGroupId: liveConnections.attrId, routingEndpoint: liveConnections.attrRoutingEndpoint },
       guardrail: this.guardrail,
       abuseReports: this.abuseReports,
       siteNotices: this.siteNotices,
@@ -514,6 +574,7 @@ export class CoyoteStack extends Stack {
       abuseReports: this.abuseReports,
       mailEvents: generatorApi.mailEvents,
       domainOrdersDeadLetters: generatorApi.domainOrdersDeadLetters,
+      hostingSetupsDeadLetters: generatorApi.hostingSetupsDeadLetters,
       monthlyBudgetUsd: 20,
     });
 
@@ -534,6 +595,10 @@ export class CoyoteStack extends Stack {
     new CfnOutput(this, 'ChatTableName', { value: this.chatTable.tableName });
     new CfnOutput(this, 'AccountsTableName', { value: this.accountsTable.tableName });
     new CfnOutput(this, 'DomainsTableName', { value: this.domainsTable.tableName });
+    new CfnOutput(this, 'LiveRoutingEndpoint', { value: liveConnections.attrRoutingEndpoint });
+    new CfnOutput(this, 'LiveDistributionId', { value: liveDistribution.distributionId });
+    new CfnOutput(this, 'LiveConnectionGroupId', { value: liveConnections.attrId });
+    new CfnOutput(this, 'HostingSetupsQueueUrl', { value: generatorApi.hostingSetups.queueUrl });
     if (generatorApi.domainOrders) new CfnOutput(this, 'DomainOrdersQueueUrl', { value: generatorApi.domainOrders.queueUrl });
     new CfnOutput(this, 'GuardrailId', { value: this.guardrail.guardrailId });
     new CfnOutput(this, 'GuardrailVersion', { value: this.guardrail.version });

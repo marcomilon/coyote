@@ -85,6 +85,8 @@ export interface GeneratorApiProps {
   rateLimitPerDay: number;
   /** URL env vars from the stack (see urls.ts `urlConfigFromEnv`). */
   urlEnv: Record<string, string>;
+  /** The live distribution (coyote-stack.ts): its tenants serve published sites on owners' domains (hosting.ts). */
+  live: { distributionId: string; connectionGroupId: string; routingEndpoint: string };
   /** Paddle (design packs, the site's monthly plan). Unset = no checkout routes. */
   paddle?: PaddleConfig;
 }
@@ -108,6 +110,9 @@ export class GeneratorApi extends Construct {
   readonly domainOrdersDeadLetters?: sqs.IQueue;
   /** Paid domains to register (Paddle config only); `./coyote.sh domain-order` resends to it. */
   readonly domainOrders?: sqs.IQueue;
+  /** Registered domains whose site goes live on them; `./coyote.sh hosting` resends to it. */
+  readonly hostingSetups: sqs.IQueue;
+  readonly hostingSetupsDeadLetters: sqs.IQueue;
   /** SES bounces and complaints → suppression; the reputation alarms → email off. Unset without a sender. */
   readonly mailEvents?: lambda.IFunction;
   /** Every route by its key ("POST /generate"): the stage gives some their own throttle and must wait for them. */
@@ -269,7 +274,9 @@ export class GeneratorApi extends Construct {
       }
     }
     // _media/<slug>/: moderated images. _src/<slug>/: sources and site records. _draft/<id>/: served drafts.
-    for (const prefix of ['_media/*', '_src/*', '_draft/*']) {
+    // _live/<slug>/: a published site, which follows every change (drafts.ts refreshPreview); _errors/ gives its 404.
+    for (const f of [generate, owner, chat]) props.sitesBucket.grantRead(f, '_errors/*');
+    for (const prefix of ['_media/*', '_src/*', '_draft/*', '_live/*']) {
       props.sitesBucket.grantReadWrite(generate, prefix);
       props.sitesBucket.grantDelete(generate, prefix); // old drafts, and a made photo that fails moderation
       props.sitesBucket.grantReadWrite(owner, prefix);
@@ -306,6 +313,59 @@ export class GeneratorApi extends Construct {
     props.sitesTable.grantReadWriteData(domains);
     props.accountsTable.grantReadData(domains); // checkSession, and the email that prefills the form
     props.rateLimitTable.grantReadWriteData(domains);
+
+    // Hosting (hosting.ts): once a domain is registered, its site goes live on it. Each step that has to wait (DNS,
+    // the certificate) comes back after the visibility timeout; after 24 tries (about 2 hours) the dead-letter
+    // queue alarms.
+    const hostingDeadLetters = new sqs.Queue(this, 'HostingSetupsDeadLetters', { retentionPeriod: Duration.days(14), enforceSSL: true });
+    const hostingSetups = new sqs.Queue(this, 'HostingSetups', {
+      visibilityTimeout: Duration.minutes(5),
+      retentionPeriod: Duration.days(4),
+      enforceSSL: true,
+      deadLetterQueue: { queue: hostingDeadLetters, maxReceiveCount: 24 },
+    });
+    this.hostingSetupsDeadLetters = hostingDeadLetters;
+    this.hostingSetups = hostingSetups;
+    hostingSetups.grantSendMessages(domains);
+    domains.addEnvironment('HOSTING_SETUPS_QUEUE_URL', hostingSetups.queueUrl);
+    const hosting = fn('HostingSetup', 'hosting-setup', {
+      memorySize: 256,
+      timeout: Duration.minutes(1),
+      environment: {
+        ...environment,
+        PORKBUN_SECRET_NAME,
+        LIVE_DISTRIBUTION_ID: props.live.distributionId,
+        LIVE_CONNECTION_GROUP_ID: props.live.connectionGroupId,
+        LIVE_ROUTING_ENDPOINT: props.live.routingEndpoint,
+      },
+    });
+    porkbunKey.grantRead(hosting);
+    props.domainsTable.grantReadWriteData(hosting);
+    props.sitesTable.grantReadWriteData(hosting);
+    props.sitesBucket.grantRead(hosting, '_draft/*');
+    props.sitesBucket.grantRead(hosting, '_errors/*');
+    props.sitesBucket.grantReadWrite(hosting, '_live/*');
+    props.sitesBucket.grantDelete(hosting, '_live/*');
+    hosting.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'cloudfront:CreateDistributionTenant',
+          'cloudfront:GetDistributionTenant',
+          'cloudfront:GetDistributionTenantByDomain',
+          'cloudfront:UpdateDistributionTenant',
+          'cloudfront:DeleteDistributionTenant',
+          'cloudfront:GetManagedCertificateDetails',
+          'cloudfront:CreateInvalidationForDistributionTenant',
+          'cloudfront:GetDistribution',
+          'cloudfront:GetConnectionGroup',
+          // CloudFront requests and renews the managed certificate in ACM on the caller's behalf.
+          'acm:RequestCertificate',
+          'acm:DescribeCertificate',
+        ],
+        resources: ['*'],
+      }),
+    );
+    hosting.addEventSource(new eventSources.SqsEventSource(hostingSetups, { batchSize: 1, reportBatchItemFailures: true }));
 
     const report = fn('Report', 'report', { environment: { ...withInvalidation, IP_HASH_SALT: ipSalt, ABUSE_TOPIC_ARN: props.abuseReports.topicArn } });
 
@@ -418,6 +478,14 @@ export class GeneratorApi extends Construct {
       props.accountsTable.grantReadData(domainOrder); // the owner's email on the domain record
       props.rateLimitTable.grantReadWriteData(domainOrder);
       domainOrder.addEventSource(new eventSources.SqsEventSource(orders, { batchSize: 1, reportBatchItemFailures: true }));
+      hostingSetups.grantSendMessages(domainOrder);
+      domainOrder.addEnvironment('HOSTING_SETUPS_QUEUE_URL', hostingSetups.queueUrl);
+      // Paying publishes: a plan that ends takes the live copy down, paying again puts it back (payments.ts).
+      props.domainsTable.grantReadData(payments);
+      props.sitesBucket.grantRead(payments, '_draft/*');
+      props.sitesBucket.grantRead(payments, '_errors/*');
+      props.sitesBucket.grantReadWrite(payments, '_live/*');
+      props.sitesBucket.grantDelete(payments, '_live/*');
       pageMode.grantRead(payments);
       pageModel.grantRead(payments);
       props.sitesTable.grantReadWriteData(payments); // the plan (billing) on the site

@@ -240,7 +240,11 @@ const es = {
       },
       owned: { registered: 'Registrado hasta el {date}.', registering: 'Registrando…', pending: 'Registrado. Estamos terminando de configurarlo.' },
       order: { pending: 'Estamos registrando tu dominio. Puede tardar unos minutos.', failed: 'Tuvimos un problema registrando tu dominio. Ya lo estamos revisando y te escribimos pronto.' },
-      later: 'Pronto podrás conectar este dominio a tu página web.',
+      hosting: {
+        setting_up: 'Estamos publicando tu página web en {domain}. Puede tardar hasta una hora.',
+        live: 'Tu página web está en línea:',
+        failed: 'Tuvimos un problema publicando tu página web. Ya lo estamos revisando y te escribimos pronto.',
+      },
       errors: { not_available: 'Ese dominio ya no está libre. Elige otro.', price_changed: 'El precio cambió. Busca de nuevo.', has_domain: 'Esta página web ya tiene un dominio.', needs_plan: 'Primero activa el plan de tu página web.', closed: 'El registro de dominios abre pronto.', rate_limited: 'Hoy no podemos registrar más dominios. Inténtalo mañana.', registrar: 'El registro de dominios no respondió. Inténtalo de nuevo en un rato.' },
     },
   },
@@ -488,7 +492,6 @@ const esVos: DeepPartial<typeof es> = {
       closed: 'El registro de dominios abre pronto. Ya podés buscar el tuyo.',
       invalid: 'Escribí solo letras, números y guiones, sin espacios ni tildes.',
       limited: 'Hiciste muchas búsquedas hoy. Volvé mañana.',
-      later: 'Pronto vas a poder conectar este dominio a tu página web.',
       plan: {
         intro: 'Para registrar tu dominio necesitás el plan de tu página web. Podés cancelarlo cuando quieras.',
                 late: 'Tu pago está tardando en confirmarse. Volvé a abrir esta pestaña en unos minutos.',
@@ -780,7 +783,11 @@ const pt: typeof es = {
       },
       order: { pending: 'Estamos registrando seu domínio. Pode levar alguns minutos.', failed: 'Tivemos um problema ao registrar seu domínio. Já estamos verificando e falamos com você em breve.' },
       owned: { registered: 'Registrado até {date}.', registering: 'Registrando…', pending: 'Registrado. Estamos terminando de configurá-lo.' },
-      later: 'Em breve você poderá conectar este domínio ao seu site.',
+      hosting: {
+        setting_up: 'Estamos publicando seu site em {domain}. Pode levar até uma hora.',
+        live: 'Seu site está no ar:',
+        failed: 'Tivemos um problema ao publicar seu site. Já estamos verificando e falamos com você em breve.',
+      },
       errors: { not_available: 'Esse domínio não está mais livre. Escolha outro.', price_changed: 'O preço mudou. Busque de novo.', has_domain: 'Este site já tem um domínio.', needs_plan: 'Primeiro ative o plano do seu site.', closed: 'O registro de domínios abre em breve.', rate_limited: 'Hoje não podemos registrar mais domínios. Tente amanhã.', registrar: 'O registro de domínios não respondeu. Tente de novo daqui a pouco.' },
     },
   },

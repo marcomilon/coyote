@@ -6,7 +6,11 @@ import { z } from 'zod';
 import { normalizeForMatch } from './brands';
 import type { DomainRecord, SiteRecord, Stores } from './jobs';
 import { day, inTwoDays } from './owner';
+import { hostingView } from './hosting';
+import { RetryLater } from './retry';
+export { RetryLater } from './retry';
 import { isSubscribed, planOf } from './plan';
+import { liveUrl } from './urls';
 
 /** The TLDs offered: `.com` only for now (WHOIS privacy everywhere; the local ones Porkbun sells are `.com.mx`, `.mx`, `.co`). */
 export const TLDS = ['com'] as const;
@@ -42,8 +46,13 @@ export interface DomainDeps {
   registrar: Registrar;
   /** The `./coyote.sh domain-register` switch. */
   registerOpen(): Promise<boolean>;
+  /** Hands a registered domain to the hosting setup (hosting.ts) through its queue. */
+  queueHosting?(slug: string, domain: string): Promise<void>;
   now(): number;
 }
+
+/** A hosting setup whose queue message never arrived is queued again after this long (on GET /me/domain). */
+const HOSTING_REQUEUE_MS = 15 * 60 * 1000;
 
 const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
@@ -115,17 +124,29 @@ export async function registerDomain(site: SiteRecord, input: unknown, deps: Dom
   return { status: 201, domain: domainView(await finishSetup((await deps.stores.getDomain(domain))!, deps)) };
 }
 
-/** Auto-renew off, expiry noted. Leaves `setup_pending` if the registrar fails; GET retries. */
-async function finishSetup(record: DomainRecord, deps: Pick<DomainDeps, 'stores' | 'registrar'>): Promise<DomainRecord> {
+/** Auto-renew off, expiry noted, hosting queued. Leaves `setup_pending` if the registrar fails; GET retries. */
+async function finishSetup(record: DomainRecord, deps: Pick<DomainDeps, 'stores' | 'registrar' | 'queueHosting' | 'now'>): Promise<DomainRecord> {
+  let done: DomainRecord;
   try {
     await deps.registrar.setAutoRenew(record.domain, false);
     const details = await deps.registrar.get(record.domain);
-    const done: DomainRecord = { ...record, status: 'registered', expiresAt: details?.expiresAt };
-    await deps.stores.saveDomain({ domain: record.domain, status: 'registered', expiresAt: details?.expiresAt });
-    return done;
+    const hosting = { step: 'publish' as const, at: deps.now() };
+    done = { ...record, status: 'registered', expiresAt: details?.expiresAt, hosting };
+    await deps.stores.saveDomain({ domain: record.domain, status: 'registered', expiresAt: details?.expiresAt, hosting });
   } catch (error) {
     console.error('domain setup failed, retried on the next GET', record.domain, error);
     return record;
+  }
+  await queueHosting(done, deps);
+  return done;
+}
+
+/** A failed send is picked up again by GET /me/domain after HOSTING_REQUEUE_MS, or `./coyote.sh hosting <slug> resend`. */
+async function queueHosting(record: DomainRecord, deps: Pick<DomainDeps, 'queueHosting'>) {
+  try {
+    await deps.queueHosting?.(record.slug, record.domain);
+  } catch (error) {
+    console.error('hosting setup not queued', record.domain, error);
   }
 }
 
@@ -184,20 +205,35 @@ async function suggestDomains(site: SiteRecord, deps: Pick<DomainDeps, 'stores' 
 }
 
 /** GET /me/domain: the site's domain (finishing a setup left halfway), or names to suggest; whether registering is open; the site's plan. */
-export async function domainPage(site: SiteRecord, deps: DomainDeps) {
+export interface DomainPage {
+  registerOpen: boolean;
+  plan: ReturnType<typeof planOf>;
+  domain?: DomainView;
+  hosting?: 'setting_up' | 'live' | 'failed';
+  liveUrl?: string;
+  order?: { domain: string; failed?: boolean };
+  suggestions?: Quote[];
+}
+
+export async function domainPage(site: SiteRecord, deps: DomainDeps): Promise<DomainPage> {
   let record = site.domain ? await deps.stores.getDomain(site.domain) : undefined;
   if (record?.status === 'setup_pending') record = await finishSetup(record, deps);
   else if (record?.status === 'registering' && deps.now() - record.createdAt > STUCK_MS) record = await recover(record, deps);
   const registerOpen = await deps.registerOpen();
   const plan = planOf(site);
-  if (record) return { domain: domainView(record), registerOpen, plan };
+  if (record?.hosting?.step === 'publish' && !record.hosting.failed && deps.now() - record.hosting.at > HOSTING_REQUEUE_MS) {
+    await deps.stores.saveDomain({ domain: record.domain, hosting: { ...record.hosting, at: deps.now() } });
+    await queueHosting(record, deps);
+  }
+  if (record) {
+    const hosting = hostingView(record);
+    return { domain: domainView(record), registerOpen, plan, ...(hosting && { hosting }), ...(hosting === 'live' && { liveUrl: liveUrl(record.domain) }) };
+  }
   // Paid, the registration queued (or refused: we were alerted).
   if (site.domainOrder) return { order: { domain: site.domainOrder.domain, ...(site.domainOrder.failed && { failed: true }) }, registerOpen, plan };
   return { suggestions: await suggestDomains(site, deps), registerOpen, plan };
 }
 
-/** Thrown for a refusal that may pass later, so the queue delivers the order again (and alerts when it gives up). */
-export class RetryLater extends Error {}
 
 /**
  * The domain-orders queue: registers the domain the plan paid for (payments.ts orders it). A refusal that may pass

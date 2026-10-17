@@ -7,7 +7,7 @@ function setup() {
   const memory = memoryStores();
   const sent: string[] = [];
   memory.sites.set('sitio-malo', { slug: 'sitio-malo', status: 'published', jobId: 'j1', createdAt: 1 });
-  memory.objects.set('sitio-malo/index.html', '<html>');
+  memory.objects.set('_live/sitio-malo/index.html', '<html>');
   const deps = { stores: memory.stores, ipSalt: 's', notify: async (subject: string) => void sent.push(subject), now: () => 1_800_000_000_000 };
   return { ...memory, sent, deps };
 }
@@ -17,7 +17,7 @@ describe('reportSite', () => {
     const t = setup();
     for (let i = 0; i < 5; i++) expect(await reportSite('sitio-malo', 'spam', '1.1.1.1', t.deps)).toMatchObject({ status: 202, quarantined: false });
     expect(t.sent).toHaveLength(1);
-    expect(t.objects.has('sitio-malo/index.html')).toBe(true);
+    expect(t.objects.has('_live/sitio-malo/index.html')).toBe(true);
   });
 
   it(`quarantines after ${QUARANTINE_AFTER} distinct visitors and notifies the admin each time`, async () => {
@@ -25,7 +25,7 @@ describe('reportSite', () => {
     await reportSite('sitio-malo', 'estafa', '1.1.1.1', t.deps);
     await reportSite('sitio-malo', 'estafa', '2.2.2.2', t.deps);
     expect(await reportSite('sitio-malo', 'estafa', '3.3.3.3', t.deps)).toEqual({ status: 202, counted: true, quarantined: true });
-    expect(t.objects.has('sitio-malo/index.html')).toBe(false);
+    expect(t.objects.has('_live/sitio-malo/index.html')).toBe(false);
     expect(t.objects.has('_quarantine/sitio-malo/index.html')).toBe(true);
     expect(t.sites.get('sitio-malo')!.status).toBe('quarantined');
     expect(t.invalidated).toContain('sitio-malo');

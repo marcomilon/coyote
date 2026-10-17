@@ -145,6 +145,24 @@ export interface DomainRecord {
   priceCents: number;
   /** The owner's account email, to reach them about the domain. */
   ownerEmail?: string;
+  /** Serving the site on the domain (hosting.ts), once it is registered. */
+  hosting?: Hosting;
+}
+
+/**
+ * The hosting setup's progress (hosting.ts), one step at a time: publish → dns → tenant → cert → live.
+ * failed: a refusal retrying can't fix (we get an alert).
+ */
+export interface Hosting {
+  step: 'publish' | 'dns' | 'tenant' | 'cert' | 'live';
+  /** The CloudFront distribution tenant serving the domain. */
+  tenantId?: string;
+  /** Managed certificate requests made (one retry after a timeout). */
+  certRequests?: number;
+  failed?: string;
+  /** ms since epoch: the last step change. */
+  at: number;
+  liveAt?: number;
 }
 
 /** Fields to change. */

@@ -31,7 +31,7 @@ describe('CoyoteStack, domainless', () => {
   it('synthesizes without credentials and creates no DNS or certificates', () => {
     template.resourceCountIs('AWS::CertificateManager::Certificate', 0);
     template.resourceCountIs('AWS::Route53::RecordSet', 0);
-    template.resourceCountIs('AWS::CloudFront::Distribution', 2);
+    template.resourceCountIs('AWS::CloudFront::Distribution', 3);
     template.resourceCountIs('AWS::DynamoDB::GlobalTable', 8);
   });
 
@@ -83,11 +83,11 @@ describe('CoyoteStack, domainless', () => {
     expect(() => synth({ prescreenModelId: 'us.amazon.nova-unknown-v1:0' })).toThrow(/has no tier/);
   });
 
-  it('lets only the domains Lambda read the registrar key and the domain-register switch, which starts off', () => {
+  it('lets only the domain Lambdas read the registrar key, and only the domains Lambda the domain-register switch, which starts off', () => {
     template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/domain-register', Value: 'off' });
     const policies = template.findResources('AWS::IAM::Policy');
     const holders = (text: string) => Object.keys(policies).filter((id) => JSON.stringify(policies[id]).includes(text)).map((id) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
-    expect(holders('coyote/porkbun-api')).toEqual(['GeneratorApiDomains']);
+    expect(holders('coyote/porkbun-api')).toEqual(['GeneratorApiDomains', 'GeneratorApiHostingSetup']);
     expect(holders('GeneratorApiDomainRegister')).toEqual(['GeneratorApiDomains']);
     template.hasResourceProperties('AWS::DynamoDB::GlobalTable', { KeySchema: [{ AttributeName: 'domain', KeyType: 'HASH' }] });
   });
@@ -197,7 +197,27 @@ describe('CoyoteStack, domainless', () => {
       .filter(([, p]) => JSON.stringify(p.Properties.PolicyDocument).includes(':secret:coyote/porkbun-api'))
       .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''))
       .sort();
-    expect(porkbunReaders).toEqual(['GeneratorApiDomainOrder', 'GeneratorApiDomains', 'GeneratorApiPayments']);
+    expect(porkbunReaders).toEqual(['GeneratorApiDomainOrder', 'GeneratorApiDomains', 'GeneratorApiHostingSetup', 'GeneratorApiPayments']);
+  });
+
+  it('serves published sites from a multi-tenant distribution: one tenant per domain, public and indexed', () => {
+    const [, live] = Object.entries(template.findResources('AWS::CloudFront::Distribution')).find(([id]) => id.startsWith('LiveDistribution'))!;
+    const config = live.Properties.DistributionConfig;
+    expect(config.ConnectionMode).toBe('tenant-only');
+    expect(config.TenantConfig.ParameterDefinitions).toEqual([expect.objectContaining({ Name: 'slug', Definition: { StringSchema: expect.objectContaining({ Required: true }) } })]);
+    expect(config.Origins[0].OriginPath).toBe('/_live/{{slug}}');
+    expect(config.Aliases).toBeUndefined();
+    expect(config.IPV6Enabled).toBeUndefined();
+    template.hasResourceProperties('AWS::CloudFront::ConnectionGroup', { Enabled: true, Ipv6Enabled: true });
+    const [, headers] = Object.entries(template.findResources('AWS::CloudFront::ResponseHeadersPolicy')).find(([id]) => id.startsWith('LiveHeaders'))!;
+    const policy = JSON.stringify(headers);
+    expect(policy).not.toContain('noindex');
+    expect(policy).toContain("frame-ancestors 'none'");
+    template.hasResourceProperties('AWS::SQS::Queue', { VisibilityTimeout: 300, RedrivePolicy: Match.objectLike({ maxReceiveCount: 24 }) });
+    const tenantMakers = Object.entries(template.findResources('AWS::IAM::Policy'))
+      .filter(([, p]) => JSON.stringify(p.Properties.PolicyDocument).includes('cloudfront:CreateDistributionTenant'))
+      .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
+    expect(tenantMakers).toEqual(['GeneratorApiHostingSetup']);
   });
 
   it('hands the Turnstile site key to the web when one is set', () => {
@@ -306,7 +326,7 @@ describe('CoyoteStack, domainless', () => {
   });
 
   it('alarms on abuse and cost; email subscriptions are managed by coyote.sh, not the stack', () => {
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 10);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 12);
     template.resourceCountIs('AWS::Budgets::Budget', 1);
     template.resourceCountIs('AWS::CE::AnomalyMonitor', 1);
     template.resourceCountIs('AWS::SNS::Subscription', 0);

@@ -1,3 +1,4 @@
+import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { porkbun } from '../aws/porkbun';
@@ -19,7 +20,18 @@ async function registerOpen(): Promise<boolean> {
   }
 }
 
-export const deps: DomainDeps = { stores, registrar: porkbun, registerOpen, now: Date.now };
+const sqs = new SQSClient({});
+
+export const deps: DomainDeps = {
+  stores,
+  registrar: porkbun,
+  registerOpen,
+  // The hosting setup (handlers/hosting-setup.ts) starts once a domain is registered.
+  async queueHosting(slug, domain) {
+    await sqs.send(new SendMessageCommand({ QueueUrl: process.env.HOSTING_SETUPS_QUEUE_URL, MessageBody: JSON.stringify({ slug, domain }) }));
+  },
+  now: Date.now,
+};
 
 // GET /me/domain · GET /me/domain/check?q= · POST /me/domain. Same credential as Mi sitio.
 export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event) => {

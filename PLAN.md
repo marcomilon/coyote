@@ -238,12 +238,13 @@ The owner looks at the draft on a computer and asks for changes from their phone
 - The phone polls `GET /me/chat?after=<at>` every 2 s while a reply is pending, 6 s otherwise. The create page polls it every 5 s while visible (for an hour after the last change) and swaps the preview when the draft changes. `GET /me/chat` has its own API Gateway throttle (25 rps, burst 50), above the stage's 5/10.
 - Messages expire after 90 days and are deleted with the site.
 
-## Drafts (nothing is published yet)
-- Every version is a draft at `_draft/<draftId>/` (random 128-bit ID), served by the sites distribution with `X-Robots-Tag: noindex` and the sites CSP (inline scripts and the listed CDNs, no network access); `frame-ancestors` lets the app show it. `/{slug}/` is not served until the publishing plan.
+## Drafts and publishing
+- Every version is a draft at `_draft/<draftId>/` (random 128-bit ID), served by the sites distribution with `X-Robots-Tag: noindex` and the sites CSP (inline scripts and the listed CDNs, no network access); `frame-ancestors` lets the app show it. A site is public only once its plan is paid, on its own domain (custom domains, step 5).
 - Drafts show only inside the app's pages, so a draft link is useless for phishing. The sites rewrite returns 404 when `Sec-Fetch-Dest` is `document` (the link opened in a tab) or missing (old browsers); `frame-ancestors` stops other sites from framing it. "Abrir en otra pestaña" opens `/ver#token=…` (`/pt/ver`): the draft full screen under a "Borrador privado" bar that is always shown.
 - Drafts do not expire; old versions beyond the last 5 are deleted.
 - Each site also has a **preview**, `_draft/<previewId>/`: a stable URL that follows `currentDraftId` (a copy made whenever the pointer moves: new draft, undo, `refill-all`), served with `no-cache` so a reload always shows the current version. The `/ver` page shows it; the versioned drafts stay for undo.
-- 👤 Later plan: publishing, admin review, and the go-live email.
+- **Paying publishes.** A site with an active plan and a registered domain gets a live copy at `_live/<slug>/`, served on the domain by the live distribution (custom domains, step 5). It follows every change (`refreshPreview` copies to it). A plan that ends takes it down; paying again puts it back.
+- 👤 Later: admin review and the go-live email.
 
 ## Landing examples
 - The landing's "Negocios como el tuyo" cards show the example sites (Taller Ruiz, Panadería Rosa, Salón Luna; inputs in `examples/{mx-taller,co-panaderia,ar-salon}.json`), made by Opus with photos through `opus:sites --images on`. They are the only public pages before the publishing plan.
@@ -399,7 +400,7 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Delete the theme pipeline (themes, render, brief, content prompts, Tailwind build, sheets, hero images); every draft is a written page
 - [ ] Deploy and live checks, including `verify:live`
 - [ ] 👤 AWS Support case: Claude Opus 5.5 and Sonnet 5 refused on the account ("not available for this account")
-- [ ] 👤 Later plan: publishing, admin review, and the go-live email
+- [ ] 👤 Later plan: admin review and the go-live email (publishing is built: paying publishes)
 
 ### Phase 5d — Chat edits from the phone (QR)
 - [x] `chat` table, `chat` Lambda, `GET`/`POST /me/chat` with a poll cap and route throttle; Haiku `edit_page` on a page outline, contact changes, redesign offer; unit and stack tests
@@ -464,7 +465,8 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Mi sitio "Dominio" tab: search, a confirm card (Coyote is the registrant), register behind `./coyote.sh domain-register` (off by default) and a daily cap; status on the tab. The tab stays hidden (CSS) until the whole flow is finished, unless `PUBLIC_DOMAIN_TAB=on`
 - [ ] 👤 One real `.com` end to end: registrant is our account's contact, privacy on, auto-renew off
 - [ ] 👤 Terms: Coyote registers and holds the domain for the owner's site; transfer to the owner on request
-- [ ] Connect a domain to its site (after publishing): distribution tenant + managed cert, DNS records through Porkbun's API
+- [x] Paying publishes: live copy, live multi-tenant distribution + connection group, `HostingSetups` queue (DNS at Porkbun, tenant + managed cert), alarms, `domain-attach` / `domain-detach` / `hosting`
+- [ ] 👤 Test domain in our Porkbun account (API access on): `domain-attach` → live on https; edit shows within 5 min; `domain-detach` cleans up
 - [x] 👤 Payment provider chosen: Paddle (sandbox for now)
 - [x] Design pack checkout + webhook (`payments.ts`): 3 designs for USD 4.90
 - [ ] 👤 `coyote/paddle` secret and the Paddle webhook destination; one sandbox purchase end to end
@@ -531,7 +533,13 @@ A site is published only on its own domain, chosen in Mi sitio → "Dominio". No
 4. A failure after the charge leaves `setup_pending`; the next `GET /me/domain` retries. A registration cut off mid-way (`registering` for over 2 minutes) is finished if Porkbun has the domain, else freed.
 
 **Later**
-5. Connect to the site (after publishing): CloudFront multi-tenant distribution (SaaS Manager): one multi-tenant distribution + connection group; per domain, a distribution tenant with a CloudFront-managed cert, origin path `/{slug}/`. Through Porkbun's DNS API: the cert's validation CNAME, `www` CNAME and an apex ALIAS → the tenant's endpoint.
+5. **Hosting (built).** Once a domain is `registered` (both paths go through `finishSetup`), `{slug, domain}` goes to the `HostingSetups` SQS queue. The `HostingSetup` Lambda runs `runHostingSetup` (`core/hosting.ts`), one step at a time, each safe to repeat, kept on `DomainRecord.hosting`:
+   - `publish`: the current draft → `_live/<slug>/` with our 404 page; `site.status = 'published'`.
+   - `dns` (Porkbun's DNS API): delete what answers for the apex or `www` besides ours (the `pixie.porkbun.com` parking records), then `ALIAS @`, `CNAME www` and `TXT _cf-challenge` → the live connection group's routing endpoint.
+   - `tenant`: a distribution tenant `site-<slug>` on the live distribution (CloudFront SaaS Manager, `tenant-only`, origin path `/_live/{{slug}}`), domains apex + `www`, with a CloudFront-managed certificate (HTTP validation through the records above). A redelivery adopts our own tenant; a domain on another tenant fails.
+   - `cert`: wait until the certificate is `issued` and both domains are `active`; a timed-out certificate is requested once more. Then `live`.
+   A step that has to wait is retried every 5 minutes, 24 times (about 2 hours), then the dead-letter alarm `HostingStuck`; one that can't succeed alarms at once (`HostingFailed`). `./coyote.sh hosting <slug> [resend]`. The live distribution redirects `www` to the apex, has no `noindex` and `frame-ancestors 'none'`, caches 5 minutes. Mi sitio shows "Estamos publicando…" and then the link. Pricing: 10 tenants free a month, then USD 20 for up to 200; the certificates are free.
+   Testing without buying: `./coyote.sh domain-attach <slug> <domain>` links a domain already in our Porkbun account (a test plan, no Paddle) and starts the same setup; `./coyote.sh domain-detach <slug>` undoes it.
 6. Registering opens to everyone and the switch goes, once the plan's sandbox check passes and Paddle is live. A canceled plan keeps its domain until the year ends (auto-renew is off); step 7 decides what happens then.
 7. Renewal: daily EventBridge scan of `domains` expiring in 30/7/1 days → WhatsApp utility template or email → payment link → on payment, renew. Unpaid → expires; the tenant is deleted; the site goes back to a private draft.
 

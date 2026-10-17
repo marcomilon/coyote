@@ -23,6 +23,8 @@ export interface MonitoringProps {
   monthlyBudgetUsd: number;
   /** Paid domains whose registration ran out of retries. */
   domainOrdersDeadLetters?: sqs.IQueue;
+  /** Registered domains whose site couldn't go live on them after the retries. */
+  hostingSetupsDeadLetters: sqs.IQueue;
 }
 
 /**
@@ -83,6 +85,8 @@ export class Monitoring extends Construct {
     if (props.domainOrdersDeadLetters) {
       alarm('DomainOrdersStuck', 'A paid domain is still not registered after an hour of retries. Check the DomainOrder logs, then ./coyote.sh domain-order <slug>.', props.domainOrdersDeadLetters.metricApproximateNumberOfMessagesVisible({ period: Duration.minutes(5), statistic: 'Maximum' }), 0);
     }
+    alarm('HostingFailed', 'A site could not go live on its domain (the domain is on another CloudFront tenant, or its certificate failed twice). Run ./coyote.sh hosting <slug>.', metric('HostingFailed', Duration.minutes(5)), 0);
+    alarm('HostingStuck', 'A site is still not live on its domain after two hours of retries (DNS, certificate). Check the HostingSetup logs, then ./coyote.sh hosting <slug> resend.', props.hostingSetupsDeadLetters.metricApproximateNumberOfMessagesVisible({ period: Duration.minutes(5), statistic: 'Maximum' }), 0);
     alarm('GenerateErrors', 'The generate Lambda crashed or timed out.', props.generate.metricErrors({ period: Duration.minutes(5), statistic: 'Sum' }), 0);
     alarm('Api5xx', 'The API is returning server errors.', apiMetric('5xx'), 5);
     alarm('Api4xx', 'Unusual number of client errors (includes 422 and 429).', apiMetric('4xx'), 200);

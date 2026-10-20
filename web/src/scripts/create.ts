@@ -2,7 +2,7 @@
 // → Mi sitio, opened with the magic link. Validation uses the same zod schema as the API, so the two can never disagree.
 import { supportLine } from './support';
 import { ZodError } from 'zod';
-import { normalizeAnswers } from '../../../services/generator/src/core/answers';
+import { Answers, normalizeAnswers } from '../../../services/generator/src/core/answers';
 import { isOurExample } from '../../../services/generator/src/core/example-about';
 import { api, apiUrl, sendAnswers, waitForJob, type JobView } from './jobs';
 import { fullNumber, setUpCountryPicker } from './phone';
@@ -25,6 +25,7 @@ interface Strings {
   notImage: string;
   removePhoto: string;
   caption: { label: string; placeholder: string };
+  improve: { failed: string; limited: string };
   submit: string;
   mySitePath: string;
   question: QuestionStrings & { invalid: string; intro: string; requiredIntro: string; needed: string };
@@ -57,6 +58,49 @@ form.querySelectorAll<HTMLElement>('[data-count-for]').forEach((counter) => {
   };
   field.addEventListener('input', update);
   update();
+});
+
+// "Mejorar mi descripción": the cheap model rewrites the description (POST /describe), and its text replaces the
+// owner's, with up to 2 facts they could add listed under it. Nothing else changes: the owner edits it or not, and
+// the form sends it as usual.
+const improveButton = $<HTMLButtonElement>('[data-improve]');
+improveButton.addEventListener('click', async () => {
+  const about = form.elements.namedItem('about') as HTMLTextAreaElement;
+  const error = $<HTMLElement>('[data-error="about"]');
+  const say = (text: string) => {
+    error.classList.remove('callout');
+    error.textContent = text;
+  };
+  const tips = $<HTMLElement>('[data-improve-tips]');
+  tips.hidden = true;
+  if (!apiUrl) return say(strings.noApi);
+  if (!Answers.shape.about.safeParse(about.value).success) return setErrors(['about']);
+  if (isOurExample(about.value)) return setErrors(['about:unclear']);
+  setErrors([]);
+  setBusy(improveButton, true);
+  try {
+    const turnstileToken = await human.token();
+    const { status, body } = await api<{ about?: string; missing?: string[]; error?: string }>('/describe', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ businessName: (form.elements.namedItem('businessName') as HTMLInputElement).value, about: about.value, lang: strings.lang, turnstileToken }),
+    });
+    if (status === 200 && body.about) {
+      about.value = body.about.slice(0, about.maxLength);
+      about.dispatchEvent(new Event('input')); // the counter
+      about.focus();
+      const missing = body.missing ?? [];
+      tips.querySelector('ul')!.replaceChildren(...missing.map((text) => Object.assign(document.createElement('li'), { textContent: text })));
+      tips.hidden = missing.length === 0;
+    } else if (status === 400) setErrors(['about']);
+    else if (status === 422 && body.error === 'unclear') setErrors(['about:unclear']);
+    else say(status === 429 ? strings.improve.limited : strings.improve.failed);
+  } catch {
+    say(strings.improve.failed);
+  } finally {
+    human.reset(); // a token works once: the form's submit needs a fresh one
+    setBusy(improveButton, false);
+  }
 });
 
 // Photos: images only, at most MAX_PHOTOS; extra or non-image files are dropped with a note.

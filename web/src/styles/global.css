@@ -53,6 +53,7 @@ a:not(.btn):hover { color: var(--rojo); }
 .site-header .home-nav { gap: 0 20px; font-size: 15px; }
 .home-nav a:not(.btn) { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; }
 .home-nav .btn.small { font-size: 15px; }
+.home-nav .nav-links { display: contents; }
 /* Fixed width: a select is as wide as its longest option (República Dominicana), which pushed the nav to a second row.
    A long name is cut with an ellipsis; the open list shows it whole. */
 select.country { width: 12rem; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; min-height: 44px; font-size: 15px; padding: 6px 2.2rem 6px 10px; border-radius: 6px; background-color: var(--paper); }
@@ -63,12 +64,19 @@ select.country { width: 12rem; text-overflow: ellipsis; white-space: nowrap; ove
   /* The hero's button is right below; the header keeps the links and the country */
   .site-header .home-nav { width: 100%; justify-content: flex-start; }
   .home-nav .btn.small { display: none; }
-  .home-nav select.country { margin-left: auto; }
+  /* Two rows: the logo with the country picker beside it, then the links. The nav's items join the header's grid. */
+  .site-header.home { display: grid; grid-template-columns: 1fr minmax(6rem, 8.5rem); gap: 4px 14px; }
+  .site-header.home .brand img { height: 2.1rem; }
+  .site-header.home .home-nav { display: contents; }
+  .home-nav .nav-links { display: flex; gap: 0 20px; grid-column: 1 / -1; grid-row: 2; white-space: nowrap; }
+  .home-nav .nav-links a { min-width: 0; }
+  .home-nav select.country { grid-column: 2; grid-row: 1; width: 100%; }
 }
+@media (max-width: 22rem) { .site-header.home .brand img { height: 1.9rem; } }
 @media (max-width: 25rem) {
   .site-header nav:not(.home-nav) { flex-wrap: nowrap; gap: .7rem; font-size: .875rem; white-space: nowrap; }
   .site-header nav:not(.home-nav) .btn.small { font-size: .78rem; padding: .65rem .75rem; }
-  .site-header .home-nav { gap: 0 14px; }
+  .home-nav .nav-links { gap: 0 14px; }
 }
 @media (max-width: 21rem) { .site-header nav:not(.home-nav) { gap: .5rem; font-size: .8rem; } }
 
@@ -96,6 +104,11 @@ select.country { width: 12rem; text-overflow: ellipsis; white-space: nowrap; ove
 .btn.wa { background: var(--verde); color: var(--ink); font-size: 18px; padding: 18px 26px; }
 .btn.flat { box-shadow: none; }
 .btn.flat:hover { box-shadow: var(--shadow); }
+/* On phones a long label (ENVIARME EL ENLACE POR CORREO) is wider than the card: let it wrap, and a form's buttons take the row. */
+@media (max-width: 40rem) {
+  .btn:not(.small) { max-width: 100%; white-space: normal; text-align: center; }
+  .submit-row .btn { width: 100%; }
+}
 
 /* ---- Home ---- */
 .includes h2, .steps h2, .proof h2, .pricing h2, .faq h2 { font-size: clamp(32px, 4.5vw, 48px); line-height: 1.05; }
@@ -205,7 +218,7 @@ select.country { width: 12rem; text-overflow: ellipsis; white-space: nowrap; ove
 
 .pricing { padding-block: 56px; }
 .pricing .sub { margin-top: 12px; max-width: none; }
-.plans { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); max-width: 800px; margin-top: 36px; }
+.plans { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); max-width: 1100px; margin-top: 36px; }
 .plan { gap: 14px; padding: 28px; }
 .plan h3 { font-size: 20px; }
 .plan .price { font: 400 48px/1 var(--display); text-transform: uppercase; }
@@ -216,8 +229,10 @@ select.country { width: 12rem; text-overflow: ellipsis; white-space: nowrap; ove
 .plan.pro { background: var(--azul); color: var(--paper-light); }
 .plan-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .plan .tag { flex: none; padding: 4px 8px; border: 2px solid var(--ink); border-radius: 4px; background: var(--amarillo); color: var(--ink); font: 700 12px/1.2 var(--body); text-transform: uppercase; }
-.plan.pro .price { display: flex; align-items: baseline; gap: 6px; color: var(--amarillo); }
-.plan.pro .price small { font: 400 16px/1 var(--body); color: var(--paper-light); text-transform: none; }
+.plan .price:has(small) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.plan .price small { font: 400 16px/1 var(--body); text-transform: none; }
+.plan.pro .price { color: var(--amarillo); }
+.plan.pro .price small { color: var(--paper-light); }
 
 .wa-band { margin-top: 56px; background: var(--azul); border-block: 2px solid var(--ink); }
 .wa-band .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 32px; padding-block: 64px; }
@@ -279,6 +294,14 @@ input:focus, textarea:focus, select:focus { outline: 3px solid var(--amarillo); 
 @media (prefers-reduced-motion: reduce) { .error.callout { animation: none; } }
 .count { font-size: .8rem; text-align: right; opacity: .6; margin-top: .3rem; font-variant-numeric: tabular-nums; }
 .count.full { color: var(--rojo); opacity: 1; font-weight: 600; }
+/* Under the description: "Mejorar mi descripción" and the counter. */
+.about-tools { display: flex; justify-content: space-between; align-items: center; gap: .5rem 1rem; margin-top: .5rem; }
+.about-tools .count { margin-top: 0; margin-left: auto; }
+/* After "Mejorar mi descripción": the facts the owner could add, in a card (a tip, so yellow where the callout is red). */
+.card.improve-tips { gap: .4rem; margin-top: .75rem; padding: .9rem 1rem; border-left: 10px solid var(--amarillo); }
+.card.improve-tips[hidden] { display: none; }
+.improve-tips p { font-weight: 700; }
+.improve-tips ul { margin: 0; padding-left: 1.2rem; }
 .choices { display: flex; flex-wrap: wrap; gap: .4rem; }
 .choice { cursor: pointer; }
 .choice input { position: absolute; opacity: 0; width: 1px; height: 1px; }
@@ -499,7 +522,12 @@ button[aria-busy='true'] .dots i { width: .6rem; height: .6rem; border-width: 2p
 .site-bar { display: flex; flex-wrap: wrap; gap: .8rem 1.5rem; align-items: center; justify-content: flex-end; margin-top: 1.4rem; min-height: 48px; }
 .site-bar .viewport[hidden] { display: none; }
 .site-bar:has(> .viewport[hidden]) { display: none; } /* nothing else in it: no empty gap on the other tabs */
-@media (max-width: 36rem) { .tabs { display: flex; flex-wrap: nowrap; } .tabs [role='tab'] { min-width: 0; flex: 1 1 0; padding: .8rem .4rem; font-size: .78rem; } }
+/* Phones: six tabs in one row squeezed the labels letter by letter, so they go two per row. Without the Dominio tab, the last one takes its row. */
+@media (max-width: 36rem) {
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; }
+  .tabs [role='tab'] { min-width: 0; padding: .9rem .6rem; font-size: .82rem; line-height: 1.15; text-wrap: balance; }
+  .mysite:not([data-domain-tab]) #tab-change { grid-column: 1 / -1; }
+}
 .viewport { display: inline-flex; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; }
 .viewport button { font: inherit; font-weight: 600; background: var(--paper); border: 0; padding: .55rem 1rem; min-height: 44px; cursor: pointer; color: var(--ink); }
 .viewport button[aria-pressed='true'] { background: var(--ink); color: var(--paper); }
@@ -524,6 +552,19 @@ button[aria-busy='true'] .dots i { width: .6rem; height: .6rem; border-width: 2p
 .mysite .banner .buy { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .mysite .banner .buy[hidden] { display: none; }
 .notice[data-kind='error'] { color: var(--rojo); }
+/* Mi sitio's page messages (toast.ts): bottom center, gone after a few seconds. */
+.toast {
+  position: fixed; left: 50%; bottom: 1.5rem; z-index: 20;
+  width: max-content; max-width: calc(100% - 2rem);
+  margin: 0; padding: .85rem 1.25rem;
+  border: 2px solid var(--ink); border-left: 8px solid var(--azul); border-radius: 10px;
+  background: var(--paper-light); color: var(--ink); box-shadow: var(--shadow);
+  font-weight: 600; cursor: pointer;
+  opacity: 0; visibility: hidden; transform: translate(-50%, 1rem);
+  transition: opacity .2s, transform .2s, visibility .2s;
+}
+.toast[data-show] { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 .danger { margin-top: 3rem; border-top: 3px dashed var(--ink); padding-top: 1.6rem; display: grid; gap: 1.2rem; }
 .danger[hidden] { display: none; }
 .danger .line { display: flex; flex-wrap: wrap; gap: .8rem 1.2rem; align-items: center; }
@@ -543,12 +584,16 @@ button[aria-busy='true'] .dots i { width: .6rem; height: .6rem; border-width: 2p
 .designs-panel:not([hidden]) { display: grid; gap: 1.2rem; }
 .designs-panel .lead { font-size: 1.1rem; margin: 0; max-width: 44rem; }
 .designs { list-style: none; margin: 0; padding: 0; display: grid; gap: .8rem; max-width: 44rem; }
-.designs li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .8rem; padding: 1rem 1.2rem; background: var(--paper); border: 2px solid var(--ink); border-radius: 10px; }
+.designs li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .8rem 1.2rem; padding: 1rem 1.2rem; background: var(--paper); border: 2px solid var(--ink); border-radius: 10px; }
 .designs li[data-current] { background: var(--paper-light); border-left: 10px solid var(--azul); }
 .designs .what { display: grid; gap: .15rem; min-width: 0; }
 .designs .what small { color: var(--muted); overflow-wrap: anywhere; }
 .designs .badge { display: inline-block; margin-left: .5rem; padding: .1rem .5rem; border-radius: 999px; background: var(--azul); color: var(--paper-light); font-size: .75rem; font-weight: 700; vertical-align: middle; }
-.designs .actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+.designs .actions { display: flex; gap: .6rem; margin: 0; justify-content: flex-end; }
+@media (max-width: 560px) {
+  .designs li { grid-template-columns: 1fr; }
+  .designs .actions { justify-content: flex-start; }
+}
 .designs-panel .notice:empty { display: none; }
 .photos-panel { max-width: 44rem; }
 .photos-panel:not([hidden]) { display: grid; gap: 1.6rem; }
@@ -597,7 +642,7 @@ input[type='file']::file-selector-button { font: 400 .8rem/1 var(--display); bac
 .not-found h1 { font-size: clamp(2rem, 6vw, 3rem); margin-bottom: 1rem; }
 .not-found .hint { margin-top: 2rem; }
 /* Mi sitio → Dominio */
-/* Hidden until the whole domain flow is finished, unless PUBLIC_DOMAIN_TAB=on (MySite.astro). */
+/* Hidden only when the build has PUBLIC_DOMAIN_TAB=off (MySite.astro). */
 .mysite:not([data-domain-tab]) #tab-domain,
 .mysite:not([data-domain-tab]) #panel-domain {
   display: none !important;

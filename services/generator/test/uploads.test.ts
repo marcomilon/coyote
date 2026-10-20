@@ -229,6 +229,33 @@ describe('uploads in a generation', () => {
     expect(await editSite(site(), { uploadId: UPLOAD }, t.ownerDeps)).toEqual({ status: 402 });
   });
 
+  it('photos taken out of, added to, or described in a row of the owner\'s photos: changed in place, no page writer, no paid write', async () => {
+    const t = setup();
+    t.objects.set(`_uploads/${UPLOAD}/photo-1.jpg`, 'jpg');
+    t.objects.set(`_uploads/${UPLOAD}/photo-2.jpg`, 'jpg2');
+    // The writer shows the owner's photos in a row.
+    t.writer.options.page = (request) =>
+      `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Panadería Luna</title></head><body><main><h1>Panadería Luna</h1><p>${request.answers.about}</p><p>${'Pan recién horneado. '.repeat(20)}</p><div class="row">${request.photos.map((p) => `<figure class="shot"><img src="${p.file}" alt=""></figure>`).join('')}</div><a href="https://wa.me/${request.answers.contact.whatsapp}">WhatsApp</a></main></body></html>`;
+    await submit(t.body, '1.2.3.4', t.submitDeps);
+    await runGenerateJob('job-1', t.generateDeps);
+    const site = () => t.sites.get('panaderia-luna')!;
+    // Out of redesigns: changes in place still go through.
+    t.ownerDeps.pageTier = async () => 'paid';
+    for (let i = 0; i < 2; i++) await t.stores.hitRateLimit(`paid-writes#${site().ownerEmailId}`, 3, 0);
+    const added = '9a8b7c6d-1e2f-4a3b-8c4d-5e6f7a8b9c0d';
+    t.objects.set(`_uploads/${added}/photo-1.jpg`, 'new');
+
+    expect(await editSite(site(), { uploadId: added, newCaptions: ['Café'], removePhotos: ['assets/photo-f1.jpg'], captions: { 'assets/photo-f2.jpg': 'Torta' } }, t.ownerDeps)).toMatchObject({ status: 202 });
+    await runGenerateJob('job-2', t.generateDeps);
+    expect(t.jobs.get('job-2')).toMatchObject({ status: 'DONE', tier: 'free' });
+    expect(t.jobs.get('job-2')!.paidWrite).toBeUndefined();
+    expect(t.writer.requests).toHaveLength(1);
+    expect(t.objects.get('_draft/draft2/index.html')).toContain('<div class="row"><figure class="shot"><img src="assets/photo-f2.jpg" alt="Torta"></figure><figure class="shot"><img src="assets/photo-f3.jpg" alt="Café"></figure></div>');
+
+    // The last photo of the row on its own: taking it out needs the page writer, a redesign (none left: 402).
+    expect(await editSite(site(), { removePhotos: ['assets/photo-f2.jpg', 'assets/photo-f3.jpg'] }, t.ownerDeps)).toEqual({ status: 402 });
+  });
+
   it('a new logo goes into the logo spot the page was tagged with (a drawn mark), with no page writer', async () => {
     const t = setup();
     await submit({ ...t.body, uploadId: undefined }, '1.2.3.4', t.submitDeps);

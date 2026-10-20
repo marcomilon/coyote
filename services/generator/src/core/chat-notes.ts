@@ -35,6 +35,11 @@ const NOTES = {
   },
 } as const;
 
+const SUPPORT = { es: 'Si crees que es un error, escríbenos a', vos: 'Si creés que es un error, escribinos a', pt: 'Se achar que é um erro, escreva para' } as const;
+
+/** A refusal, with where to write if the owner thinks it is a mistake (nowhere with no domain: urls.supportEmail). */
+export const withSupport = (text: string, voice: Voice, supportEmail?: string) => (supportEmail ? `${text} ${SUPPORT[voice]} ${supportEmail}.` : text);
+
 const ttl = (now: number) => Math.floor(now / 1000) + CHAT_TTL_SECONDS;
 
 /** A redesign started: a pending note that names its job. Resolves to the note's `at`, kept on the job. */
@@ -44,11 +49,12 @@ export async function noteRedesign(stores: Pick<Stores, 'putChat'>, slug: string
 }
 
 /** The redesign ended: its note says how, and a new draft makes it a change the owner can undo. Resolves to the change. */
-export async function noteRedesignDone(stores: Pick<Stores, 'updateChat'>, job: Job, outcome: 'DONE' | 'REJECTED' | 'FAILED', draftId?: string): Promise<Partial<ChatMessage>> {
+export async function noteRedesignDone(stores: Pick<Stores, 'updateChat'>, job: Job, outcome: 'DONE' | 'REJECTED' | 'FAILED', supportEmail: string | undefined, draftId?: string): Promise<Partial<ChatMessage>> {
   if (!job.slug || job.chatAt === undefined) return {};
-  const say = NOTES[voiceOf(job.answers)];
+  const voice = voiceOf(job.answers);
+  const say = NOTES[voice];
   const patch: Partial<ChatMessage> =
-    outcome === 'DONE' ? { status: 'done', text: say.redesigned, ...(draftId && { draftId }) } : { status: 'failed', text: outcome === 'REJECTED' ? say.rejected : say.failed };
+    outcome === 'DONE' ? { status: 'done', text: say.redesigned, ...(draftId && { draftId }) } : { status: 'failed', text: outcome === 'REJECTED' ? withSupport(say.rejected, voice, supportEmail) : say.failed };
   await stores.updateChat(job.slug, job.chatAt, patch).catch((error: unknown) => console.warn('chat: redesign note not updated', { jobId: job.jobId, error }));
   return patch;
 }

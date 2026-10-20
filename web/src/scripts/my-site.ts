@@ -12,6 +12,7 @@ import { qrCode } from './live-preview';
 import { captionField, captionsOf, showThumbs, UploadLimitError, uploadImages } from './upload';
 import { forgetOwnerTokens, ownerHash, ownerToken, tokenHash } from './owner-token';
 import { buyDesignPack, type BuyStrings } from './buy-designs';
+import { toast } from './toast';
 import { checkoutAvailable } from './paddle';
 import { setBusy } from './busy';
 
@@ -57,6 +58,7 @@ interface SiteImage {
 }
 type Message = { title: string; text: string };
 interface Strings {
+  designsLeft: { one: string; many: string };
   designsOut: BuyStrings;
   noToken: Message;
   badToken: Message;
@@ -196,8 +198,15 @@ function showFrozen(frozen: boolean) {
   if (frozen) showSupport($('[data-frozen] [data-support]'));
 }
 
-/** The banner for an owner whose designs are used up (a 402 from a redesign shows it too), with the pack to buy. */
-function showDesignsOut(out: boolean) {
+/**
+ * The designs card: how many are left, or, once used up (a 402 from a redesign shows it too), the pack to buy.
+ * `left` is undefined when page writes are free-tier: no card.
+ */
+function showDesignsLeft(left: number | undefined) {
+  const out = left === 0;
+  const card = $<HTMLElement>('[data-designs-left]');
+  card.hidden = !left;
+  if (left) card.querySelector('strong')!.textContent = left === 1 ? strings.designsLeft.one : strings.designsLeft.many.replace('{n}', String(left));
   $<HTMLElement>('[data-designs-out]').hidden = !out;
   $<HTMLElement>('[data-buy-designs]').hidden = !out || !checkoutAvailable();
 }
@@ -211,7 +220,7 @@ function setUpBuyDesigns() {
     note.textContent = text;
     note.dataset.kind = error ? 'error' : '';
   };
-  button.onclick = () => void buyDesignPack<View>(api, strings.lang, strings.designsOut, { say, busy: (on) => setBusy(button, on), arrived: designsArrived });
+  button.onclick = () => void buyDesignPack<View>(api, strings.lang, strings.designsOut, { say, busy: (on) => setBusy(button, on), arrived: designsArrived, late: () => (button.disabled = true) });
 }
 
 /** A design pack arrived, bought from the banner or the chat: the banner goes. */
@@ -222,7 +231,7 @@ function designsArrived(view: View) {
 }
 
 function notice(text: string) {
-  $<HTMLElement>('[data-notice]').textContent = text;
+  toast($<HTMLElement>('[data-notice]'), text);
 }
 
 const api = <T>(path: string, method = 'GET', body?: unknown) =>
@@ -248,7 +257,7 @@ function fill(view: View) {
   showPhotos(view.images);
   showMade(view.made);
   showTexts(view.texts);
-  showDesignsOut(view.designsLeft === 0);
+  showDesignsLeft(view.designsLeft);
   showDesigns(view.designs ?? []);
   showFrozen(view.frozen === true);
   $<HTMLButtonElement>('[data-delete]').onclick = async () => {
@@ -293,9 +302,11 @@ function startSiteChat() {
       if (first) return;
       $<HTMLIFrameElement>('.device iframe').src = current;
       notice(strings.qr.updated);
-      // A redesign may have changed the photos, and any change the texts.
+      // A redesign adds a design and may have changed the photos, and any change the texts.
       void api<View>('/me').then(({ status, body }) => {
         if (status !== 200) return;
+        showDesignsLeft(body.designsLeft);
+        showDesigns(body.designs ?? []);
         showPhotos(body.images);
         if (chosen.size === 0) showMade(body.made);
         if (!textsDirty()) showTexts(body.texts);
@@ -420,7 +431,7 @@ photosForm.onsubmit = async (event) => {
       notice(logoOnly ? strings.photos.made.started : strings.photos.started);
       showTab('preview');
     } else {
-      if (status === 402) showDesignsOut(true);
+      if (status === 402) showDesignsLeft(0);
       if (status === 423) showFrozen(true);
       photoError(status === 423 ? strings.frozen.title : status === 402 ? strings.photos.noDesigns : status === 409 ? strings.photos.busy : status === 429 ? strings.photos.limited : strings.photos.failed);
     }

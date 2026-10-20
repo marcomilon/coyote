@@ -34,7 +34,6 @@ const onboarding = (WHATSAPP.onboarding && contact) || s.paths.create;
 const [primary, secondary] = WHATSAPP_FIRST
   ? [{ label: h.ctaWhatsapp, href: onboarding }, { label: h.ctaWeb, href: s.paths.create }]
   : [{ label: h.cta, href: s.paths.create }, { label: h.seeExamples, href: '#ejemplos' }];
-const [subBefore, subAfter] = h.pricing.sub.split('{currency}');
 const testimonials = TESTIMONIALS[lang];
 const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
 ---
@@ -225,17 +224,7 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
 
   <section class="pricing wrap" id="precio">
     <h2>{h.pricing.title}</h2>
-    <p class="sub">
-      {subBefore}
-      {
-        perCountry((c) => c.currency[lang]).map((v) => (
-          <span data-country={v.code} hidden={v.hidden}>
-            {v.value}
-          </span>
-        ))
-      }
-      {subAfter}
-    </p>
+    <p class="sub">{h.pricing.sub}</p>
     <div class="plans">
       <div class="card plan">
         <h3>{h.pricing.free.name}</h3>
@@ -249,13 +238,7 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
           <span class="tag">{h.pricing.pro.tag}</span>
         </div>
         <p class="price">
-          {
-            perCountry((c) => c.price).map((v) => (
-              <span data-country={v.code} hidden={v.hidden}>
-                {v.value}
-              </span>
-            ))
-          }
+          {h.pricing.pro.price}
           <small>{h.pricing.pro.per}</small>
         </p>
         <ul>
@@ -281,6 +264,14 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
           }
         </ul>
         <a class="btn flat" href={s.paths.create}>{h.pricing.pro.cta}</a>
+      </div>
+      <div class="card plan">
+        <h3>{h.pricing.designs.name}</h3>
+        <p class="price">
+          {h.pricing.designs.price}
+          <small>{h.pricing.designs.per}</small>
+        </p>
+        {h.pricing.designs.text.map((line) => <p class="plan-text">{line}</p>)}
       </div>
     </div>
   </section>

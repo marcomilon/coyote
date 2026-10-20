@@ -4,6 +4,7 @@ import { claimFreeDraft, returnFreeDraft } from './free-draft';
 import { noteRefusal } from './freeze';
 import { claimPaidWrite, returnPaidWrite } from './paid-writes';
 import { hasLogoSpot, placeLogo, tagLogo } from './logo';
+import { changePhotosInPlace } from './photo-slots';
 import { noteRedesignDone } from './chat-notes';
 import { GuardrailBlocked, type CallTool, type ImageInput, type Usage } from './bedrock';
 import type { Media } from './content';
@@ -327,7 +328,7 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
   const finish = async (patch: Partial<Job>, draftId?: string) => {
     await stores.updateJob(jobId, { usage: [...job.usage, ...usage], ...patch });
     // A redesign from the chat: its note there says how it ended.
-    if (patch.status === 'DONE' || patch.status === 'REJECTED' || patch.status === 'FAILED') await noteRedesignDone(stores, job, patch.status, draftId);
+    if (patch.status === 'DONE' || patch.status === 'REJECTED' || patch.status === 'FAILED') await noteRedesignDone(stores, job, patch.status, deps.urls.supportEmail, draftId);
   };
 
   let site = await stores.getSite(slug);
@@ -404,9 +405,15 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
       await stores.updateJob(jobId, { stage: 'write' });
     }
 
+    // A photo change the page has a place for (photo-slots.ts), made with no page writer. Logos have their own swaps.
+    const logos = [media.logo, current?.media.logo];
+    const photosPage =
+      current && photoChange && !job.instruction && !photoChange.replaced?.length && !photoChange.placed && ![...photoChange.added, ...photoChange.removed].some((file) => logos.includes(file))
+        ? changePhotosInPlace(current.page, photoChange, current.media.photos, media.captions)
+        : undefined;
     // A paid-tier writer (models.ts) uses the new site's free draft, claimed atomically right before it runs.
-    // Swapping in the owner's photos calls no model.
-    const tier = current && (photoChange?.replaced?.length || photoChange?.placed) ? 'free' : modelTier(writerModel(deps.pageMode, deps.pageModel, deps.modelId));
+    // Swapping in the owner's photos, or changing them in place, calls no model.
+    const tier = current && (photoChange?.replaced?.length || photoChange?.placed || photosPage) ? 'free' : modelTier(writerModel(deps.pageMode, deps.pageModel, deps.modelId));
     if (job.tier !== tier) {
       job.tier = tier;
       await stores.updateJob(jobId, { tier });
@@ -455,7 +462,7 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
     const requests = [...(current?.requests ?? []), ...(job.instruction ? [job.instruction] : [])];
     // The owner's photos in place of made ones: swapped in the page, with no page writer.
     const swaps = current && photoChange?.replaced?.length ? photoChange.replaced.map((made, i) => ({ made, photo: photoChange!.added[i]! })) : undefined;
-    const placedPage = current && photoChange?.placed ? placeLogo(current.page, photoChange.placed, job.answers.businessName) : undefined;
+    const placedPage = (current && photoChange?.placed ? placeLogo(current.page, photoChange.placed, job.answers.businessName) : undefined) ?? photosPage;
     const written = placedPage
       ? await checkWrittenPage(placedPage, [], request, requests, slug, deps).then((checked) => ('problem' in checked || !current!.template ? checked : { ...checked, template: current!.template }))
       : swaps
@@ -598,7 +605,7 @@ export async function recordGenerateCrash(jobId: string, errorMessage: string | 
   if (job.freeDraft && job.ownerEmail) await returnFreeDraft(stores, job.ownerEmail);
   if (job.paidWrite) await returnPaidWrite(stores, job.paidWrite);
   await stores.updateJob(jobId, { status: 'FAILED', error });
-  await noteRedesignDone(stores, job, 'FAILED');
+  await noteRedesignDone(stores, job, 'FAILED', undefined);
   await announceFailure(deps.announce, job, error, [], /timed out/i.test(error));
 }
 

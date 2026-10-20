@@ -414,7 +414,8 @@ export class GeneratorApi extends Construct {
       f.addToRolePolicy(invokePrescreen);
       f.addToRolePolicy(applyGuardrail);
     }
-    for (const f of [generate, chat]) f.addToRolePolicy(invokeWriter);
+    // submit: "Mejorar mi descripción" (describe.ts) runs on the same cheap model.
+    for (const f of [submit, generate, chat]) f.addToRolePolicy(invokeWriter);
     // The image model (us-west-2: us-east-1 has no text-to-image model) takes no guardrail: the scene goes through
     // ApplyGuardrail first and the photo through Rekognition (images.ts).
     generate.addToRolePolicy(
@@ -430,6 +431,7 @@ export class GeneratorApi extends Construct {
     route('/generate', apigwv2.HttpMethod.POST, submit);
     route('/jobs/{id}', apigwv2.HttpMethod.GET, status);
     route('/jobs/{id}/answers', apigwv2.HttpMethod.POST, submit);
+    route('/describe', apigwv2.HttpMethod.POST, submit);
     route('/report/{slug}', apigwv2.HttpMethod.POST, report);
     route('/uploads', apigwv2.HttpMethod.POST, uploads);
     route('/me', apigwv2.HttpMethod.GET, owner);

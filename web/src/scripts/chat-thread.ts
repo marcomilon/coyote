@@ -90,7 +90,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
   /** "Deshacer" was tapped: the bubble asks before undoing. */
   let confirmingUndo = false;
   /** The design pack's checkout from a reply: its line under the button, and whether the button waits. */
-  let buying = { note: '', error: false, busy: false };
+  let buying = { note: '', error: false, busy: false, late: false };
   let active = false;
   let pollTimer: number | undefined;
   /** What the thread last showed: a poll that changes nothing leaves the page (and its scroll) alone. */
@@ -144,10 +144,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
         li.className = `bubble ${m.role}`;
         li.dataset.status = m.status;
         const p = document.createElement('p');
-        if (m.status === 'pending' && !m.text) {
-          // Still writing: the loading dots, read out as "thinking".
-          Object.assign(p, { role: 'status', ariaLabel: strings.thinking, innerHTML: '<span class="dots small" aria-hidden="true"><i></i><i></i><i></i></span>' });
-        } else p.textContent = m.text;
+        p.textContent = m.status === 'pending' && !m.text ? strings.thinking : m.text;
         li.append(p);
         if (m.changed) {
           const tag = Object.assign(document.createElement('span'), { className: m.undone ? 'tag undone' : 'tag', textContent: m.undone ? `↩ ${strings.undoneTag}` : `✓ ${strings.changed}` });
@@ -175,6 +172,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
         if (m.buyDesigns && m === lastBuy && checkoutAvailable()) {
           const buy = button(strings.designsOut.buy, 'btn small', () => void buyPack());
           setBusy(buy, buying.busy);
+          buy.disabled ||= buying.late;
           const note = Object.assign(document.createElement('span'), { className: 'notice', textContent: buying.note });
           note.setAttribute('aria-live', 'polite');
           note.dataset.kind = buying.error ? 'error' : '';
@@ -277,6 +275,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
       say: (note, error = false) => update({ note, error }),
       busy: (on) => update({ busy: on }),
       arrived: (view: { designsLeft?: number }) => onDesignsBought?.(view),
+      late: () => update({ late: true }),
     });
   }
 

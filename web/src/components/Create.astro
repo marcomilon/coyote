@@ -24,6 +24,7 @@ const clientStrings = {
   notImage: c.photos.notImage,
   removePhoto: c.photos.remove,
   caption: c.photos.caption,
+  improve: { failed: c.q2.improveFailed, limited: c.q2.improveLimited },
   submit: c.submit,
   mySitePath: s.paths.mySite,
   question: s.questions,
@@ -60,7 +61,14 @@ const [readyBefore, readyAfter] = c.working.ready.text.split('{email}');---
           <label class="q" for="about"><i>2</i>{c.q2.label}</label>
           <p class="hint" id="about-hint">{c.q2.hint}</p>
           <textarea id="about" name="about" maxlength="1000" aria-describedby="about-hint" placeholder={c.q2.placeholder} required></textarea>
-          <p class="count" data-count-for="about" aria-hidden="true"></p>
+          <div class="about-tools">
+            <button type="button" class="btn small ghost" data-improve>{c.q2.improve}</button>
+            <p class="count" data-count-for="about" aria-hidden="true"></p>
+          </div>
+          <div class="card improve-tips" data-improve-tips hidden>
+            <p>{c.q2.improveTips}</p>
+            <ul></ul>
+          </div>
           <p class="error" data-error="about" role="alert"></p>
         </fieldset>
 

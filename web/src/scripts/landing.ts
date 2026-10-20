@@ -1,10 +1,11 @@
-// Home page: the country picker (currency, price, TLD), the hero's example tabs, and the links
-// to the example sites.
+// Home page: the country picker (TLD), the hero's example tabs, the links to the example sites, and Paddle's
+// payment links (paddle.ts openLinkedCheckout).
 // The picker starts on the saved choice, else the visitor's country from /geo (phone.ts detectCountry).
 // The page is complete without this script: it renders the default country and the first example.
 // The FAQ needs no script: <details name="faq"> keeps one answer open at a time.
 import { VOSEO_COUNTRIES } from '../../../services/generator/src/core/i18n';
 import { detectCountry } from './phone';
+import { openLinkedCheckout } from './paddle';
 
 const KEY = 'ventas314.country';
 
@@ -126,3 +127,5 @@ document.querySelectorAll<HTMLAnchorElement>('a[data-example]').forEach((link) =
   link.href = url;
   link.hidden = false;
 });
+
+openLinkedCheckout();

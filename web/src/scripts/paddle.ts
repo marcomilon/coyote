@@ -18,6 +18,8 @@ declare global {
 }
 
 const SCRIPT_URL = 'https://cdn.paddle.com/paddle/v2/paddle.js';
+/** Long enough to see Paddle's tick, then the overlay closes by itself. */
+const CLOSE_AFTER_MS = 4000;
 
 let loading: Promise<PaddleJs | undefined> | undefined;
 let onCompleted: (() => void) | undefined;
@@ -32,7 +34,15 @@ function loadPaddle(): Promise<PaddleJs | undefined> {
       const paddle = window.Paddle;
       if (!paddle) return resolve(undefined);
       if (config.env === 'sandbox') paddle.Environment.set('sandbox');
-      paddle.Initialize({ token: config.clientToken, eventCallback: (event) => event.name === 'checkout.completed' && onCompleted?.() });
+      paddle.Initialize({
+        token: config.clientToken,
+        eventCallback: (event) => {
+          if (event.name !== 'checkout.completed') return;
+          onCompleted?.();
+          // Paddle's success screen stays until closed; our page already says the payment arrived.
+          setTimeout(() => paddle.Checkout.close(), CLOSE_AFTER_MS);
+        },
+      });
       resolve(paddle);
     };
     script.onerror = () => {
@@ -44,6 +54,14 @@ function loadPaddle(): Promise<PaddleJs | undefined> {
 }
 
 export const checkoutAvailable = () => Boolean(window.COYOTE_CONFIG?.paddle);
+
+/**
+ * Paddle's default payment link is our home page: its emails (a subscription's new card, a failed renewal) send the
+ * owner there with `?_ptxn=<transaction>`, and Paddle.js opens that checkout by itself once initialized.
+ */
+export function openLinkedCheckout() {
+  if (new URLSearchParams(location.search).has('_ptxn')) void loadPaddle();
+}
 
 /** Opens the checkout for a transaction from POST /me/checkout. Resolves to false when it couldn't open; `completed` runs once paid. */
 export async function openCheckout(transaction: { transactionId: string; email?: string }, lang: string, completed: () => void): Promise<boolean> {

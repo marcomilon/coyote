@@ -7,8 +7,9 @@ import { countUsage } from './email-usage';
 import { isFrozen, noteRefusal } from './freeze';
 import type { Announce } from './notices';
 import { publicJob, type ChatMessage, type SiteRecord } from './jobs';
-import { CHAT_TTL_SECONDS, noteRedesignDone } from './chat-notes';
+import { CHAT_TTL_SECONDS, noteRedesignDone, withSupport } from './chat-notes';
 import { applyContact, day, designsLeft, inTwoDays, previewUrl, runningEdit, type ContactInput, type OwnerDeps } from './owner';
+import { editScope } from './edit-scope';
 import { checkPage } from './page-check';
 import { applyChanges, elide, type Change } from './page-outline';
 import { ownerTextsAfter, pageTexts } from './page-texts';
@@ -18,7 +19,8 @@ import { isRejected, prescreen } from './prescreen';
  * The chat: the owner scans a QR on the result page and asks for changes from their phone. Each message gets a
  * reply from Haiku, which changes the page's text with find/replace changes on an outline of the page (no page
  * writer, so seconds and cents instead of minutes and dollars). Contact changes go through the same path as the
- * contact form. A change that needs design work gets a "Rediseñar" offer, which starts the usual Opus edit job.
+ * contact form. A change that needs design work gets a "Rediseñar" offer, which starts the usual Opus edit job: Haiku
+ * decides which is which, and an edit that adds design of its own (edit-scope.ts) gets the offer instead.
  * The finished page goes through the same checks as any other: page checks, content policy, output guardrail.
  */
 
@@ -58,7 +60,8 @@ const REPLIES = {
     noDesigns: 'Você já usou todos os seus designs, então não posso fazer um novo. Se quiser outro design, compre mais 3 no botão abaixo. Enquanto isso, posso mudar seus textos e seus contatos.',
   },
 } as const;
-const REFUSALS = new Set<string>(Object.values(REPLIES).map((r) => r.refused));
+const REFUSALS = Object.values(REPLIES).map((r) => r.refused);
+const isRefusal = (text: string | undefined) => text !== undefined && REFUSALS.some((r) => text.startsWith(r));
 
 /** What the browser sees of a message. */
 export function publicMessage(message: ChatMessage, now: number) {
@@ -89,7 +92,7 @@ export async function chatView(site: SiteRecord, after: number | undefined, { st
     const job = await stores.getJob(m.jobId!);
     const status = job ? publicJob(job, now()).status : 'FAILED';
     if (status === 'PENDING' || status === 'NEEDS_INPUT') continue;
-    Object.assign(m, job ? await noteRedesignDone(stores, job, status) : { status: 'failed' });
+    Object.assign(m, job ? await noteRedesignDone(stores, job, status, urls.supportEmail) : { status: 'failed' });
   }
   const view = {
     draftUrl: site.currentDraftId ? urls.draftUrl(site.currentDraftId) : undefined,
@@ -154,13 +157,13 @@ type EditPage = z.infer<typeof EditPage>;
 
 const SYSTEM = `You edit the content of a small business's one-page website for its owner, who writes to you in a chat from their phone. The owner is not technical.
 
-You get the current page as HTML. To keep it short, parts of it are hidden behind placeholders like ⟦12⟧: styles, scripts, drawings, embedded images, and long class or style attributes. Leave placeholders exactly as they are.
+You get the current page as HTML. To keep it short, parts of it are hidden behind placeholders like ⟦12⟧: styles, scripts, drawings, embedded images, and long class or style attributes. Leave placeholders exactly as they are. The styles' :root blocks are shown: their custom properties (--name: value) are the page's colors and fonts.
 
 Reply only by calling edit_page, with one action:
-- edit: a change to the page's content: texts, prices, hours, products or services, adding or removing an item in a list, removing a section, a small wording change. Put the changes in "changes". Each change is a "find" copied exactly from the page (markup included) and its "replace". A "find" must appear exactly once in the page: include enough surrounding text to make it unique, and keep it short. To add an item to a list, copy an existing item's markup, placeholders included (a placeholder may be repeated), and change its text. Never write a placeholder that is not in the page. Keep the page's language and tone. A fact the page repeats (hours, a price, a name) changes everywhere it appears: headings, text, the <title>, meta descriptions, and alt texts.
+- edit: an update that keeps the page's design: texts, prices, hours, products or services, a small wording change, adding, removing, or moving an item or a section like the ones the page has (copy its markup), and a new color or font for a custom property in :root (a color as a hex code; a font the page already uses). Use only the tags, classes, and styles the page already has. Put the changes in "changes". Each change is a "find" copied exactly from the page (markup included) and its "replace". A "find" must appear exactly once in the page: include enough surrounding text to make it unique, and keep it short. To add an item to a list, copy an existing item's markup, placeholders included (a placeholder may be repeated), and change its text. Never write a placeholder that is not in the page. Keep the page's language and tone. A fact the page repeats (hours, a price, a name) changes everywhere it appears: headings, text, the <title>, meta descriptions, and alt texts.
 - New contact details (WhatsApp, phone, email, address, Instagram, Facebook) never go in "changes": put them in "contact", with action edit, and the page is updated from there. Never change a phone number, email, or address in "changes".
 - ask: something needed is missing or unclear (which item, the new price). Ask one short question in "reply".
-- redesign: the request needs design work: colors, fonts, layout, a new section, new images or photos, animations, or a different style. Do not attempt it. Say in "reply" that it needs a redesign of the page, which takes a few minutes, and that they can start it with the button under your reply. Put the request, rewritten as one clear instruction in the language of the page, in "instruction".
+- redesign: the request needs design work: a new look or style, a new layout, a kind of section the page does not have, animations, new images, or a color or font that is not a custom property in :root. Do not attempt it. Say in "reply" that it needs a redesign of the page, which takes a few minutes, and that they can start it with the button under your reply. Put the request, rewritten as one clear instruction in the language of the page, in "instruction".
 - The owner's own photos and logo cannot be sent here. To add, change, or take out their photos or logo, use action none and say they can do it in the "Tus fotos" tab of "Mi página web" (Portuguese: the "Suas fotos" tab of "Meu site"). Made-up images are a redesign.
 - none: a greeting, a thank-you, a question, or anything that is not a change to this page. Answer briefly.
 
@@ -221,9 +224,11 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
     return { outcome, usage };
   };
   // The owner's message refused by the pre-screen or the input guardrail: it counts toward freezing the account.
-  const refused = async () => {
+  const refused = async (cause: Record<string, unknown>) => {
+    // Logged, so a refusal an owner reports can be explained (the reply says only "las reglas de uso").
+    console.warn('chat refused', { slug, at, text: request?.text?.slice(0, 300), ...cause });
     await noteRefusal(stores, site?.ownerEmailId, deps.now(), { announce: deps.announce, where: 'chat', text: request?.text ?? '' });
-    return answer('REJECTED', { text: REPLIES[voice].refused });
+    return answer('REJECTED', { text: withSupport(REPLIES[voice].refused, voice, deps.urls.supportEmail) });
   };
 
   try {
@@ -235,20 +240,20 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
 
     const screening = await prescreen(doc.answers, { callTool: deps.callTool, modelId: deps.prescreenModelId }, request.text);
     usage.push(screening.usage);
-    if (isRejected(screening)) return await refused();
+    if (isRejected(screening)) return await refused({ by: 'prescreen', category: screening.category, confidence: screening.confidence, reason: screening.reason.slice(0, 300) });
 
     const outline = elide(doc.page);
     // A refused message stays out of what the model is sent, with its refusal: the guardrail would block every later
     // message for it (a prompt attack in the history), and the owner could never use the chat again.
     const shown = history.filter((m) => m.at < request.at && m.status === 'done' && m.text);
-    const earlier = shown.filter((m, i) => !REFUSALS.has(m.text!) && !(m.role === 'owner' && shown[i + 1]?.role === 'coyote' && REFUSALS.has(shown[i + 1]!.text!)));
+    const earlier = shown.filter((m, i) => !isRefusal(m.text) && !(m.role === 'owner' && shown[i + 1]?.role === 'coyote' && isRefusal(shown[i + 1]!.text)));
     const speaker = (m: ChatMessage) =>
-      m.role === 'owner' ? 'Owner' : m.draftId ? (m.undone ? 'Coyote (changed the page, then the owner undid it)' : 'Coyote (changed the page)') : m.redesign ? (m.redesignStarted ? 'Coyote (offered a redesign, and the owner started it)' : 'Coyote (offered a redesign)') : 'Coyote';
+      m.role === 'owner' ? 'Owner' : m.draftId ? (m.undone ? 'You (changed the page, then the owner undid it)' : 'You (changed the page)') : m.redesign ? (m.redesignStarted ? 'You (offered a redesign, and the owner started it)' : 'You (offered a redesign)') : 'You';
     const conversation = earlier.map((m) => `${speaker(m)}: ${m.text}`).join('\n');
     const ask = (feedback = '') =>
       callWithRetry(deps.callTool, usage, {
         modelId: deps.modelId,
-        system: SYSTEM,
+        system: deps.urls.brand ? `${SYSTEM}\nYou are the assistant of ${deps.urls.brand}, the service that made this page; if you name yourself, use that name.` : SYSTEM,
         guarded: `${conversation ? `<chat>\n${conversation}\n</chat>\n` : ''}<request>${request.text}</request>`,
         user: `The page is in ${lang === 'pt' ? 'Portuguese' : voice === 'vos' ? 'Spanish; the owner is in a voseo country, so address them with vos' : 'Spanish; address the owner with tú'}. The current page:\n\`\`\`html\n${outline.text}\n\`\`\`\n\nAnswer the owner's request by calling edit_page.${feedback}`,
         maxTokens: 4000,
@@ -265,18 +270,24 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
       }
       if ('problems' in applied) return await answer('REPLIED', { text: say.couldNot, redesign: request.text });
       edited = outline.restore(applied.text);
+      // An edit that adds design of its own (new classes, styles, scripts) is a redesign: the page writer does it.
+      const scope = editScope(doc.page, edited);
+      if (scope.length > 0) {
+        console.warn('chat: edit is more than an update', { slug, scope });
+        return await answer('REPLIED', { text: say.couldNot, redesign: request.text });
+      }
     }
 
     if (result.action === 'redesign') {
       // No designs left: no redesign button, but the design pack's.
       if ((await designsLeft(site, deps)) === 0) return await answer('REPLIED', { text: say.noDesigns, buyDesigns: true });
-      if (!(await deps.outputAllowed(result.reply))) return await answer('REJECTED', { text: say.refused });
+      if (!(await deps.outputAllowed(result.reply))) return await answer('REJECTED', { text: withSupport(say.refused, voice, deps.urls.supportEmail) });
       return await answer('REPLIED', { text: result.reply, redesign: (result.instruction || request.text).slice(0, 1000) });
     }
 
     const contact = result.action === 'edit' && result.contact ? givenByOwner(result.contact, [request.text, ...earlier.filter((m) => m.role === 'owner').map((m) => m.text)].join('\n')) : {};
     if (edited === undefined && Object.keys(contact).length === 0) {
-      if (!(await deps.outputAllowed(result.reply))) return await answer('REJECTED', { text: say.refused });
+      if (!(await deps.outputAllowed(result.reply))) return await answer('REJECTED', { text: withSupport(say.refused, voice, deps.urls.supportEmail) });
       return await answer('REPLIED', { text: result.reply });
     }
 
@@ -304,12 +315,12 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
     if (edited !== undefined && !tipped && pageTexts(next.page, next.answers.contact).length > 0) result = { ...result, reply: `${result.reply} ${say.textsTip}` };
     const before = new Set(checkPage(doc.page, { ...options, contact: doc.answers.contact, ownerText: ownerText(doc) }).texts);
     const added = checked.texts.filter((text) => !before.has(text));
-    if (!(await deps.outputAllowed([...added, result.reply].join('\n')))) return await answer('REJECTED', { text: say.refused });
+    if (!(await deps.outputAllowed([...added, result.reply].join('\n')))) return await answer('REJECTED', { text: withSupport(say.refused, voice, deps.urls.supportEmail) });
 
     const draftId = await saveDraft(site, next, deps);
     return await answer('EDITED', { text: result.reply, draftId });
   } catch (error) {
-    if (error instanceof GuardrailBlocked) return refused();
+    if (error instanceof GuardrailBlocked) return refused({ by: 'guardrail' });
     if (error instanceof ModelOutputError) usage.push(error.usage);
     console.error('chat failed', { slug, at, error });
     await stores.updateChat(slug, at, { status: 'failed', text: REPLIES[voice].failed });

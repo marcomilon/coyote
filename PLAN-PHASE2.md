@@ -56,7 +56,7 @@ Entry: the user taps a `wa.me/<number>?text=Hola` link (site, Instagram bio, QR 
 - Sender phone → sites via the GSI on `sites.ownerPhone`. One site → proceed. Several → WhatsApp list message "¿Cuál sitio?"; the choice is kept in `wa_sessions` for the session.
 - The message goes through the web chat's path (`PLAN.md` "Chat edits (QR)", `chat.ts` `runChatTurn`): pre-screen, Haiku text changes on the page outline, contact changes validated like the form, page checks and output guardrail, a new draft. A change that needs design work gets "Rediseñar" as a quick reply, which starts the Opus edit job.
 - The reply carries the new draft link and "Deshacer" as a quick reply.
-- Caps: the chat's 30 messages/day per site; redesigns count against the 5 Opus edits/day.
+- Caps: the chat's 30 messages/day per site; redesigns use a design (`paid-writes.ts`).
 - The edited copy passes the pre-screen (on the message), the policy checks, and `ApplyGuardrail`, exactly as a web edit.
 
 ### C. Contact form + leads to WhatsApp

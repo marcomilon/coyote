@@ -5,10 +5,11 @@ import { snsAnnounce } from '../aws/notices';
 import { pageTier } from '../aws/page-tier';
 import { turnstile } from '../aws/turnstile';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
-import { callTool } from '../core/bedrock';
+import { callTool, outputAllowed } from '../core/bedrock';
 import { submitAnswers } from '../core/clarify';
+import { describe } from '../core/describe';
 import { emitMetrics } from '../core/metrics';
-import { prescreenModelId } from '../core/models';
+import { modelId, prescreenModelId } from '../core/models';
 import { submit } from '../core/submit';
 import { json, parseBody, perIpLimit } from './http';
 
@@ -21,8 +22,36 @@ const startGenerate = async (jobId: string) => {
 };
 
 // POST /generate · POST /jobs/{id}/answers (the owner's answers to the model's questions; the job ID is the credential)
+// · POST /describe ("Mejorar mi descripción": the cheap model rewrites the form's description)
 export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event) => {
   const body = parseBody(event.body, event.isBase64Encoded);
+
+  if (event.routeKey === 'POST /describe') {
+    const result = await describe(body, event.requestContext.http.sourceIp, {
+      stores,
+      callTool,
+      modelId: modelId(),
+      ipSalt: process.env.IP_HASH_SALT ?? '',
+      verifyHuman,
+      outputAllowed: (text) => outputAllowed(text),
+      now: Date.now,
+    });
+    if ('usage' in result) emitMetrics({ Described: 1, TokensIn: result.usage.reduce((n, u) => n + u.inputTokens, 0), TokensOut: result.usage.reduce((n, u) => n + u.outputTokens, 0) });
+    switch (result.status) {
+      case 200:
+        return json(200, { about: result.about, missing: result.missing });
+      case 400:
+        return json(400, { error: 'invalid', fields: ['about'] });
+      case 403:
+        return json(403, { error: 'captcha' });
+      case 422:
+        return json(422, { error: result.unclear ? 'unclear' : 'rejected' }); // never say why
+      case 429:
+        return json(429, { error: 'rate_limited' });
+      case 502:
+        return json(502, { error: 'failed' });
+    }
+  }
 
   if (event.routeKey === 'POST /jobs/{id}/answers') {
     const result = await submitAnswers(event.pathParameters?.id ?? '', body, { stores, callTool, prescreenModelId: prescreenModelId(), startGenerate, now: Date.now, announce });

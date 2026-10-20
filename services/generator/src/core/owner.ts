@@ -15,6 +15,7 @@ import { checkTexts } from './policy';
 import { parseToken, secretMatches } from './token';
 import { onlyLogo } from './uploads';
 import { hasLogoSpot } from './logo';
+import { changePhotosInPlace } from './photo-slots';
 import type { Urls } from './urls';
 
 const OWNER_REQUESTS_PER_DAY = 60;
@@ -181,7 +182,13 @@ export async function editSite(site: SiteRecord, body: unknown, deps: OwnerDeps)
   const oldLogo = current.media.logo;
   const logoGoes = (oldLogo && current.page.includes(oldLogo)) || hasLogoSpot(current.page);
   const swapLogo = Boolean(uploadId && !instruction && !captions && !newCaptions && !replaceMade && logoGoes && !removePhotos?.some((file) => file !== oldLogo) && (await onlyLogo(uploadId, stores)));
-  const swap = Boolean(replaceMade) || swapLogo;
+  // Photos taken out, described, or added where the page has a place for them: changed in place (photo-slots.ts).
+  // A new upload's files aren't known yet: a stand-in checks there is a place, and a logo among them goes to the page writer.
+  const logos = [current.media.logo];
+  const inPlace =
+    !instruction && !replaceMade && !swapLogo && !removePhotos?.some((file) => logos.includes(file)) &&
+    changePhotosInPlace(current.page, { added: uploadId ? ['assets/new-photo'] : [], removed: removePhotos ?? [], described: Object.keys(captions ?? {}) }, current.media.photos, { ...current.media.captions, ...captions }) !== undefined;
+  const swap = Boolean(replaceMade) || swapLogo || inPlace;
   // A paid-tier redesign needs one of the email's paid writes left (the claim itself is in the generate job); that is
   // its only limit. A swap calls no model, so it needs none.
   if (redesign && !swap && (await designsLeft(site, deps)) === 0) return { status: 402 };

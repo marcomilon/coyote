@@ -275,7 +275,7 @@ describe('CoyoteStack, domainless', () => {
     const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route')).map((r) => r.Properties.RouteKey).sort();
     expect(routes).toEqual([
       'DELETE /me', 'GET /account', 'GET /jobs/{id}', 'GET /me', 'GET /me/chat', 'GET /me/domain', 'GET /me/domain/check', 'POST /account/login', 'POST /account/session',
-      'POST /generate', 'POST /jobs/{id}/answers', 'POST /me/chat', 'POST /me/design', 'POST /me/domain', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads',
+      'POST /describe', 'POST /generate', 'POST /jobs/{id}/answers', 'POST /me/chat', 'POST /me/design', 'POST /me/domain', 'POST /me/edit', 'POST /me/undo', 'POST /report/{slug}', 'POST /uploads',
     ]);
   });
 
@@ -311,7 +311,7 @@ describe('CoyoteStack, domainless', () => {
     expect(JSON.stringify(text)).toContain('inference-profile/us.amazon.nova-2-lite-v1:0'); // the pre-screen
     expect(JSON.stringify(text)).toContain('foundation-model/amazon.nova-2-lite-v1:0');
     const writer = text.filter((s) => JSON.stringify(s.Resource).includes(DEFAULT_MODEL_ID));
-    expect(writer).toHaveLength(2); // generate (plan_site) and the chat
+    expect(writer).toHaveLength(3); // generate (plan_site), the chat, and submit ("Mejorar mi descripción")
     for (const statement of writer) expect(statement.Action).toBe('bedrock:InvokeModel');
     // The only call without the guardrail: the image model in us-west-2, for generate only (images.ts screens it).
     expect(unguarded).toEqual([{ Action: 'bedrock:InvokeModel', Effect: 'Allow', Resource: { 'Fn::Join': ['', ['arn:', { Ref: 'AWS::Partition' }, `:bedrock:us-west-2::foundation-model/${DEFAULT_IMAGE_MODEL_ID}`]] } }]);

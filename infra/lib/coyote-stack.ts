@@ -550,6 +550,7 @@ export class CoyoteStack extends Stack {
     const routeThrottles: Record<string, [rate: number, burst: number]> = {
       'POST /generate': [5, 10],
       'POST /jobs/{id}/answers': [5, 10],
+      'POST /describe': [5, 10],
       'POST /uploads': [5, 10],
       'POST /report/{slug}': [2, 5],
       'POST /account/login': [2, 5],

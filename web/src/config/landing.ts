@@ -2,7 +2,7 @@ import type { Lang } from '../i18n/strings';
 import { COUNTRIES as PHONE_COUNTRIES } from '../../../services/generator/src/core/phones';
 
 /**
- * Business facts on the home page: countries, prices, stats, testimonials, the WhatsApp number.
+ * Business facts on the home page: countries, stats, testimonials, the WhatsApp number.
  * Every value wrapped in TODO() is a placeholder from the design handoff that the business must replace
  * (grep for "TODO(" to find them all). Values that are null are left off the page until they're set.
  */
@@ -12,54 +12,39 @@ export interface CountryInfo {
   code: string;
   flag: string;
   name: Record<Lang, string>;
-  /** "Precios en {currency}." */
-  currency: Record<Lang, string>;
-  /** The "Negocio completo" plan, per month. */
-  price: string;
   tld: string;
 }
 
-/** A local price, for the countries that have one; the others show USD_PLAN. */
-interface LocalPlan {
-  currency: Record<Lang, string>;
-  price: string;
-}
-
-const USD_PLAN: LocalPlan = { currency: { es: 'dólares (USD)', pt: 'dólares (USD)' }, price: TODO('US$9') };
-
-const LOCAL: Record<string, Partial<LocalPlan> & { tld: string }> = {
-  AR: { tld: '.com.ar', currency: { es: 'pesos argentinos (ARS)', pt: 'pesos argentinos (ARS)' }, price: TODO('$9.900') },
-  BO: { tld: '.com.bo' },
-  BR: { tld: '.com.br', currency: { es: 'reales (BRL)', pt: 'reais (BRL)' }, price: TODO('R$39') },
-  CL: { tld: '.cl' },
-  CO: { tld: '.co', currency: { es: 'pesos colombianos (COP)', pt: 'pesos colombianos (COP)' }, price: TODO('$29.900') },
-  CR: { tld: '.cr' },
-  EC: { tld: '.ec' },
-  SV: { tld: '.com.sv' },
-  GT: { tld: '.com.gt' },
-  HN: { tld: '.hn' },
-  MX: { tld: '.mx', currency: { es: 'pesos mexicanos (MXN)', pt: 'pesos mexicanos (MXN)' }, price: TODO('$149') },
-  NI: { tld: '.com.ni' },
-  PA: { tld: '.com.pa' },
-  PY: { tld: '.com.py' },
-  PE: { tld: '.pe' },
-  PR: { tld: '.pr' },
-  DO: { tld: '.com.do' },
-  US: { tld: '.us' },
-  UY: { tld: '.com.uy' },
+/** The country's own TLD, offered next to .com. */
+const TLD: Record<string, string> = {
+  AR: '.com.ar',
+  BO: '.com.bo',
+  BR: '.com.br',
+  CL: '.cl',
+  CO: '.co',
+  CR: '.cr',
+  EC: '.ec',
+  SV: '.com.sv',
+  GT: '.com.gt',
+  HN: '.hn',
+  MX: '.mx',
+  NI: '.com.ni',
+  PA: '.com.pa',
+  PY: '.com.py',
+  PE: '.pe',
+  PR: '.pr',
+  DO: '.com.do',
+  US: '.us',
+  UY: '.com.uy',
 };
 
 const flag = (iso: string) => String.fromCodePoint(...[...iso].map((ch) => 0x1f1a5 + ch.charCodeAt(0)));
 
 /**
  * The country picker in the header: the same countries as the form's phone field (core/phones.ts).
- * Changes currency, price and TLD.
+ * Changes the TLD. Prices are in USD everywhere (strings.ts), as Paddle charges them.
  */
-export const COUNTRIES: CountryInfo[] = PHONE_COUNTRIES.map((c) => {
-  const local = LOCAL[c.iso] ?? { tld: '.com' };
-  const plan = local.price && local.currency ? (local as LocalPlan) : USD_PLAN;
-  return { code: c.iso, flag: flag(c.iso), name: c.name, currency: plan.currency, price: plan.price, tld: local.tld };
-});
+export const COUNTRIES: CountryInfo[] = PHONE_COUNTRIES.map((c) => ({ code: c.iso, flag: flag(c.iso), name: c.name, tld: TLD[c.iso] ?? '.com' }));
 
 /** In the picker's order: alphabetical in the page's language, like the form. */
 export const countriesFor = (lang: Lang) => [...COUNTRIES].sort((a, b) => a.name[lang].localeCompare(b.name[lang], lang));

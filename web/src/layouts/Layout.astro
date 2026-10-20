@@ -79,15 +79,17 @@ const [es, pt] = lang === 'es' ? [here, there] : [there, here];
     {withConfig && <script is:inline src="/config.js" />}
   </head>
   <body>
-    <header class="site-header wrap">
+    <header class:list={["site-header wrap", { home }]}>
       <div class="brand"><a href={s.paths.home}><img src="/logo.png" alt="ventas314.com" width="668" height="132" /></a><span>{s.brandTagline}</span></div>
       {/* Only the home page has links here; every other page shows just the logo. */}
       {
         home && (
           <nav class="home-nav">
-            <a href="#precio">{s.home.nav.price}</a>
-            <a href="#ejemplos">{s.home.nav.examples}</a>
-            <a href={s.paths.mySites}>{s.nav.mySites}</a>
+            <span class="nav-links">
+              <a href="#precio">{s.home.nav.price}</a>
+              <a href="#ejemplos">{s.home.nav.examples}</a>
+              <a href={s.paths.mySites}>{s.nav.mySites}</a>
+            </span>
             <select class="country" data-country-select data-default={DEFAULT_COUNTRY[lang]} aria-label={s.home.nav.country}>
               {countriesFor(lang).map((c) => (
                 <option value={c.code} selected={c.code === DEFAULT_COUNTRY[lang]}>
@@ -111,6 +113,7 @@ const [es, pt] = lang === 'es' ? [here, there] : [there, here];
         <nav>
           <a href={s.paths.terms}>{s.footer.terms}</a>
           <a href={s.paths.privacy}>{s.footer.privacy}</a>
+          <a href={s.paths.refunds}>{s.footer.refunds}</a>
         </nav>
       </div>
     </footer>

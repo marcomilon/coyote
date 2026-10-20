@@ -1,12 +1,13 @@
 /**
  * The page as the chat model sees it: styles, scripts, drawings without words, embedded images, and long
  * class, style, and geometry attributes become placeholders (⟦n⟧), so what is left is the markup and the text a visitor reads, at a
- * fraction of the tokens. The model answers with find/replace changes on that outline; `restore` puts the
+ * fraction of the tokens. The styles' `:root` blocks stay: their custom properties are the page's colors and fonts, which
+ * an update may change (edit-scope.ts). The model answers with find/replace changes on that outline; `restore` puts the
  * hidden parts back.
  */
 
-const HIDDEN: { pattern: RegExp; keep?: (match: string) => boolean }[] = [
-  { pattern: /(?<=<style\b[^>]*>)[\s\S]*?(?=<\/style>)/gi },
+const HIDDEN: { pattern: RegExp; keep?: (match: string) => boolean; shown?: RegExp }[] = [
+  { pattern: /(?<=<style\b[^>]*>)[\s\S]*?(?=<\/style>)/gi, shown: /(:root\s*\{[^{}]*\})/ },
   { pattern: /(?<=<script\b[^>]*>)[\s\S]*?(?=<\/script>)/gi },
   // A drawing with words in it (an hours dial, a labelled map) stays, minus its geometry below.
   { pattern: /<svg\b[\s\S]*?<\/svg>/gi, keep: (svg) => /<(text|tspan|title|desc)\b/i.test(svg) },
@@ -25,12 +26,17 @@ export function elide(page: string): Outline {
   const hidden: string[] = [];
   // A page that already contains the marker could not be restored safely: show it whole.
   if (page.includes('⟦')) return { text: page, restore: (text) => text };
+  const hide = (part: string) => {
+    if (part.trim() === '') return part;
+    hidden.push(part);
+    return `⟦${hidden.length - 1}⟧`;
+  };
   let text = page;
-  for (const { pattern, keep } of HIDDEN) {
+  for (const { pattern, keep, shown } of HIDDEN) {
     text = text.replace(pattern, (match) => {
-      if (match.trim() === '' || keep?.(match)) return match;
-      hidden.push(match);
-      return `⟦${hidden.length - 1}⟧`;
+      if (keep?.(match)) return match;
+      // `shown` captures the parts that stay: split puts them at the odd indices.
+      return shown ? match.split(shown).map((part, i) => (i % 2 === 1 ? part : hide(part))).join('') : hide(match);
     });
   }
   return { text, restore: (edited) => edited.replace(PLACEHOLDER, (marker, i: string) => hidden[Number(i)] ?? marker) };

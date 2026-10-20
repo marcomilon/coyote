@@ -20,6 +20,8 @@ export interface BuyHandlers<V> {
   busy(on: boolean): void;
   /** The designs arrived: the owner's view (GET /me) with them. */
   arrived(view: V): void;
+  /** Paid, but the designs didn't arrive in time: the button stays disabled until the page is opened again. */
+  late(): void;
 }
 
 /** How long to wait for Paddle's webhook to add the designs after a payment. */
@@ -52,6 +54,7 @@ export async function buyDesignPack<V extends { designsLeft?: number }>(api: Api
       }
     }
     on.busy(false);
+    on.late();
     on.say(strings.late);
   }
 }

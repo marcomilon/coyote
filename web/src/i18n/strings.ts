@@ -5,7 +5,7 @@ export type Lang = 'es' | 'pt';
 const es = {
   htmlLang: 'es-419',
   otherLang: { code: 'pt' as Lang, label: 'Português' },
-  paths: { home: '/', create: '/crear', mySite: '/mi-pagina-web', mySites: '/mis-paginas-web', chat: '/chat', preview: '/ver', terms: '/terminos', privacy: '/privacidad' },
+  paths: { home: '/', create: '/crear', mySite: '/mi-pagina-web', mySites: '/mis-paginas-web', chat: '/chat', preview: '/ver', terms: '/terminos', privacy: '/privacidad', refunds: '/reembolsos' },
   brandTagline: 'Ponemos tu negocio online',
   loading: 'Cargando…',
   notFound: { title: 'Página no encontrada — ventas314.com', heading: 'Esta página no existe', text: 'Puede que el enlace esté incompleto o que la página se haya movido.', home: 'Ir al inicio' },
@@ -55,9 +55,10 @@ const es = {
     proof: { title: ['Negocios como el tuyo', 'ya están en línea'], screenshot: 'Página web de {business}', visit: 'Abre este ejemplo' },
     pricing: {
       title: 'Cuánto cuesta',
-      sub: 'Precios en {currency}. Pagas solo cuando publicas. Sin contratos.',
-      free: { name: 'Para empezar', price: 'Gratis', text: ['Crea tu página web gratis, sin saber nada de tecnología.', 'Pide los cambios que quieras y, cuando te guste, la publicas.'], cta: 'Empezar gratis' },
-      pro: { name: 'Negocio completo', tag: 'El más elegido', per: '/ mes', features: ['Tu página web publicada, a la vista de tus clientes', 'Tu propio dominio (.com o {tld})', 'Sigues haciendo cambios cuando quieras', 'Alta en Google Maps', 'Soporte por WhatsApp'], cta: 'Crear mi página web' },
+      sub: 'Precios en dólares (USD), con los impuestos de tu país. Crear es gratis; pagas al publicar o si quieres más diseños. Sin contratos.',
+      free: { name: 'Para empezar', price: 'Gratis', text: ['Crea tu página web gratis, con 3 diseños incluidos, sin saber nada de tecnología.', 'Pide los cambios que quieras y, cuando te guste, la publicas.'], cta: 'Empezar gratis' },
+      designs: { name: 'Más diseños', price: 'US$4.99', per: 'pago único', text: ['3 diseños nuevos para tu página web, cuando quieras otro estilo.', 'Los compras desde Mi página web cuando usaste tus 3 diseños gratis.'] },
+      pro: { name: 'Negocio completo', tag: 'El más elegido', price: 'US$9.99', per: '/ mes', features: ['Tu página web publicada, a la vista de tus clientes', 'Tu propio dominio (.com o {tld})', 'Sigues haciendo cambios cuando quieras', 'Alta en Google Maps', 'Soporte por WhatsApp'], cta: 'Crear mi página web' },
     },
     whatsapp: {
       title: '¿Tienes WhatsApp? Ya tienes lo que hace falta.',
@@ -67,7 +68,6 @@ const es = {
     faqTitle: 'Preguntas frecuentes',
     faq: [
       { q: '¿Necesito saber de tecnología?', a: 'No. Respondes unas pocas preguntas y nosotros armamos todo. Si quieres un cambio, lo pides con tus palabras.' },
-      { q: '¿El dominio es mío?', a: 'Lo registramos nosotros y lo usamos solo para tu página web. Si lo quieres a tu nombre, te lo pasamos sin costo, y si un día te vas, te lo llevas.' },
       { q: '¿Voy a aparecer en Google?', a: 'Tu página web se publica lista para buscadores y damos de alta tu negocio en Google Maps con tu dirección, horario y teléfono.' },
       { q: '¿Puedo cancelar?', a: 'Cuando quieras, sin multas ni contratos.' },
       { q: '¿Quién me ayuda si tengo un problema?', a: 'Una persona real por WhatsApp, en tu idioma y en tu horario.' },
@@ -85,6 +85,10 @@ const es = {
       label: '¿Qué hace tu negocio?',
       hint: 'Cuenta qué vendes o qué servicios das, en qué ciudad y barrio, y tus horarios si quieres. Entre más detalle, mejor.',
       placeholder: EXAMPLE_ABOUT.es.placeholder,
+      improve: 'Mejorar mi descripción',
+      improveFailed: 'No pudimos mejorar tu descripción. Inténtalo de nuevo.',
+      improveLimited: 'Por hoy no podemos mejorar más descripciones. Puedes seguir con la tuya.',
+      improveTips: 'Tu página puede quedar mejor si agregas:',
     },
     q3: { label: '¿Cómo te contactan?', whatsapp: 'Teléfono', whatsappHint: 'Tus clientes te escriben por WhatsApp o te llaman a este número.', country: 'País', countryPick: 'Elige tu país', email: 'Correo del negocio (opcional)', emailPlaceholder: 'contacto@tunegocio.com', address: 'Dirección (opcional)', instagram: 'Instagram (opcional)', instagramPlaceholder: '@tunegocio', facebook: 'Facebook (opcional)', facebookPlaceholder: 'facebook.com/tunegocio' },
     goal: {
@@ -136,10 +140,15 @@ const es = {
     // Too many refused requests (services/generator/src/core/freeze.ts): changes are closed, the page stays.
     frozen: { title: 'Tu cuenta está pausada', text: 'Recibimos varios pedidos que no cumplen las reglas de uso, así que pausamos los cambios. Tu página web sigue guardada tal como está.', support: 'Si crees que es un error, escríbenos a' },
     // Shown once the owner's email used its paid writes (services/generator/src/core/paid-writes.ts: 3 free, plus the packs it bought).
+    designsLeft: {
+      one: 'Te queda 1 diseño',
+      many: 'Te quedan {n} diseños',
+      text: 'Cada rediseño de tu página web usa un diseño. Cambiar tus textos, tus datos de contacto o tus fotos no cuenta como rediseño.',
+    },
     designsOut: {
       title: 'Ya no te quedan diseños',
       text: 'Compra 3 diseños más para rediseñar tu página web. Mientras tanto puedes seguir cambiando tus textos y tus datos de contacto, y poner tus fotos en lugar de las creadas con IA.',
-      buy: 'Comprar 3 diseños · USD 4.90',
+      buy: 'Comprar 3 diseños · USD 4.99',
       opening: 'Abriendo el pago…',
       waiting: 'Pago recibido. Sumando tus diseños…',
       done: '¡Listo! Ya tienes 3 diseños más.',
@@ -185,7 +194,7 @@ const es = {
       notImage: 'Ese archivo no es una imagen. Elige una foto (JPG o PNG).',
       failed: 'No pudimos subir las fotos. Inténtalo de nuevo.',
       limited: 'Llegaste al límite de cambios de hoy. Inténtalo mañana.',
-      noDesigns: 'Ya no te quedan diseños, y agregar o quitar fotos rediseña la página. Puedes comprar 3 más arriba, o cambiar las fotos creadas con IA por las tuyas.',
+      noDesigns: 'Ya no te quedan diseños, y tu página no tiene lugar para este cambio de fotos sin rediseñarla. Puedes comprar 3 más arriba, o cambiar las fotos creadas con IA por las tuyas.',
     },
     texts: {
       intro: 'Cambia cualquier texto de tu página web aquí mismo. El diseño queda igual.',
@@ -341,7 +350,7 @@ const es = {
     limited: 'Enviaste muchos reportes hoy. Inténtalo mañana.',
     captcha: 'No pudimos comprobar que eres una persona. Inténtalo de nuevo; si aparece una casilla, márcala.',
   },
-  footer: { made: 'ventas314.com', terms: 'Términos', privacy: 'Privacidad', support: 'Soporte por WhatsApp:' },
+  footer: { made: 'ventas314.com', terms: 'Términos', privacy: 'Privacidad', refunds: 'Reembolsos', support: 'Soporte por WhatsApp:' },
 };
 
 type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
@@ -379,8 +388,9 @@ const esVos: DeepPartial<typeof es> = {
       { n: '3', title: 'Lo ajustás y publicás', text: 'Ves tu página web y pedís cambios con tus palabras, desde tu enlace privado.' },
     ],
     pricing: {
-      sub: 'Precios en {currency}. Pagás solo cuando publicás. Sin contratos.',
-      free: { text: ['Creá tu página web gratis, sin saber nada de tecnología.', 'Pedí los cambios que quieras y, cuando te guste, la publicás.'] },
+      sub: 'Precios en dólares (USD), con los impuestos de tu país. Crear es gratis; pagás al publicar o si querés más diseños. Sin contratos.',
+      free: { text: ['Creá tu página web gratis, con 3 diseños incluidos, sin saber nada de tecnología.', 'Pedí los cambios que quieras y, cuando te guste, la publicás.'] },
+      designs: { text: ['3 diseños nuevos para tu página web, cuando quieras otro estilo.', 'Los comprás desde Mi página web cuando usaste tus 3 diseños gratis.'] },
       pro: { features: ['Tu página web publicada, a la vista de tus clientes', 'Tu propio dominio (.com o {tld})', 'Seguís haciendo cambios cuando quieras', 'Alta en Google Maps', 'Soporte por WhatsApp'] },
     },
     whatsapp: {
@@ -390,7 +400,6 @@ const esVos: DeepPartial<typeof es> = {
     },
     faq: [
       { q: '¿Necesito saber de tecnología?', a: 'No. Respondés unas pocas preguntas y nosotros armamos todo. Si querés un cambio, lo pedís con tus palabras.' },
-      { q: '¿El dominio es mío?', a: 'Lo registramos nosotros y lo usamos solo para tu página web. Si lo querés a tu nombre, te lo pasamos sin costo, y si un día te vas, te lo llevás.' },
       { q: '¿Voy a aparecer en Google?', a: 'Tu página web se publica lista para buscadores y damos de alta tu negocio en Google Maps con tu dirección, horario y teléfono.' },
       { q: '¿Puedo cancelar?', a: 'Cuando quieras, sin multas ni contratos.' },
       { q: '¿Quién me ayuda si tengo un problema?', a: 'Una persona real por WhatsApp, en tu idioma y en tu horario.' },
@@ -404,6 +413,9 @@ const esVos: DeepPartial<typeof es> = {
     q2: {
       hint: 'Contá qué vendés o qué servicios das, en qué ciudad y barrio, y tus horarios si querés. Cuanto más detalle, mejor.',
       placeholder: EXAMPLE_ABOUT.vos.placeholder,
+      improveFailed: 'No pudimos mejorar tu descripción. Intentalo de nuevo.',
+      improveLimited: 'Por hoy no podemos mejorar más descripciones. Podés seguir con la tuya.',
+      improveTips: 'Tu página puede quedar mejor si agregás:',
     },
     q3: { countryPick: 'Elegí tu país' },
     goal: { label: '¿Qué querés que hagan tus clientes?' },
@@ -468,7 +480,7 @@ const esVos: DeepPartial<typeof es> = {
       notImage: 'Ese archivo no es una imagen. Elegí una foto (JPG o PNG).',
       failed: 'No pudimos subir las fotos. Intentalo de nuevo.',
       limited: 'Llegaste al límite de cambios de hoy. Intentalo mañana.',
-      noDesigns: 'Ya no te quedan diseños, y agregar o quitar fotos rediseña la página. Podés comprar 3 más arriba, o cambiar las fotos creadas con IA por las tuyas.',
+      noDesigns: 'Ya no te quedan diseños, y tu página no tiene lugar para este cambio de fotos sin rediseñarla. Podés comprar 3 más arriba, o cambiar las fotos creadas con IA por las tuyas.',
     },
     texts: {
       intro: 'Cambiá cualquier texto de tu página web acá mismo. El diseño queda igual.',
@@ -551,7 +563,7 @@ const esVos: DeepPartial<typeof es> = {
 const pt: typeof es = {
   htmlLang: 'pt-BR',
   otherLang: { code: 'es', label: 'Español' },
-  paths: { home: '/pt/', create: '/pt/criar', mySite: '/pt/meu-site', mySites: '/pt/meus-sites', chat: '/pt/chat', preview: '/pt/ver', terms: '/pt/termos', privacy: '/pt/privacidade' },
+  paths: { home: '/pt/', create: '/pt/criar', mySite: '/pt/meu-site', mySites: '/pt/meus-sites', chat: '/pt/chat', preview: '/pt/ver', terms: '/pt/termos', privacy: '/pt/privacidade', refunds: '/pt/reembolsos' },
   brandTagline: 'Colocamos seu negócio online',
   loading: 'Carregando…',
   notFound: { title: 'Página não encontrada — ventas314.com', heading: 'Esta página não existe', text: 'Talvez o link esteja incompleto ou a página tenha mudado de lugar.', home: 'Ir para o início' },
@@ -600,9 +612,10 @@ const pt: typeof es = {
     proof: { title: ['Negócios como o seu', 'já estão online'], screenshot: 'Site de {business}', visit: 'Abra este exemplo' },
     pricing: {
       title: 'Quanto custa',
-      sub: 'Preços em {currency}. Você só paga quando publica. Sem contrato.',
-      free: { name: 'Para começar', price: 'Grátis', text: ['Crie seu site grátis, sem precisar entender de tecnologia.', 'Peça as mudanças que quiser e, quando gostar, publique.'], cta: 'Começar grátis' },
-      pro: { name: 'Negócio completo', tag: 'O mais escolhido', per: '/ mês', features: ['Seu site publicado, à vista dos seus clientes', 'Seu próprio domínio (.com ou {tld})', 'Continue mudando quando quiser', 'Cadastro no Google Maps', 'Suporte pelo WhatsApp'], cta: 'Criar meu site' },
+      sub: 'Preços em dólares (USD), com os impostos do seu país. Criar é grátis; você paga ao publicar ou se quiser mais designs. Sem contrato.',
+      free: { name: 'Para começar', price: 'Grátis', text: ['Crie seu site grátis, com 3 designs incluídos, sem precisar entender de tecnologia.', 'Peça as mudanças que quiser e, quando gostar, publique.'], cta: 'Começar grátis' },
+      designs: { name: 'Mais designs', price: 'US$4,99', per: 'pagamento único', text: ['3 designs novos para o seu site, quando quiser outro estilo.', 'Você compra em Meu site depois de usar seus 3 designs grátis.'] },
+      pro: { name: 'Negócio completo', tag: 'O mais escolhido', price: 'US$9,99', per: '/ mês', features: ['Seu site publicado, à vista dos seus clientes', 'Seu próprio domínio (.com ou {tld})', 'Continue mudando quando quiser', 'Cadastro no Google Maps', 'Suporte pelo WhatsApp'], cta: 'Criar meu site' },
     },
     whatsapp: {
       title: 'Tem WhatsApp? Então você já tem o que precisa.',
@@ -612,7 +625,6 @@ const pt: typeof es = {
     faqTitle: 'Perguntas frequentes',
     faq: [
       { q: 'Preciso entender de tecnologia?', a: 'Não. Você responde algumas perguntas e a gente monta tudo. Se quiser uma mudança, é só pedir com as suas palavras.' },
-      { q: 'O domínio é meu?', a: 'Nós o registramos e ele é usado só para o seu site. Se você quiser no seu nome, transferimos sem custo, e se um dia você sair, leva ele com você.' },
       { q: 'Vou aparecer no Google?', a: 'Seu site é publicado pronto para os buscadores e cadastramos seu negócio no Google Maps com endereço, horário e telefone.' },
       { q: 'Posso cancelar?', a: 'Quando quiser, sem multa nem contrato.' },
       { q: 'Quem me ajuda se eu tiver um problema?', a: 'Uma pessoa de verdade pelo WhatsApp, no seu idioma e no seu horário.' },
@@ -630,6 +642,10 @@ const pt: typeof es = {
       label: 'O que o seu negócio faz?',
       hint: 'Conte o que você vende ou quais serviços oferece, em que cidade e bairro, e os horários se quiser. Quanto mais detalhe, melhor.',
       placeholder: EXAMPLE_ABOUT.pt.placeholder,
+      improve: 'Melhorar minha descrição',
+      improveFailed: 'Não conseguimos melhorar sua descrição. Tente de novo.',
+      improveLimited: 'Por hoje não podemos melhorar mais descrições. Você pode seguir com a sua.',
+      improveTips: 'Sua página pode ficar melhor se você acrescentar:',
     },
     q3: { label: 'Como te encontram?', whatsapp: 'Telefone', whatsappHint: 'Seus clientes te mandam WhatsApp ou te ligam neste número.', country: 'País', countryPick: 'Escolha seu país', email: 'E-mail do negócio (opcional)', emailPlaceholder: 'contato@seunegocio.com', address: 'Endereço (opcional)', instagram: 'Instagram (opcional)', instagramPlaceholder: '@seunegocio', facebook: 'Facebook (opcional)', facebookPlaceholder: 'facebook.com/seunegocio' },
     goal: {
@@ -679,10 +695,15 @@ const pt: typeof es = {
       action: 'Ir para Meus sites',
     },
     frozen: { title: 'Sua conta está pausada', text: 'Recebemos vários pedidos que não seguem as regras de uso, então pausamos as mudanças. Seu site continua salvo como está.', support: 'Se achar que é um erro, escreva para' },
+    designsLeft: {
+      one: 'Você tem 1 design',
+      many: 'Você tem {n} designs',
+      text: 'Cada redesenho do seu site usa um design. Mudar seus textos, seus contatos ou suas fotos não conta como redesenho.',
+    },
     designsOut: {
       title: 'Seus designs acabaram',
       text: 'Compre mais 3 designs para redesenhar seu site. Enquanto isso, você ainda pode mudar seus textos e seus contatos, e colocar suas fotos no lugar das criadas com IA.',
-      buy: 'Comprar 3 designs · US$ 4,90',
+      buy: 'Comprar 3 designs · US$ 4,99',
       opening: 'Abrindo o pagamento…',
       waiting: 'Pagamento recebido. Somando seus designs…',
       done: 'Pronto! Você tem mais 3 designs.',
@@ -728,7 +749,7 @@ const pt: typeof es = {
       notImage: 'Esse arquivo não é uma imagem. Escolha uma foto (JPG ou PNG).',
       failed: 'Não foi possível enviar as fotos. Tente de novo.',
       limited: 'Você chegou ao limite de mudanças de hoje. Tente amanhã.',
-      noDesigns: 'Seus designs acabaram, e adicionar ou tirar fotos redesenha o site. Você pode comprar mais 3 acima, ou trocar as fotos criadas com IA pelas suas.',
+      noDesigns: 'Seus designs acabaram, e seu site não tem lugar para essa mudança de fotos sem redesenhá-lo. Você pode comprar mais 3 acima, ou trocar as fotos criadas com IA pelas suas.',
     },
     texts: {
       intro: 'Mude qualquer texto do seu site aqui mesmo. O design continua igual.',
@@ -884,7 +905,7 @@ const pt: typeof es = {
     limited: 'Você enviou muitas denúncias hoje. Tente amanhã.',
     captcha: 'Não conseguimos confirmar que você é uma pessoa. Tente de novo; se aparecer uma caixa, marque-a.',
   },
-  footer: { made: 'ventas314.com', terms: 'Termos', privacy: 'Privacidade', support: 'Suporte pelo WhatsApp:' },
+  footer: { made: 'ventas314.com', terms: 'Termos', privacy: 'Privacidade', refunds: 'Reembolsos', support: 'Suporte pelo WhatsApp:' },
 };
 
 export const STRINGS = { es, pt };

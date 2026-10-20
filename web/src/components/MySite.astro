@@ -17,8 +17,8 @@ const d = m.domain;
 const p = m.photos;
 const x = m.texts;
 const g = m.designs;
-// The Dominio tab is hidden (global.css) unless PUBLIC_DOMAIN_TAB=on, e.g. in web/.env.development.local, which only `npm run dev` reads.
-const domainTab = import.meta.env.PUBLIC_DOMAIN_TAB === 'on';
+// The Dominio tab shows unless the build has PUBLIC_DOMAIN_TAB=off (global.css hides it then).
+const domainTab = import.meta.env.PUBLIC_DOMAIN_TAB !== 'off';
 const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, designsOut: m.designsOut, question: s.questions } };
 ---
 
@@ -56,6 +56,11 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
         <p>{m.frozen.text}</p>
         <p data-support hidden>{m.frozen.support} <a></a></p>
       </aside>
+      {/* How many redesigns the owner's email has left (paid-writes.ts); hidden when page writes are free-tier. */}
+      <aside class="banner" data-designs-left hidden>
+        <strong></strong>
+        <p>{m.designsLeft.text}</p>
+      </aside>
       {/* The owner's email used its free designs (paid-writes.ts): redesigns are closed, text and contact edits are not. */}
       <aside class="banner" data-designs-out role="status" hidden>
         <strong>{m.designsOut.title}</strong>
@@ -88,7 +93,7 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
           <button type="button" data-width="desktop" aria-pressed="true">{m.viewport.desktop}</button>
         </div>
       </div>
-      <p class="notice" data-notice role="status" aria-live="polite"></p>
+      <p class="toast" data-notice role="status" aria-live="polite"></p>
 
       <div class="tabpanel" role="tabpanel" id="panel-preview" aria-labelledby="tab-preview" data-panel="preview">
         <div class="device" data-width="desktop">

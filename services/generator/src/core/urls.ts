@@ -35,6 +35,8 @@ export interface Urls {
   mailFrom?: string;
   /** Where owners write to us (a paused account), or undefined with no domain (inbound mail needs one). */
   supportEmail?: string;
+  /** Our name as owners see it (the domain), or undefined with no domain. */
+  brand?: string;
 }
 
 const trimSlash = (url: string) => url.replace(/\/+$/, '');
@@ -51,6 +53,7 @@ export function createUrls(config: UrlConfig): Urls {
       draftUrl: (draftId) => `${draftOrigin}/${draftId}/`,
       mailFrom: `no-reply@${config.domainName}`,
       supportEmail: `soporte@${config.domainName}`,
+      brand: config.domainName,
     });
   }
 

@@ -517,7 +517,7 @@ button[aria-busy='true'] .dots i { width: .6rem; height: .6rem; border-width: 2p
 .tabs [role='tab'][data-tab='domain'][data-owned] { background: var(--paper-deep); color: var(--ink); }
 .tabs [role='tab'][data-tab='domain'][data-owned]:hover { background: #fffaf0; }
 .tabs [role='tab'][data-tab='domain'][data-owned][aria-selected='true'] { background: #fffaf0; color: var(--rojo); }
-.tabpanel { margin-top: .4rem; }
+.tabpanel { margin-top: 1.75rem; } /* clear of the tabs' 6px shadow */
 .change-layout { display: grid; gap: 2rem; grid-template-columns: minmax(0, 1fr); align-items: start; }
 @media (min-width: 64rem) { .change-layout { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); } }
 .change-layout .handoff { margin: 0; grid-template-columns: minmax(0, 1fr); justify-items: start; }

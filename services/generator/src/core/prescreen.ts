@@ -63,6 +63,8 @@ Reject only these:
 
 Always allowed, even if they sound harsh: butchers, martial-arts and boxing gyms, tattoo and piercing studios, pharmacies, locksmiths, funeral homes, security companies, lingerie shops, therapeutic massage, food banks.
 
+Prices, fees, commissions and earnings the owner sets for their own products or services, and calculators or tables of them on the page, are ordinary page content and never a reason to reject.
+
 When in doubt about an ordinary-looking local business, allow. confidence is how sure you are of the decision, from 0 to 1.
 
 Separately, judge clarity: whether the answers describe a real business or activity we could build a page for.

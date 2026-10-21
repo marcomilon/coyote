@@ -29,7 +29,7 @@ export function fullNumber(iso: string, typed: string): string {
 // Time zones of the listed countries, for picking the owner's country before they do.
 const ZONES: Record<string, string> = {
   La_Paz: 'BO', Santiago: 'CL', Punta_Arenas: 'CL', Bogota: 'CO', Costa_Rica: 'CR', Guayaquil: 'EC', El_Salvador: 'SV',
-  Guatemala: 'GT', Tegucigalpa: 'HN', Managua: 'NI', Panama: 'PA', Asuncion: 'PY', Lima: 'PE', Puerto_Rico: 'PR',
+  Guatemala: 'GT', Tegucigalpa: 'HN', Panama: 'PA', Asuncion: 'PY', Lima: 'PE', Puerto_Rico: 'PR',
   Santo_Domingo: 'DO', Montevideo: 'UY', Galapagos: 'EC', Mexico_City: 'MX', Cancun: 'MX', Merida: 'MX', Monterrey: 'MX', Matamoros: 'MX',
   Chihuahua: 'MX', Ciudad_Juarez: 'MX', Ojinaga: 'MX', Mazatlan: 'MX', Bahia_Banderas: 'MX', Hermosillo: 'MX', Tijuana: 'MX',
   Sao_Paulo: 'BR', Fortaleza: 'BR', Recife: 'BR', Bahia: 'BR', Belem: 'BR', Manaus: 'BR', Cuiaba: 'BR', Campo_Grande: 'BR',

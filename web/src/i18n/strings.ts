@@ -55,10 +55,11 @@ const es = {
     proof: { title: ['Negocios como el tuyo', 'ya están en línea'], screenshot: 'Página web de {business}', visit: 'Abre este ejemplo' },
     pricing: {
       title: 'Cuánto cuesta',
-      sub: 'Precios en dólares (USD), con los impuestos de tu país. Crear es gratis; pagas al publicar o si quieres más diseños. Sin contratos.',
+      note: 'El precio final se confirma al pagar.',
+      sub: 'Precios en {currency}, con los impuestos de tu país. Crear es gratis; pagas al publicar o si quieres más diseños. Sin contratos.',
       free: { name: 'Para empezar', price: 'Gratis', text: ['Crea tu página web gratis, con 3 diseños incluidos, sin saber nada de tecnología.', 'Pide los cambios que quieras y, cuando te guste, la publicas.'], cta: 'Empezar gratis' },
-      designs: { name: 'Más diseños', price: 'US$4.99', per: 'pago único', text: ['3 diseños nuevos para tu página web, cuando quieras otro estilo.', 'Los compras desde Mi página web cuando usaste tus 3 diseños gratis.'] },
-      pro: { name: 'Negocio completo', tag: 'El más elegido', price: 'US$9.99', per: '/ mes', features: ['Tu página web publicada, a la vista de tus clientes', 'Tu propio dominio (.com o {tld})', 'Sigues haciendo cambios cuando quieras', 'Alta en Google Maps', 'Soporte por WhatsApp'], cta: 'Crear mi página web' },
+      designs: { name: 'Más diseños', per: 'pago único', text: ['3 diseños nuevos para tu página web, cuando quieras otro estilo.', 'Los compras desde Mi página web cuando usaste tus 3 diseños gratis.'] },
+      pro: { name: 'Negocio completo', tag: 'El más elegido', per: '/ mes', features: ['Tu página web publicada, a la vista de tus clientes', 'Tu propio dominio (.com o {tld})', 'Sigues haciendo cambios cuando quieras', 'Alta en Google Maps', 'Soporte por WhatsApp'], cta: 'Crear mi página web' },
     },
     whatsapp: {
       title: '¿Tienes WhatsApp? Ya tienes lo que hace falta.',
@@ -148,7 +149,7 @@ const es = {
     designsOut: {
       title: 'Ya no te quedan diseños',
       text: 'Compra 3 diseños más para rediseñar tu página web. Mientras tanto puedes seguir cambiando tus textos y tus datos de contacto, y poner tus fotos en lugar de las creadas con IA.',
-      buy: 'Comprar 3 diseños · USD 4.99',
+      buy: 'Comprar 3 diseños · {price}',
       opening: 'Abriendo el pago…',
       waiting: 'Pago recibido. Sumando tus diseños…',
       done: '¡Listo! Ya tienes 3 diseños más.',
@@ -239,9 +240,9 @@ const es = {
         submit: 'Registrar dominio', back: 'Volver',
       },
       plan: {
-        price: 'USD 9.99', per: 'al mes',
+        per: 'al mes',
         intro: 'Para registrar tu dominio necesitas el plan de tu página web. Puedes cancelarlo cuando quieras.',
-        subscribe: 'Activar plan · USD 9.99/mes',
+        subscribe: 'Activar plan · {price}/mes',
         waiting: 'Confirmando tu pago y registrando tu dominio…',
                 late: 'Tu pago está tardando en confirmarse. Vuelve a abrir esta pestaña en unos minutos.',
         failed: 'No pudimos abrir el pago. Inténtalo de nuevo.',
@@ -389,7 +390,7 @@ const esVos: DeepPartial<typeof es> = {
       { n: '3', title: 'Lo ajustás y publicás', text: 'Ves tu página web y pedís cambios con tus palabras, desde tu enlace privado.' },
     ],
     pricing: {
-      sub: 'Precios en dólares (USD), con los impuestos de tu país. Crear es gratis; pagás al publicar o si querés más diseños. Sin contratos.',
+      sub: 'Precios en {currency}, con los impuestos de tu país. Crear es gratis; pagás al publicar o si querés más diseños. Sin contratos.',
       free: { text: ['Creá tu página web gratis, con 3 diseños incluidos, sin saber nada de tecnología.', 'Pedí los cambios que quieras y, cuando te guste, la publicás.'] },
       designs: { text: ['3 diseños nuevos para tu página web, cuando quieras otro estilo.', 'Los comprás desde Mi página web cuando usaste tus 3 diseños gratis.'] },
       pro: { features: ['Tu página web publicada, a la vista de tus clientes', 'Tu propio dominio (.com o {tld})', 'Seguís haciendo cambios cuando quieras', 'Alta en Google Maps', 'Soporte por WhatsApp'] },
@@ -613,10 +614,11 @@ const pt: typeof es = {
     proof: { title: ['Negócios como o seu', 'já estão online'], screenshot: 'Site de {business}', visit: 'Abra este exemplo' },
     pricing: {
       title: 'Quanto custa',
-      sub: 'Preços em dólares (USD), com os impostos do seu país. Criar é grátis; você paga ao publicar ou se quiser mais designs. Sem contrato.',
+      note: 'O preço final é confirmado no pagamento.',
+      sub: 'Preços em {currency}, com os impostos do seu país. Criar é grátis; você paga ao publicar ou se quiser mais designs. Sem contrato.',
       free: { name: 'Para começar', price: 'Grátis', text: ['Crie seu site grátis, com 3 designs incluídos, sem precisar entender de tecnologia.', 'Peça as mudanças que quiser e, quando gostar, publique.'], cta: 'Começar grátis' },
-      designs: { name: 'Mais designs', price: 'US$4,99', per: 'pagamento único', text: ['3 designs novos para o seu site, quando quiser outro estilo.', 'Você compra em Meu site depois de usar seus 3 designs grátis.'] },
-      pro: { name: 'Negócio completo', tag: 'O mais escolhido', price: 'US$9,99', per: '/ mês', features: ['Seu site publicado, à vista dos seus clientes', 'Seu próprio domínio (.com ou {tld})', 'Continue mudando quando quiser', 'Cadastro no Google Maps', 'Suporte pelo WhatsApp'], cta: 'Criar meu site' },
+      designs: { name: 'Mais designs', per: 'pagamento único', text: ['3 designs novos para o seu site, quando quiser outro estilo.', 'Você compra em Meu site depois de usar seus 3 designs grátis.'] },
+      pro: { name: 'Negócio completo', tag: 'O mais escolhido', per: '/ mês', features: ['Seu site publicado, à vista dos seus clientes', 'Seu próprio domínio (.com ou {tld})', 'Continue mudando quando quiser', 'Cadastro no Google Maps', 'Suporte pelo WhatsApp'], cta: 'Criar meu site' },
     },
     whatsapp: {
       title: 'Tem WhatsApp? Então você já tem o que precisa.',
@@ -704,7 +706,7 @@ const pt: typeof es = {
     designsOut: {
       title: 'Seus designs acabaram',
       text: 'Compre mais 3 designs para redesenhar seu site. Enquanto isso, você ainda pode mudar seus textos e seus contatos, e colocar suas fotos no lugar das criadas com IA.',
-      buy: 'Comprar 3 designs · US$ 4,99',
+      buy: 'Comprar 3 designs · {price}',
       opening: 'Abrindo o pagamento…',
       waiting: 'Pagamento recebido. Somando seus designs…',
       done: 'Pronto! Você tem mais 3 designs.',
@@ -795,9 +797,9 @@ const pt: typeof es = {
         submit: 'Registrar domínio', back: 'Voltar',
       },
       plan: {
-        price: 'US$ 9,99', per: 'por mês',
+        per: 'por mês',
         intro: 'Para registrar seu domínio, você precisa do plano do seu site. Você pode cancelar quando quiser.',
-        subscribe: 'Ativar plano · US$ 9,99/mês',
+        subscribe: 'Ativar plano · {price}/mês',
         waiting: 'Confirmando seu pagamento e registrando seu domínio…',
                 late: 'Seu pagamento está demorando para ser confirmado. Abra esta aba de novo em alguns minutos.',
         failed: 'Não conseguimos abrir o pagamento. Tente de novo.',

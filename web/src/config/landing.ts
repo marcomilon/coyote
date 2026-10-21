@@ -28,7 +28,6 @@ const TLD: Record<string, string> = {
   GT: '.com.gt',
   HN: '.hn',
   MX: '.mx',
-  NI: '.com.ni',
   PA: '.com.pa',
   PY: '.com.py',
   PE: '.pe',
@@ -42,7 +41,7 @@ const flag = (iso: string) => String.fromCodePoint(...[...iso].map((ch) => 0x1f1
 
 /**
  * The country picker in the header: the same countries as the form's phone field (core/phones.ts).
- * Changes the TLD. Prices are in USD everywhere (strings.ts), as Paddle charges them.
+ * Changes the TLD and the prices (core/prices.ts: local currency where Paddle has one for the country, else USD).
  */
 export const COUNTRIES: CountryInfo[] = PHONE_COUNTRIES.map((c) => ({ code: c.iso, flag: flag(c.iso), name: c.name, tld: TLD[c.iso] ?? '.com' }));
 

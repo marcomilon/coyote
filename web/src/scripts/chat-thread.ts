@@ -3,6 +3,7 @@
 // edit (POST /me/edit), followed here. Used full-page on the phone (chat.ts) and inside Mi sitio (my-site.ts).
 import { setBusy } from './busy';
 import { buyDesignPack, type BuyStrings } from './buy-designs';
+import { withPrice } from './prices';
 import { checkoutAvailable } from './paddle';
 import { supportLine } from './support';
 import { api as apiCall, apiUrl, sendAnswers, waitForJob } from './jobs';
@@ -170,7 +171,7 @@ export function startChat(el: HTMLElement, { token, strings, scroll, previewLink
           li.append(start);
         }
         if (m.buyDesigns && m === lastBuy && checkoutAvailable()) {
-          const buy = button(strings.designsOut.buy, 'btn small', () => void buyPack());
+          const buy = button(withPrice(strings.designsOut.buy, 'designs'), 'btn small', () => void buyPack());
           setBusy(buy, buying.busy);
           buy.disabled ||= buying.late;
           const note = Object.assign(document.createElement('span'), { className: 'notice', textContent: buying.note });

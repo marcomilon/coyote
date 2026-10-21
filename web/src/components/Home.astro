@@ -12,6 +12,7 @@ import {
   WHATSAPP_FIRST,
   whatsappLink,
 } from '../config/landing';
+import { CURRENCY_NAMES, formatPrice, pricesFor, type PriceKind } from '../../../services/generator/src/core/prices';
 
 interface Props {
   lang: Lang;
@@ -28,6 +29,10 @@ const perCountry = (value: (c: (typeof COUNTRIES)[number]) => string) =>
   COUNTRIES.map((c) => ({ code: c.code, value: value(c), hidden: c.code !== fallback }));
 // "…{tld}…" → the text around it, with the TLD switched by country.
 const splitTld = (text: string) => text.split('{tld}') as [string, string?];
+// The plan's and the design pack's price, and the currency they're in, as each country pays them (core/prices.ts).
+const price = (kind: PriceKind) => perCountry((c) => formatPrice(kind, c.code, lang));
+const currency = perCountry((c) => CURRENCY_NAMES[pricesFor(c.code).currency][lang]);
+const [subBefore, subAfter = ''] = h.pricing.sub.split('{currency}') as [string, string?];
 const contact = whatsappLink(lang);
 // Until owners can create a site on WhatsApp, the WhatsApp buttons open the web form.
 const onboarding = (WHATSAPP.onboarding && contact) || s.paths.create;
@@ -224,7 +229,15 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
 
   <section class="pricing wrap" id="precio">
     <h2>{h.pricing.title}</h2>
-    <p class="sub">{h.pricing.sub}</p>
+    <p class="sub">
+      {subBefore}
+      {currency.map((v) => (
+        <span data-country={v.code} hidden={v.hidden}>
+          {v.value}
+        </span>
+      ))}
+      {subAfter}
+    </p>
     <div class="plans">
       <div class="card plan">
         <h3>{h.pricing.free.name}</h3>
@@ -238,7 +251,11 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
           <span class="tag">{h.pricing.pro.tag}</span>
         </div>
         <p class="price">
-          {h.pricing.pro.price}
+          {price('plan').map((v) => (
+            <span data-country={v.code} hidden={v.hidden}>
+              {v.value}
+            </span>
+          ))}
           <small>{h.pricing.pro.per}</small>
         </p>
         <ul>
@@ -268,12 +285,17 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
       <div class="card plan">
         <h3>{h.pricing.designs.name}</h3>
         <p class="price">
-          {h.pricing.designs.price}
+          {price('designs').map((v) => (
+            <span data-country={v.code} hidden={v.hidden}>
+              {v.value}
+            </span>
+          ))}
           <small>{h.pricing.designs.per}</small>
         </p>
         {h.pricing.designs.text.map((line) => <p class="plan-text">{line}</p>)}
       </div>
     </div>
+    <p class="note">{h.pricing.note}</p>
   </section>
 
   <section class="wa-band">

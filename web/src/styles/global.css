@@ -231,6 +231,7 @@ select.country { width: 12rem; text-overflow: ellipsis; white-space: nowrap; ove
 .plan .tag { flex: none; padding: 4px 8px; border: 2px solid var(--ink); border-radius: 4px; background: var(--amarillo); color: var(--ink); font: 700 12px/1.2 var(--body); text-transform: uppercase; }
 .plan .price:has(small) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
 .plan .price small { font: 400 16px/1 var(--body); text-transform: none; }
+.pricing .note { margin-top: 16px; font-size: 14px; opacity: .75; }
 .plan.pro .price { color: var(--amarillo); }
 .plan.pro .price small { color: var(--paper-light); }
 

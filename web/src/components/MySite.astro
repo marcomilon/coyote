@@ -3,6 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import AccountBar from './AccountBar.astro';
 import ChatThread from './ChatThread.astro';
 import { t, type Lang } from '../i18n/strings';
+import { formatPrice, type PriceKind } from '../../../services/generator/src/core/prices';
 
 interface Props {
   lang: Lang;
@@ -19,6 +20,13 @@ const x = m.texts;
 const g = m.designs;
 // The Dominio tab shows unless the build has PUBLIC_DOMAIN_TAB=off (global.css hides it then).
 const domainTab = import.meta.env.PUBLIC_DOMAIN_TAB !== 'off';
+// "… {price} …" around the price, which scripts/prices.ts switches to the visitor's currency (USD until then).
+const priced = (text: string, kind: PriceKind) => {
+  const [before, after = ''] = text.split('{price}') as [string, string?];
+  return { before, after, price: formatPrice(kind, '', lang) };
+};
+const buy = priced(m.designsOut.buy, 'designs');
+const subscribe = priced(d.plan.subscribe, 'plan');
 const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.preview, chatPath: s.paths.chat, chat: { ...s.chat, designsOut: m.designsOut, question: s.questions } };
 ---
 
@@ -66,7 +74,7 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
         <strong>{m.designsOut.title}</strong>
         <p>{m.designsOut.text}</p>
         {/* A design pack (services/generator core/payments.ts), shown only when config.js has Paddle. */}
-        <p class="buy" data-buy-designs hidden><button type="button" class="btn small">{m.designsOut.buy}</button> <span class="notice" data-buy-notice aria-live="polite"></span></p>
+        <p class="buy" data-buy-designs hidden><button type="button" class="btn small">{buy.before}<span data-price="designs">{buy.price}</span>{buy.after}</button> <span class="notice" data-buy-notice aria-live="polite"></span></p>
       </aside>
       {/* For an owner who came from the form or the "lista" email (not from Mis páginas web): how to come back later. */}
       <details class="later" data-later hidden>
@@ -251,14 +259,14 @@ const clientStrings = { ...m, lang, question: s.questions, previewPath: s.paths.
           <div class="domain-plan">
             <p class="chosen" data-domain-chosen-name></p>
             <div data-domain-plan hidden>
-              <p class="price"><strong>{d.plan.price}</strong> {d.plan.per}</p>
+              <p class="price"><strong data-price="plan">{formatPrice('plan', '', lang)}</strong> {d.plan.per}</p>
               <p>{d.plan.intro}</p>
             </div>
           </div>
           <p class="notice" data-domain-plan-notice role="status"></p>
           <p class="notice" data-kind="error" data-domain-error role="alert"></p>
           <div class="submit-row">
-            <button class="btn" type="button" data-domain-subscribe hidden>{d.plan.subscribe}</button>
+            <button class="btn" type="button" data-domain-subscribe hidden>{subscribe.before}<span data-price="plan">{subscribe.price}</span>{subscribe.after}</button>
             <button class="linkbtn" type="button" data-domain-plan-manage hidden>{d.plan.manage}</button>
             <button class="btn" type="submit" data-domain-submit>{d.confirm.submit}</button>
             <button class="linkbtn" type="button" data-domain-back>{d.confirm.back}</button>

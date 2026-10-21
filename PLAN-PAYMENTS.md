@@ -6,7 +6,7 @@
 - **Free design:** stays 1 per email (`core/free-draft.ts`). WhatsApp verification comes later, with Phase 2.
 - **Free designs:** each email already gets 3 paid-tier page writes (`core/paid-writes.ts`: the first design and 2 redesigns), and Mi sitio shows a banner when they run out. Credits extend that count; the banner gets the buy button.
 - **Design pack (built):** USD 4.99, one-time, can be bought again, gives **3 designs**. They raise the email's paid-writes allowance (`designs-bought#<email hash>` in the rate-limit table, added once per Paddle transaction), so the claim and refund in `generate-job.ts` stay as they are. The rest of this section is the original design; the credit-balance steps below (`core/credits.ts`, `spendCredit`, `paidWith`) are replaced by that counter. New sites still need the free draft. One credit pays for each paid-tier page write (`modelTier` in `models.ts`: Opus today) after the free one. Free-tier writes (Haiku: template mode, `page-model haiku`) never spend a credit. A credit pays for: a new site, or a redesign from the chat ("Rediseñar con esta idea", photos added or removed). No free redesigns. Subscribers pay credits too. Free, as today (no Opus call): text edits, contact edits, photo swaps, the chat itself, undo. `EDITS_PER_DAY = 5` stays as a safety cap.
-- **Monthly plan (built):** subscription at **USD 9.99/month**, one per site, same price everywhere (no Argentina override). The pack pays for designs only. A site needs the plan (status active or past_due) before it can register a domain (`domains.ts`, 402 `needs_plan`). The Dominio tab's card sells it with the chosen name in the checkout's `custom_data`; once active, the webhook orders that domain and a queue registers it (PLAN.md custom domains, step 3). The webhook writes `site.billing = {subscriptionId, customerId, status, nextBilledAt, updatedAt}`, and an event older than the stored one is dropped. Paying publishes: once the domain is registered, the site goes live on it (PLAN.md custom domains, step 5), and a plan that ends takes it down. The rest of this file below is the original design; where it differs, the code and this list win.
+- **Monthly plan (built):** subscription at **USD 9.99/month**, one per site. The pack pays for designs only. A site needs the plan (status active or past_due) before it can register a domain (`domains.ts`, 402 `needs_plan`). The Dominio tab's card sells it with the chosen name in the checkout's `custom_data`; once active, the webhook orders that domain and a queue registers it (PLAN.md custom domains, step 3). The webhook writes `site.billing = {subscriptionId, customerId, status, nextBilledAt, updatedAt}`, and an event older than the stored one is dropped. Paying publishes: once the domain is registered, the site goes live on it (PLAN.md custom domains, step 5), and a plan that ends takes it down. The rest of this file below is the original design; where it differs, the code and this list win.
 
 ## Paddle catalog (I create it through the Paddle sandbox MCP)
 | Product | `tax_category` | Price |
@@ -16,7 +16,18 @@
 
 Live (the Ventas314 account), both `saas`: "Ventas314 – Página web" `pro_01m5b0z3cy5gxbyaq8bd8q7xa0`, USD 999/month `pri_01m5b0z3qnrq14f2vyg9n2dj40`; "Ventas314 – 3 diseños" `pro_01m5b0z40g10n0h9qdfsqcvfkm`, USD 499 one-time `pri_01m5b0z47zne9wkce5x7ntcvh5`; client token "Ventas314 web" `live_a5aad4bc8a6fd3736741c8e773a`.
 
-The price IDs go into `infra/cdk.json` context as `paddle: { env: 'production' | 'sandbox', clientToken, designsPriceId, hostingPriceId }` (production now; for sandbox testing, the sandbox ids above and sandbox keys in `coyote/paddle`). The webhook destination subscribes to `transaction.completed` and `subscription.*`. This works like `turnstileSiteKey`: the client token is public, and synth keeps working without credentials. Paddle converts USD into local currencies on its own.
+The price IDs go into `infra/cdk.json` context as `paddle: { env: 'production' | 'sandbox', clientToken, designsPriceId, hostingPriceId }` (production now; for sandbox testing, the sandbox ids above and sandbox keys in `coyote/paddle`). The webhook destination subscribes to `transaction.completed` and `subscription.*`. This works like `turnstileSiteKey`: the client token is public, and synth keeps working without credentials.
+
+**Local prices (built):** Paddle's automatic currency conversion is off. Six countries pay a fixed round price in their own currency, set as `unit_price_overrides` on both prices (live and sandbox); every other country pays USD. Paddle picks the override from the buyer's country (IP, or the one entered at checkout); a subscription keeps the currency it started in. `core/prices.ts` holds the same table and shows it: the home page per picker country, Mi sitio and the chat per the visitor's IP country (`detectCountry`), as Paddle's checkout guesses it, with "El precio final se confirma al pagar". **`prices.ts` and the Paddle overrides must match**: change both together, and check with the Paddle MCP's `pricingPreview` per country. ARS needs a review when inflation moves it.
+
+| Country | Plan / month | 3 designs |
+|---|---|---|
+| Mexico | MXN 179 | MXN 89 |
+| Brazil | BRL 49.90 | BRL 24.90 |
+| Argentina | ARS 14,999 | ARS 7,499 |
+| Chile | CLP 9,990 | CLP 4,990 |
+| Colombia | COP 31,900 | COP 15,900 |
+| Peru | PEN 34.90 | PEN 16.90 |
 
 ## Backend (`services/generator`)
 1. **`core/credits.ts`**: design credits per email, on the account profile row in AccountsTable.

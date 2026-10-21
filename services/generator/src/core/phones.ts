@@ -24,7 +24,6 @@ export const COUNTRIES: Country[] = [
   { iso: 'GT', dial: '502', name: { es: 'Guatemala', pt: 'Guatemala' }, example: '5123 4567', digits: [8, 8] },
   { iso: 'HN', dial: '504', name: { es: 'Honduras', pt: 'Honduras' }, example: '9123 4567', digits: [8, 8] },
   { iso: 'MX', dial: '52', name: { es: 'México', pt: 'México' }, example: '55 1234 5678', digits: [10, 10] },
-  { iso: 'NI', dial: '505', name: { es: 'Nicaragua', pt: 'Nicarágua' }, example: '8123 4567', digits: [8, 8] },
   { iso: 'PA', dial: '507', name: { es: 'Panamá', pt: 'Panamá' }, example: '6123 4567', digits: [8, 8] },
   { iso: 'PY', dial: '595', name: { es: 'Paraguay', pt: 'Paraguai' }, example: '961 456789', digits: [9, 9] },
   { iso: 'PE', dial: '51', name: { es: 'Perú', pt: 'Peru' }, example: '912 345 678', digits: [9, 9] },

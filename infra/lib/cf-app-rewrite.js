@@ -3,6 +3,7 @@
 // Domain mode: the bare domain (BARE_HOST) redirects to the app's www address (APP_URL), path and query kept.
 // Visitors from a voseo country (VOSEO, from i18n.ts) get the Spanish pages written with vos, built under /vos/,
 // at the usual URLs: /crear → /vos/crear/index.html. The rewritten URI is the cache key, so each version caches apart.
+// /.well-known/ files are served as they are.
 // The country is the one chosen in the home page's picker (the `country` cookie), else the one CloudFront sees.
 var BARE_HOST = '__BARE_HOST__';
 var APP_URL = '__APP_URL__';
@@ -35,6 +36,8 @@ function handler(event) {
   if (BARE_HOST && host === BARE_HOST) {
     return { statusCode: 301, statusDescription: 'Moved Permanently', headers: { location: { value: APP_URL + uri + query(request.querystring || {}) } } };
   }
+  // Files other services fetch as they are, e.g. Apple Pay's domain association file (Paddle's checkout).
+  if (uri.indexOf('/.well-known/') === 0) return request;
   if (wantsVos(request, uri)) uri = '/vos' + uri;
   request.uri = uri;
   if (uri.endsWith('/')) {

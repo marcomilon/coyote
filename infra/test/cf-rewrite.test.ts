@@ -123,6 +123,7 @@ describe('app rewrite, vos pages', () => {
     expect(run('/config.js', 'AR')).toBe('/config.js');
     expect(run('/_astro/home.abc.css', 'AR')).toBe('/_astro/home.abc.css');
     expect(run('/vos/crear', 'AR')).toBe('/vos/crear/index.html');
+    expect(run('/.well-known/apple-developer-merchantid-domain-association', 'AR')).toBe('/.well-known/apple-developer-merchantid-domain-association');
   });
 });
 

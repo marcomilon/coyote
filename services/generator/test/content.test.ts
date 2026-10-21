@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cleanContact, normalizeAnswers } from '../src/core/answers';
 import { Contact } from '../src/core/content';
-import { countryOf } from '../src/core/phones';
+import { countryOf, nationalNumber } from '../src/core/phones';
 
 describe('Contact', () => {
   it('validates phone and email like the WhatsApp number', () => {
@@ -67,5 +67,23 @@ describe('normalizeAnswers', () => {
     expect(normalizeAnswers({ ...base, email: ' Hola@Luna.test ' }).contact.email).toBe('hola@luna.test');
     expect(normalizeAnswers({ ...base, email: '' }).contact.email).toBeUndefined();
     expect(() => normalizeAnswers({ ...base, email: 'hola' })).toThrow();
+  });
+});
+
+describe('nationalNumber', () => {
+  it('writes a number the way people in its country do', () => {
+    // Argentina: without the country code and the mobile 9, split at the area code (2, 3 or 4 digits).
+    expect(nationalNumber('5491123456789')).toBe('11 2345-6789');
+    expect(nationalNumber('541143210000')).toBe('11 4321-0000');
+    expect(nationalNumber('5493512345678')).toBe('351 234-5678');
+    expect(nationalNumber('5493593834943')).toBe('3593 83-4943');
+    expect(nationalNumber('5492966123456')).toBe('2966 12-3456');
+    expect(nationalNumber('573001234567')).toBe('300 123 4567');
+    expect(nationalNumber('525512345678')).toBe('55 1234 5678');
+    expect(nationalNumber('5511912345678')).toBe('11 91234 5678');
+    expect(nationalNumber('551123456789')).toBe('11 2345 6789'); // a Brazilian landline: one digit fewer than the example
+    expect(nationalNumber('51912345678')).toBe('912 345 678');
+    expect(nationalNumber('13051234567')).toBe('305 123 4567');
+    expect(nationalNumber('442071234567')).toBe('+442 071 234567'); // not a listed country: stays international
   });
 });

@@ -50,3 +50,32 @@ export function validForCountry(number: string): boolean {
   const local = number.length - country.dial.length;
   return local >= country.digits[0] && local <= country.digits[1];
 }
+
+/**
+ * Argentina's 3-digit area codes (the national numbering plan). Buenos Aires is 11; every other area code is 4 digits.
+ * The area code and the subscriber number always make 10 digits.
+ */
+const AR_AREAS_3 = new Set(['220', '221', '223', '230', '236', '237', '249', '260', '261', '263', '264', '266', '280', '291', '294', '297', '298', '299', '336', '341', '342', '343', '345', '348', '351', '353', '358', '362', '364', '370', '376', '379', '380', '381', '383', '385', '387', '388']);
+
+/** "11 2345-6789", "351 234-5678", "3593 83-4943": the area code, then the subscriber number with its last 4 digits apart. */
+function argentineNumber(national: string): string {
+  if (national.length !== 10) return national;
+  const area = national.startsWith('11') ? 2 : AR_AREAS_3.has(national.slice(0, 3)) ? 3 : 4;
+  return `${national.slice(0, area)} ${national.slice(area, -4)}-${national.slice(-4)}`;
+}
+
+/**
+ * How people in the business's country write a full number ("<code><number>", digits only): without the country
+ * code, an Argentine mobile without its 9 and split at its area code ("11 2345-6789"), others grouped like the
+ * country's example ("300 123 4567"). A number of a country not listed stays international ("+44 207 123 4567").
+ */
+export function nationalNumber(number: string): string {
+  const country = countryOf(number);
+  if (!country) return `+${number.replace(/(\d{3})(?=\d{4,})/g, '$1 ')}`;
+  const local = number.slice(country.dial.length);
+  if (country.iso === 'AR') return argentineNumber(local.length === 11 && local.startsWith('9') ? local.slice(1) : local);
+  const groups = country.example.split(' ').map((g) => g.length);
+  if (groups.reduce((sum, g) => sum + g, 0) !== local.length) return local.replace(/^(\d+?)(\d{4})(\d{4})$/, '$1 $2 $3').replace(/^(\d{3,4})(\d{4})$/, '$1 $2');
+  let at = 0;
+  return groups.map((g) => local.slice(at, (at += g))).join(' ');
+}

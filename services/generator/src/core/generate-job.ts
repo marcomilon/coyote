@@ -13,7 +13,7 @@ import { voiceOf } from './i18n';
 import { handsChecker } from './hands';
 import { imageMaker, imageRatio, madeRatio, REUSED_MADE, type GenerateImage } from './images';
 import type { Design, DesignLook, Job, Stores } from './jobs';
-import { checkPage } from './page-check';
+import { checkPage, nationalNumbers } from './page-check';
 import { designTraits, type DesignTraits } from './design-traits';
 import { DEFAULT_PAGE_SKILL, NO_SKILL, parsePage, pickLook, TONES, type Look, type PageEffort, type PagePhoto, type PageSkill, type PageRequest, type UsedLooks, type WritePage } from './page-writer';
 import { PolicyRejection, type Violation } from './policy';
@@ -201,7 +201,7 @@ async function writeCheckedPage(request: PageRequest, requests: string[], slug: 
 async function checkWrittenPage(written: string, made: string[], request: Pick<PageRequest, 'answers' | 'notes' | 'photos'>, requests: string[], slug: string, deps: GenerateJobDeps): Promise<PageResult> {
   const { answers } = request;
   // The logo spot, tagged for later logo changes with no page writer (logo.ts).
-  const page = tagLogo(written, answers.businessName);
+  const page = nationalNumbers(tagLogo(written, answers.businessName), answers.contact);
   const checked = checkPage(page, { contact: answers.contact, ownerText: ownerText({ answers, notes: request.notes, requests, media: { captions: Object.fromEntries(request.photos.flatMap((p) => (p.caption ? [[p.file, p.caption]] : []))) } }), businessName: answers.businessName, lang: answers.lang });
   if (checked.violations.length > 0) return { problem: 'policy', detail: JSON.stringify(checked.violations).slice(0, 300), violations: checked.violations };
   if (!(await deps.outputAllowed(checked.texts.join('\n')))) return { problem: 'guardrail', detail: 'page text' };

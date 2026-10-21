@@ -6,7 +6,7 @@ import { submit } from '../src/core/submit';
 import { body, harness } from './harness';
 import { toolInputOf } from '../src/core/bedrock';
 import { checkPage } from '../src/core/page-check';
-import { displayPhone, fillSchema, fillTemplate, parseTemplate, type StoredFill } from '../src/core/template';
+import { fillSchema, fillTemplate, parseTemplate, type StoredFill } from '../src/core/template';
 
 const TEMPLATE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Sample</title><meta name="description" content="sample"></head><body>
 <header><div data-image="logo" data-aspect="1:1"><svg></svg></div><span data-text="business_name">Sample Co</span></header>
@@ -118,10 +118,6 @@ describe('fillTemplate', () => {
     expect(info).toContain('Escríbenos');
     expect(info).not.toContain('Llámanos');
   });
-});
-
-it('displayPhone groups the number after its country code', () => {
-  expect(displayPhone('573001234567')).toBe('+57 300 123 4567');
 });
 
 describe('template mode in the generate job', () => {

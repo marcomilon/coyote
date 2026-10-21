@@ -10,7 +10,7 @@ import { publicJob, type ChatMessage, type SiteRecord } from './jobs';
 import { CHAT_TTL_SECONDS, noteRedesignDone, withSupport } from './chat-notes';
 import { applyContact, day, designsLeft, inTwoDays, previewUrl, runningEdit, type ContactInput, type OwnerDeps } from './owner';
 import { editScope } from './edit-scope';
-import { checkPage } from './page-check';
+import { checkPage, nationalNumbers } from './page-check';
 import { applyChanges, elide, type Change } from './page-outline';
 import { ownerTextsAfter, pageTexts } from './page-texts';
 import { isRejected, prescreen } from './prescreen';
@@ -269,7 +269,7 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
         applied = result.action === 'edit' && result.changes?.length ? applyChanges(outline.text, result.changes as Change[]) : { text: outline.text };
       }
       if ('problems' in applied) return await answer('REPLIED', { text: say.couldNot, redesign: request.text });
-      edited = outline.restore(applied.text);
+      edited = nationalNumbers(outline.restore(applied.text), doc.answers.contact);
       // An edit that adds design of its own (new classes, styles, scripts) is a redesign: the page writer does it.
       const scope = editScope(doc.page, edited);
       if (scope.length > 0) {

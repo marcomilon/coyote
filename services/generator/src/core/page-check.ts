@@ -3,7 +3,7 @@ import { Element, Text, type AnyNode, type Document } from 'domhandler';
 import { parseDocument } from 'htmlparser2';
 import type { Contact } from './content';
 import { escapeHtml, html as h } from './html';
-import { countryOf } from './phones';
+import { countryOf, nationalNumber } from './phones';
 import { checkTexts, type Violation } from './policy';
 
 /**
@@ -307,6 +307,39 @@ export function localForms(n: string): string[] {
  */
 const NUMBER_GAP = '(?:[\\s().\\u2010-\\u2015\\u2212-]|&nbsp;|&#160;|&#x0*a0;|&#8209;|&#x0*2011;)*';
 export const numberPattern = (n: string) => new RegExp(n.split('').join(NUMBER_GAP), 'gi');
+
+/**
+ * The owner's numbers in the text a visitor reads, written the way people in the business's country write them
+ * (`nationalNumber`): "+54 9 11 2345 6789", "9 11 2345 6789" or "1123456789" becomes "11 2345-6789", also after a
+ * contact change kept the old number's spacing. Links, scripts and attributes keep the international number. Edits
+ * the source in place, so the rest of the page stays as written.
+ */
+export function nationalNumbers(page: string, contact: Contact): string {
+  const forms = [contact.whatsapp, contact.phone].flatMap((n) => {
+    if (!n || !countryOf(n)) return [];
+    const ways = [`(?:\\(?(?:\\+|00)${NUMBER_GAP})?${numberPattern(n).source}`, ...localForms(n).filter((f) => f.length >= 7).map((f) => numberPattern(f).source)];
+    return [{ pattern: new RegExp(`(?<![\\d+])(?:${ways.join('|')})(?!\\d)`, 'gi'), national: escapeHtml(nationalNumber(n)) }];
+  });
+  if (forms.length === 0) return page;
+  const dom = parseDocument(page, { lowerCaseAttributeNames: true, withStartIndices: true, withEndIndices: true });
+  const spans: { start: number; end: number }[] = [];
+  const visit = (node: AnyNode) => {
+    if (node.type === 'text') {
+      if (node.startIndex !== null && node.endIndex !== null) spans.push({ start: node.startIndex, end: node.endIndex + 1 });
+      return;
+    }
+    if (!isElement(node) || ['script', 'style', 'noscript', 'template'].includes(node.name)) return;
+    node.children.forEach(visit);
+  };
+  dom.children.forEach(visit);
+  let out = page;
+  for (const { start, end } of spans.reverse()) {
+    const text = out.slice(start, end);
+    const next = forms.reduce((t, { pattern, national }) => t.replace(pattern, national), text);
+    if (next !== text) out = out.slice(0, start) + next + out.slice(end);
+  }
+  return out;
+}
 
 /** Puts `next`'s digits into a matched number, keeping the page's formatting when the two numbers have the same length. */
 const swapDigits = (next: string) => (match: string) => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
-import { checkPage, contactMissing, replaceContact } from '../src/core/page-check';
+import { checkPage, contactMissing, nationalNumbers, replaceContact } from '../src/core/page-check';
 import { DEFAULT_PAGE_SKILL, LAYOUTS, pageModel, pageParams, pagePrompt, parsePage, pickLook, siteLanguage, skillText, TONES, type PageRequest } from '../src/core/page-writer';
 import { submit } from '../src/core/submit';
 import { body, harness } from './harness';
@@ -149,6 +149,17 @@ describe('contact details on a written page', () => {
       expect(checkPage(`<!doctype html><html><head><title>Panadería Luna</title></head><body><h1>Panadería Luna</h1>${written}</body></html>`, { ...opts, contact: before }).violations).toEqual([]);
       expect(replaceContact(written, before, after)).toBe(`<p>WhatsApp: +54${gap}9${gap}1123${gap}456789</p>`);
     }
+  });
+
+  it('shows the owner\'s numbers in their national form, leaving links and scripts international', () => {
+    const ar = { whatsapp: '5491123456789', phone: '541143210000' };
+    const page = `<a href="https://wa.me/5491123456789">+54 9 11 2345-6789</a><a href="tel:+541143210000">(+54) 11 4321-0000</a><p>Escríbenos al 9&nbsp;11&nbsp;2345&nbsp;6789.</p><script type="application/ld+json">{"telephone":"+541143210000"}</script><p>Desde 1998 · 2345</p>`;
+    const out = nationalNumbers(page, ar);
+    expect(out).toBe(`<a href="https://wa.me/5491123456789">11 2345-6789</a><a href="tel:+541143210000">11 4321-0000</a><p>Escríbenos al 11 2345-6789.</p><script type="application/ld+json">{"telephone":"+541143210000"}</script><p>Desde 1998 · 2345</p>`);
+    expect(nationalNumbers(out, ar)).toBe(out);
+    expect(nationalNumbers('<p>Tel. +57 300 123 4567</p>', contact)).toBe('<p>Tel. 300 123 4567</p>');
+    // A contact change finds the national form; the new number gets its own area code split.
+    expect(nationalNumbers(replaceContact(out, ar, { ...ar, whatsapp: '5493593834943' }), { ...ar, whatsapp: '5493593834943' })).toContain('>3593 83-4943<');
   });
 
   it('the prompt carries the owner\'s real contact details', () => {

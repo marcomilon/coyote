@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { Answers, PageGoal } from './answers';
 import type { Contact, Media } from './content';
 import { IMAGE_ASPECTS, type ImageAspect } from './page-writer';
-import { countryOf } from './phones';
+import { nationalNumber } from './phones';
 
 /**
  * Template pages (`./coyote.sh page-mode template`): Opus designs a page once, with placeholders marked by data
@@ -203,19 +203,13 @@ export interface FillContext {
 
 const digits = (s: string) => s.replace(/\D/g, '');
 
-/** "+57 300 123 4567": the country code, then the rest in groups. */
-export function displayPhone(number: string): string {
-  const dial = countryOf(number)?.dial ?? '';
-  return `+${dial ? `${dial} ` : ''}${number.slice(dial.length).replace(/(\d{3})(?=\d{4,})/g, '$1 ')}`;
-}
-
 function contactLink(kind: ContactKind, contact: Contact): { href: string; label: string } | undefined {
   switch (kind) {
     case 'whatsapp':
-      return { href: `https://wa.me/${digits(contact.whatsapp)}`, label: displayPhone(contact.whatsapp) };
+      return { href: `https://wa.me/${digits(contact.whatsapp)}`, label: nationalNumber(contact.whatsapp) };
     case 'phone': {
       const number = contact.phone ?? contact.whatsapp;
-      return { href: `tel:+${digits(number)}`, label: displayPhone(number) };
+      return { href: `tel:+${digits(number)}`, label: nationalNumber(number) };
     }
     case 'email':
       return contact.email ? { href: `mailto:${contact.email}`, label: contact.email } : undefined;

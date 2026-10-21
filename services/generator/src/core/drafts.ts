@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Answers } from './answers';
 import { Media } from './content';
 import type { Design, SiteRecord, Stores } from './jobs';
-import { checkPage } from './page-check';
+import { checkPage, nationalNumbers } from './page-check';
 import { StoredFill } from './template';
 import type { Urls } from './urls';
 
@@ -135,7 +135,7 @@ export async function showUnavailable(slug: string, stores: Stores): Promise<voi
 export function renderDraft(doc: SiteDoc, slug: string, urls: Urls): string {
   const { contact, businessName, lang } = doc.answers;
   const assets = [doc.media.logo, ...doc.media.photos, ...(doc.media.generated ?? [])].filter((file): file is string => !!file);
-  const checked = checkPage(doc.page, { contact, ownerText: ownerText(doc), businessName, lang, assets });
+  const checked = checkPage(nationalNumbers(doc.page, contact), { contact, ownerText: ownerText(doc), businessName, lang, assets });
   if (checked.violations.length > 0) throw new Error(`written page breaks the page checks: ${JSON.stringify(checked.violations)}`);
   return checked.html;
 }

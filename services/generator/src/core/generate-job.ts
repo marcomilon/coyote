@@ -453,7 +453,7 @@ async function generate(jobId: string, deps: GenerateJobDeps, run: { owner?: str
     const keep = current?.ownerTexts?.length ? current.ownerTexts : undefined;
     // The owner's photos the page shows (taken-out ones are no longer in media).
     const keepPhotos = current ? media.photos.filter((file) => current!.page.includes(file)) : [];
-    const texts = redesign ? [...new Set(pageTexts(current!.page, job.answers.contact).filter((t) => !t.locked).map((t) => t.text))].slice(0, 150) : [];
+    const texts = redesign ? [...new Set(pageTexts(current!.page, job.answers.contact).filter((t) => !t.showsContact).map((t) => t.text))].slice(0, 150) : [];
     const request = !current
       ? { answers: job.answers, notes, photos, ...goal, ...look }
       : redesign

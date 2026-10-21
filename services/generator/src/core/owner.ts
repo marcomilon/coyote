@@ -10,13 +10,13 @@ import type { ModelTier } from './models';
 import { paidWritesLeft } from './paid-writes';
 import { isFrozen } from './freeze';
 import { checkPage, contactMissing, replaceContact } from './page-check';
-import { editTexts, ownerTextsAfter, pageTexts, type TextEdit } from './page-texts';
+import { contactChanges, editTexts, ownerTextsAfter, pageTexts, type TextEdit } from './page-texts';
 import { checkTexts } from './policy';
 import { parseToken, secretMatches } from './token';
 import { onlyLogo } from './uploads';
 import { hasLogoSpot } from './logo';
 import { changePhotosInPlace } from './photo-slots';
-import type { Urls } from './urls';
+import { liveUrl, type Urls } from './urls';
 
 const OWNER_REQUESTS_PER_DAY = 60;
 /** Chat messages searched for the reply that made an undone draft (only the last few drafts are kept). */
@@ -89,6 +89,10 @@ export async function ownerView(site: SiteRecord, deps: Pick<OwnerDeps, 'stores'
     designs: (site.designs ?? []).map(({ id, draftId, at, kind, request }) => ({ id, at, kind, ...(request && { request }), draftUrl: urls.draftUrl(draftId), current: draftId === site.currentDraftId })),
     slug: site.slug,
     status: site.status,
+    // The site's own domain, once it has one: Mi sitio's "Publica tu página web" tab becomes "Tu dominio".
+    domain: site.domain,
+    // Published on that domain: the link under the title opens the live page instead of the private one.
+    liveUrl: site.status === 'published' && site.domain ? liveUrl(site.domain) : undefined,
     draftUrl: site.currentDraftId ? urls.draftUrl(site.currentDraftId) : undefined,
     previewUrl: previewUrl(site, urls),
     canUndo: (site.drafts?.length ?? 0) > 1,
@@ -275,8 +279,9 @@ export async function applyContact(
 const PHONE_OR_EMAIL = /\d[\d\s().-]{5,}\d|@/;
 
 /**
- * Texts the owner wrote in Tus textos, with no model call: each one replaces the old text where it stands. The
- * page checks and the output guardrail run on the result. Resolves to the changed record, not saved yet.
+ * Texts the owner wrote in Tus textos, with no model call: each one replaces the old text where it stands. A contact
+ * detail changed in a text becomes the site's contact, swapped in everywhere else on the page (links included), as a
+ * contact change. The page checks and the output guardrail run on the result. Resolves to the changed record, not saved yet.
  */
 export async function applyTexts(
   current: SiteDoc,
@@ -284,17 +289,28 @@ export async function applyTexts(
   deps: Pick<OwnerDeps, 'outputAllowed'>,
 ): Promise<{ doc: SiteDoc } | { status: 400; fields: string[] } | { status: 409; error: 'stale' } | { status: 422 }> {
   const edited = editTexts(current.page, edits, current.answers.contact);
-  if ('problem' in edited) return edited.problem === 'stale' ? { status: 409, error: 'stale' } : { status: 400, fields: ['texts'] };
+  if ('problem' in edited) return { status: 409, error: 'stale' };
   if (edited.page === current.page) return { doc: current };
+  let contact = current.answers.contact;
+  let page = edited.page;
+  const changes = Object.entries(contactChanges(edits, contact)) as [ContactField, string][];
+  if (changes.length > 0) {
+    const merged: Record<string, string | undefined> = { ...contact };
+    for (const [field, value] of changes) merged[field] = cleanContact(field, value);
+    const checked = Contact.safeParse(merged);
+    if (!checked.success) return { status: 400, fields: [...new Set(checked.error.issues.map((i) => `contact.${i.path.join('.')}`))] };
+    page = replaceContact(page, contact, checked.data);
+    contact = checked.data;
+  }
   // Numbers and emails the owner typed are theirs, as in a chat request.
   const typed = edits.map((e) => e.to).filter((text) => PHONE_OR_EMAIL.test(text)).join('\n').slice(0, 1000);
-  const ownerTexts = ownerTextsAfter(current.page, edited.page, current.answers.contact, current.ownerTexts);
-  const doc: SiteDoc = { ...current, page: edited.page, ownerTexts, ...(typed && { requests: [...(current.requests ?? []), typed] }) };
-  const { contact, businessName, lang } = doc.answers;
+  const ownerTexts = ownerTextsAfter(current.page, page, contact, current.ownerTexts);
+  const doc: SiteDoc = { ...current, answers: { ...current.answers, contact }, page, ownerTexts, ...(typed && { requests: [...(current.requests ?? []), typed] }) };
+  const { businessName, lang } = doc.answers;
   const options = { contact, businessName, lang };
   const checked = checkPage(doc.page, { ...options, ownerText: ownerText(doc) });
   if (checked.violations.length > 0) return { status: 422 };
-  const before = new Set(checkPage(current.page, { ...options, ownerText: ownerText(current) }).texts);
+  const before = new Set(checkPage(current.page, { ...options, contact: current.answers.contact, ownerText: ownerText(current) }).texts);
   const added = checked.texts.filter((text) => !before.has(text));
   if (added.length > 0 && !(await deps.outputAllowed(added.join('\n')))) return { status: 422 };
   return { doc };

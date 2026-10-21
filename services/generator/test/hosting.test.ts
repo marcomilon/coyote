@@ -181,8 +181,10 @@ describe('a published site', () => {
       occurred_at: at,
       data: { id: 'sub_1', status, customer_id: 'ctm_1', custom_data: { app: 'coyote', kind: 'hosting', slug: 'luna' }, items: [{ price: { id: 'pri_h' } }] },
     });
+    t.objects.set('_errors/unavailable.html', '<html>no disponible</html>');
     await handleEvent(event('canceled', '2027-02-01T00:00:00Z'), deps);
     expect(t.objects.has('_live/luna/index.html')).toBe(false);
+    expect(t.objects.get('_live/luna/404.html')).toBe('<html>no disponible</html>'); // every path on the domain
     expect(t.sites.get('luna')!.status).toBe('draft');
     await handleEvent(event('active', '2027-02-02T00:00:00Z'), deps);
     expect(t.objects.get('_live/luna/index.html')).toBe('<html>v1</html>');

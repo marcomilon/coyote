@@ -9,7 +9,7 @@ import { day, inTwoDays } from './owner';
 import { hostingView } from './hosting';
 import { RetryLater } from './retry';
 export { RetryLater } from './retry';
-import { isSubscribed, planOf } from './plan';
+import { isInvited, isSubscribed, planOf } from './plan';
 import { liveUrl } from './urls';
 
 /** The TLDs offered: `.com` only for now (WHOIS privacy everywhere; the local ones Porkbun sells are `.com.mx`, `.mx`, `.co`). */
@@ -124,6 +124,27 @@ export async function registerDomain(site: SiteRecord, input: unknown, deps: Dom
   return { status: 201, domain: domainView(await finishSetup((await deps.stores.getDomain(domain))!, deps)) };
 }
 
+/**
+ * An invited customer (`./coyote.sh domain-attach`): a domain already in our registrar account, linked to the site the way a paid
+ * registration leaves it: the account email on the record, auto-renew off, the expiry, the order cleared, hosting
+ * queued. Nothing is bought; the plan is the caller's business.
+ */
+export async function attachDomain(
+  site: SiteRecord,
+  domain: string,
+  deps: Pick<DomainDeps, 'stores' | 'registrar' | 'queueHosting' | 'now'>,
+): Promise<{ status: 201; domain: DomainView } | { status: 400 | 404 } | { status: 409; error: 'has_domain' | 'not_available' }> {
+  if (!tldOf(domain)) return { status: 400 };
+  if (site.domain) return { status: 409, error: 'has_domain' };
+  if (!(await deps.registrar.get(domain))) return { status: 404 };
+  const now = deps.now();
+  const ownerEmail = site.ownerEmailId ? (await deps.stores.getAccount(site.ownerEmailId))?.email : undefined;
+  const record: DomainRecord = { domain, slug: site.slug, status: 'setup_pending', createdAt: now, registeredAt: now, priceCents: 0, ownerEmail };
+  if (!(await deps.stores.claimDomain(record))) return { status: 409, error: 'not_available' };
+  if (site.domainOrder) await deps.stores.clearDomainOrder(site.slug);
+  return { status: 201, domain: domainView(await finishSetup(record, deps)) };
+}
+
 /** Auto-renew off, expiry noted, hosting queued. Leaves `setup_pending` if the registrar fails; GET retries. */
 async function finishSetup(record: DomainRecord, deps: Pick<DomainDeps, 'stores' | 'registrar' | 'queueHosting' | 'now'>): Promise<DomainRecord> {
   let done: DomainRecord;
@@ -208,6 +229,8 @@ async function suggestDomains(site: SiteRecord, deps: Pick<DomainDeps, 'stores' 
 export interface DomainPage {
   registerOpen: boolean;
   plan: ReturnType<typeof planOf>;
+  /** The plan is ours (an invited customer): no Paddle portal. */
+  invited?: true;
   domain?: DomainView;
   hosting?: 'setting_up' | 'live' | 'failed';
   liveUrl?: string;
@@ -227,7 +250,7 @@ export async function domainPage(site: SiteRecord, deps: DomainDeps): Promise<Do
   }
   if (record) {
     const hosting = hostingView(record);
-    return { domain: domainView(record), registerOpen, plan, ...(hosting && { hosting }), ...(hosting === 'live' && { liveUrl: liveUrl(record.domain) }) };
+    return { domain: domainView(record), registerOpen, plan, ...(isInvited(site) && { invited: true as const }), ...(hosting && { hosting }), ...(hosting === 'live' && { liveUrl: liveUrl(record.domain) }) };
   }
   // Paid, the registration queued (or refused: we were alerted).
   if (site.domainOrder) return { order: { domain: site.domainOrder.domain, ...(site.domainOrder.failed && { failed: true }) }, registerOpen, plan };

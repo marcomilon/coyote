@@ -398,8 +398,13 @@ export class CoyoteStack extends Stack {
     // tenant's managed certificate is served under this policy.
     liveCfn.addPropertyOverride('DistributionConfig.ViewerCertificate', { CloudFrontDefaultCertificate: true, SslSupportMethod: 'sni-only', MinimumProtocolVersion: 'TLSv1.2_2021' });
 
+    // A live site whose plan ended or that was quarantined (drafts.ts takeDownLive): our logo and a link to the app.
+    const unavailablePage = readFileSync(asset('./sites-unavailable.html'), 'utf8')
+      .replace('__LOGO__', `data:image/png;base64,${readFileSync(asset('../../web/public/logo.png')).toString('base64')}`)
+      .replaceAll('__APP_URL__', appUrl)
+      .replaceAll('__APP_HOST__', domain ? domain.bareHost : appUrl);
     new s3deploy.BucketDeployment(this, 'SitesErrorPages', {
-      sources: [s3deploy.Source.asset(asset('../assets/sites-errors'))],
+      sources: [s3deploy.Source.asset(asset('../assets/sites-errors')), s3deploy.Source.data('unavailable.html', unavailablePage)],
       destinationBucket: this.sitesBucket,
       destinationKeyPrefix: '_errors/',
       prune: false, // never delete generated sites

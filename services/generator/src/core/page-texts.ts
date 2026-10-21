@@ -2,7 +2,7 @@ import { Element, type AnyNode, type Text } from 'domhandler';
 import { parseDocument } from 'htmlparser2';
 import type { Contact } from './content';
 import { escapeHtml } from './html';
-import { showsContact } from './page-check';
+import { addressPattern, localForms, numberPattern, showsContact } from './page-check';
 
 /**
  * Mi sitio → Tus textos: every text a visitor reads on the written page, as a list the owner edits directly.
@@ -25,8 +25,8 @@ export interface PageText {
   role?: Role;
   /** Texts in the same card (a repeated item: a numbered point, a service, a contact card) share this number. */
   card?: number;
-  /** Shows the owner's contact details: those change through the chat, which keeps the links in step. */
-  locked?: true;
+  /** Shows the owner's contact details: a change to one changes the site's contact too (`contactChanges`), links and all. */
+  showsContact?: true;
 }
 
 export interface TextEdit {
@@ -175,7 +175,7 @@ function slots(page: string, contact: Contact): Slot[] {
       const last = block.children.at(-1)!.endIndex! + 1;
       slot.pieces = [{ start: first, end: first, depth: 0, ...text('') }, ...slot.pieces, { start: last, end: last, depth: 0, ...text('') }];
     }
-    out.push({ ...slot, id: out.length, text: joined, node: block, ...(!slot.kind && { role: roleOf(block) }), ...(showsContact(joined, contact) && { locked: true }) });
+    out.push({ ...slot, id: out.length, text: joined, node: block, ...(!slot.kind && { role: roleOf(block) }), ...(showsContact(joined, contact) && { showsContact: true }) });
   }
   markCards(out);
   return out;
@@ -277,16 +277,16 @@ function split(pieces: Piece[], to: string): string[] {
 
 /**
  * Writes the owner's texts into the page. `stale`: an entry is gone or no longer has the text it had (the page
- * changed since the list was read). `locked`: an entry shows contact details.
+ * changed since the list was read). A contact detail edited in a text changes only that text here; `contactChanges`
+ * finds it, so the caller swaps it everywhere else.
  */
-export function editTexts(page: string, edits: TextEdit[], contact: Contact): { page: string } | { problem: 'stale' | 'locked' } {
+export function editTexts(page: string, edits: TextEdit[], contact: Contact): { page: string } | { problem: 'stale' } {
   const all = slots(page, contact);
   const writes: { piece: Piece; text: string }[] = [];
   for (const { id, from, to } of edits) {
     const slot = all[id];
     if (!slot || slot.text !== collapse(from)) return { problem: 'stale' };
     if (collapse(to) === slot.text) continue;
-    if (slot.locked) return { problem: 'locked' };
     split(slot.pieces, collapse(to)).forEach((text, k) => {
       if (text !== slot.pieces[k]!.data) writes.push({ piece: slot.pieces[k]!, text });
     });
@@ -336,6 +336,72 @@ export interface Restored {
   lost: string[];
 }
 
+const CONTACT_FIELDS = ['whatsapp', 'phone', 'email', 'instagram', 'facebook', 'address'] as const;
+/** What a new detail of each kind looks like, when the words around the old one changed too. */
+const NEW_DETAIL: Partial<Record<keyof Contact, RegExp>> = {
+  whatsapp: /\+?\d[\d\s().-]{5,}\d/g,
+  phone: /\+?\d[\d\s().-]{5,}\d/g,
+  email: /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g,
+  instagram: /@[A-Za-z0-9._]{1,30}|instagram\.com\/[A-Za-z0-9._]{1,30}/gi,
+  facebook: /facebook\.com\/[A-Za-z0-9.-]{1,50}/gi,
+};
+
+/** Where a text shows a contact detail, and the form it is written in (a number may lack its country code). */
+function findDetail(field: keyof Contact, value: string, text: string): { start: number; end: number; form: string } | undefined {
+  if (field === 'whatsapp' || field === 'phone') {
+    for (const form of [value, ...localForms(value)].filter((f) => f.length >= 7)) {
+      const match = numberPattern(form).exec(text);
+      if (match) return { start: match.index, end: match.index + match[0].length, form };
+    }
+    return undefined;
+  }
+  if (field === 'address') {
+    const match = addressPattern(value)?.exec(text) ?? (text.includes(value) ? { index: text.indexOf(value), 0: value } : null);
+    return match ? { start: match.index, end: match.index + match[0].length, form: value } : undefined;
+  }
+  const at = text.toLowerCase().indexOf(value.toLowerCase());
+  return at >= 0 ? { start: at, end: at + value.length, form: value } : undefined;
+}
+
+const digitsOf = (text: string) => text.replace(/\D/g, '').replace(/^00/, '');
+
+/**
+ * Mi sitio → Tus textos: the contact details the owner changed by editing a text that shows them. The new detail is
+ * what took the old one's place (the words around it kept), or else the one new number, email or handle the text
+ * gained. A number written without its country code keeps the old one's. A detail taken out of a text leaves the
+ * contact as it is. Raw values: the caller cleans and checks them.
+ */
+export function contactChanges(edits: TextEdit[], contact: Contact): Partial<Record<keyof Contact, string>> {
+  const out: Partial<Record<keyof Contact, string>> = {};
+  for (const edit of edits) {
+    const before = collapse(edit.from);
+    const after = collapse(edit.to);
+    if (before === after) continue;
+    for (const field of CONTACT_FIELDS) {
+      const value = contact[field];
+      if (!value || out[field] !== undefined) continue;
+      const found = findDetail(field, value, before);
+      if (!found || findDetail(field, value, after)) continue;
+      const prefix = before.slice(0, found.start);
+      const suffix = before.slice(found.end);
+      let next: string | undefined;
+      if (after.length >= prefix.length + suffix.length && after.startsWith(prefix) && after.endsWith(suffix)) next = after.slice(prefix.length, after.length - suffix.length).trim();
+      else {
+        const gained = [...after.matchAll(NEW_DETAIL[field] ?? /$^/g)].map((m) => m[0]).filter((d) => !before.toLowerCase().includes(d.toLowerCase()));
+        if (gained.length === 1) next = gained[0];
+      }
+      if (!next) continue;
+      if (field === 'whatsapp' || field === 'phone') {
+        const digits = digitsOf(next);
+        if (!digits) continue;
+        next = digits.length === found.form.length && found.form !== value ? value.slice(0, value.length - found.form.length) + digits : digits;
+      }
+      out[field] = next;
+    }
+  }
+  return out;
+}
+
 /**
  * After a redesign: each text the owner wrote that the new page reworded goes back into the entry that took its
  * place (the most alike with the same role, at least half the words shared), unless the request asked to change it.
@@ -355,7 +421,7 @@ export function restoreTexts(before: string, after: string, keep: string[], inst
     if (mentioned(text, instruction)) continue;
     let best: { entry: PageText; score: number } | undefined;
     for (const entry of entries) {
-      if (taken.has(entry.id) || entry.locked || keep.includes(entry.text) || (entry.kind ?? entry.role) !== role.get(text)) continue;
+      if (taken.has(entry.id) || entry.showsContact || keep.includes(entry.text) || (entry.kind ?? entry.role) !== role.get(text)) continue;
       const score = alike(text, entry.text);
       if (score >= 0.5 && score > (best?.score ?? 0)) best = { entry, score };
     }

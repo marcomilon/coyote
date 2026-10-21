@@ -106,6 +106,7 @@ async function copyLive(slug: string, draftId: string, stores: Stores) {
 
 /** Deployed with the sites (infra `SitesErrorPages`). */
 const NOT_FOUND_PAGE = '_errors/404.html';
+const UNAVAILABLE_PAGE = '_errors/unavailable.html';
 
 /** Paying for the plan publishes the site on its domain (hosting.ts). Idempotent. */
 export async function publishLive(site: SiteRecord, stores: Stores): Promise<void> {
@@ -114,11 +115,20 @@ export async function publishLive(site: SiteRecord, stores: Stores): Promise<voi
   if (site.status !== 'published') await stores.saveSite({ slug: site.slug, status: 'published' });
 }
 
-/** The plan ended (canceled, paused): the domain serves nothing until it is paid again. */
+/** The plan ended (canceled, paused): the domain says the page isn't available until it is paid again. */
 export async function takeDownLive(slug: string, stores: Stores): Promise<void> {
-  await stores.deletePrefix(livePrefix(slug));
+  await showUnavailable(slug, stores);
   const site = await stores.getSite(slug);
   if (site?.status === 'published') await stores.saveSite({ slug, status: 'draft' });
+}
+
+/**
+ * Empties the live copy but for its 404.html, which becomes our "no disponible" page: with no index.html the live
+ * distribution answers every path with it (404, cached 1 minute).
+ */
+export async function showUnavailable(slug: string, stores: Stores): Promise<void> {
+  await stores.deletePrefix(livePrefix(slug));
+  await stores.copyObject(UNAVAILABLE_PAGE, `${livePrefix(slug)}404.html`, contentType(UNAVAILABLE_PAGE));
 }
 
 /** Finishes the written page (checks, repairs, footer). A violation here is our bug. */

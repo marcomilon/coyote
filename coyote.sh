@@ -46,8 +46,8 @@ Commands:
   domains                        List the domains owners registered (Mi sitio → Dominio)
   domain-order <slug> [resend]   Show the domain a paid plan ordered; resend queues it again (after a DomainOrder alarm)
   hosting <slug> [resend]        Show a site's hosting setup on its domain; resend queues it again (after a Hosting alarm)
-  domain-attach <slug> <domain>  Testing: link a domain already in our Porkbun account to a site and publish it there
-  domain-detach <slug>           Testing: undo domain-attach (tenant, DNS records, live copy)
+  domain-attach <slug> <domain>  Invite a customer: link a domain already in our Porkbun account to a site and publish it there (our plan, no Paddle)
+  domain-detach <slug>           Undo domain-attach (tenant, DNS records, live copy, our plan)
   domain-register [on|off]       Show or switch whether owners may register a domain (Coyote pays from the Porkbun balance).
                                  Search works either way. No deploy needed. Survives deploys
   captcha [on|off]               Show or switch the CAPTCHA (Cloudflare Turnstile) on the create, sign-in link and report forms.

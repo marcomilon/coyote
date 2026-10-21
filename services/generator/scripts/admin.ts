@@ -7,9 +7,9 @@
  *   domains             the domains registered for owners (Mi sitio → Dominio)
  *   domain-order <slug> the domain a paid plan ordered; with `resend`, clears its failure and queues it again
  *   hosting <slug>      the site's hosting setup on its domain (step, tenant, certificate); `resend` queues it again
- *   domain-attach <slug> <domain>  testing: links a domain already in our Porkbun account to a site (no purchase, a
- *                       test plan) and starts the hosting setup, as a paid registration would
- *   domain-detach <slug>           testing: undoes domain-attach (tenant, our DNS records, the live copy); run it
+ *   domain-attach <slug> <domain>  an invited customer: links a domain already in our Porkbun account to a site (no
+ *                       purchase; our own plan, no Paddle) and starts the hosting setup, as a paid registration would
+ *   domain-detach <slug>           undoes domain-attach (tenant, our DNS records, the live copy, our plan); run it
  *                       again while CloudFront is still disabling the tenant
  *   free-draft <email>  give an email its free draft and its 3 free designs back (support: a second business; testing)
  *   usage <email>       the email's model calls by tier (paid/free) and their cost: all time and this month
@@ -22,6 +22,8 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { SendMessageCommand, SQSClient } from '@aws-sdk/client-sqs';
 import { porkbun, porkbunDns } from '../src/aws/porkbun';
 import { tenants } from '../src/aws/tenants';
+import { attachDomain } from '../src/core/domains';
+import { INVITED, isInvited } from '../src/core/plan';
 import { removeHosting, type HostingDeps } from '../src/core/hosting';
 import { RetryLater } from '../src/core/retry';
 import { BatchWriteCommand, DynamoDBDocumentClient, paginateScan } from '@aws-sdk/lib-dynamodb';
@@ -258,15 +260,22 @@ switch (command) {
     const domain = rest[0]?.trim().toLowerCase();
     const site = slug ? await stores.getSite(slug) : undefined;
     if (!site || !domain) throw new Error('usage: domain-attach <slug> <domain>');
-    if (site.domain) throw new Error(`${slug} already has ${site.domain}`);
-    if (!(await porkbun.get(domain))) throw new Error(`${domain} is not in our Porkbun account (or its API access is off)`);
+    // Paying publishes, so a site without a plan gets ours (an invited customer, no Paddle), as the webhook saves a paid one.
     const now = Date.now();
-    const claimed = await stores.claimDomain({ domain, slug: site.slug, status: 'registered', createdAt: now, registeredAt: now, priceCents: 0, hosting: { step: 'publish', at: now } });
-    if (!claimed) throw new Error(`${domain} is already linked to a site`);
-    // Paying publishes, so the test site gets a plan (no Paddle).
-    if (!['active', 'past_due'].includes(site.billing?.status ?? '')) await stores.saveBilling(site.slug, { subscriptionId: 'test', customerId: 'test', status: 'active', updatedAt: now });
-    await queueHosting(site.slug, domain);
-    console.log(`${domain} linked to ${site.slug} with a test plan; hosting setup queued. ./coyote.sh hosting ${site.slug} shows the progress.`);
+    const invited = !['active', 'past_due'].includes(site.billing?.status ?? '');
+    if (invited) await stores.saveBilling(site.slug, { subscriptionId: INVITED, customerId: INVITED, status: 'active', updatedAt: now });
+    // The rest is what a paid registration does (domains.ts): the record, auto-renew off, the expiry, hosting queued.
+    const result = await attachDomain(site, domain, { stores, registrar: porkbun, queueHosting: async (s, d) => void (await queueHosting(s, d)), now: Date.now });
+    if (result.status !== 201) {
+      if (invited) await stores.saveBilling(site.slug, { subscriptionId: INVITED, customerId: INVITED, status: 'canceled', updatedAt: Date.now() });
+      throw new Error(
+        result.status === 404 ? `${domain} is not in our Porkbun account (or its API access is off)`
+        : result.status === 400 ? `${domain}: not a domain we offer`
+        : 'error' in result && result.error === 'has_domain' ? `${slug} already has ${site.domain}`
+        : `${domain} is already linked to a site`,
+      );
+    }
+    console.log(`${domain} linked to ${site.slug}${invited ? ' with our plan (invited)' : ''}: ${result.domain.status}, hosting setup queued. ./coyote.sh hosting ${site.slug} shows the progress.`);
     break;
   }
   case 'domain-detach': {
@@ -283,8 +292,9 @@ switch (command) {
       console.log(`CloudFront is disabling the tenant. Run ./coyote.sh domain-detach ${site.slug} again in a few minutes.`);
       break;
     }
+    await stores.deletePrefix(livePrefix(site.slug)); // the "no disponible" page takeDownLive left
     await stores.releaseDomain(record.domain, site.slug);
-    if (site.billing?.subscriptionId === 'test') await stores.saveBilling(site.slug, { subscriptionId: 'test', customerId: 'test', status: 'canceled', updatedAt: Date.now() });
+    if (isInvited(site)) await stores.saveBilling(site.slug, { subscriptionId: INVITED, customerId: INVITED, status: 'canceled', updatedAt: Date.now() });
     console.log(`${record.domain} detached from ${site.slug}: tenant deleted, our DNS records removed, the site is a draft again.`);
     break;
   }

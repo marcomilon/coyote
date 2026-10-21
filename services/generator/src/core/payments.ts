@@ -4,7 +4,7 @@
 import { tldOf, type Registrar } from './domains';
 import { publishLive, takeDownLive } from './drafts';
 import type { Billing, SiteRecord, Stores } from './jobs';
-import { isSubscribed } from './plan';
+import { isInvited, isSubscribed } from './plan';
 import type { ModelTier } from './models';
 import { addBoughtDesigns, DESIGNS_PER_PACK } from './paid-writes';
 
@@ -68,7 +68,7 @@ export async function checkout(site: SiteRecord, deps: PaymentDeps, kind: Checko
 
 /** POST /me/billing/portal: Paddle's page to cancel the plan or change the card. */
 export async function portal(site: SiteRecord, deps: PaymentDeps): Promise<{ status: 200; url: string } | { status: 409 }> {
-  if (!site.billing) return { status: 409 };
+  if (!site.billing || isInvited(site)) return { status: 409 };
   return { status: 200, url: await deps.payments.portalUrl(site.billing.customerId, site.billing.subscriptionId) };
 }
 

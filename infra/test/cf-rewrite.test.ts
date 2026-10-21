@@ -141,6 +141,19 @@ describe('app rewrite, domain mode', () => {
   });
 });
 
+describe('live sites', () => {
+  const handler = new Function(`${readFileSync(new URL('../lib/cf-live.js', import.meta.url), 'utf8')}; return handler;`)() as (event: unknown) => Result;
+  const run = (host: string, querystring = {}) => handler({ request: { uri: '/menu', headers: { host: { value: host } }, querystring } });
+
+  it('sends the bare domain to www, keeping the path and the query', () => {
+    expect(run('Luna.com')).toMatchObject({ statusCode: 301, headers: { location: { value: 'https://www.luna.com/menu' } } });
+    expect(run('luna.com.ar', { a: { value: '1' } })).toMatchObject({ statusCode: 301, headers: { location: { value: 'https://www.luna.com.ar/menu?a=1' } } });
+  });
+
+  it('serves www as usual', () => {
+    expect(run('www.luna.com').uri).toBe('/menu');
+  });
+});
 
 describe('geo', () => {
   const handler = new Function(`${readFileSync(new URL('../lib/cf-geo.js', import.meta.url), 'utf8')}; return handler;`)() as (event: unknown) => Result & { body?: string };

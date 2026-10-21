@@ -27,6 +27,7 @@ describe('reportSite', () => {
     expect(await reportSite('sitio-malo', 'estafa', '3.3.3.3', t.deps)).toEqual({ status: 202, counted: true, quarantined: true });
     expect(t.objects.has('_live/sitio-malo/index.html')).toBe(false);
     expect(t.objects.has('_quarantine/sitio-malo/index.html')).toBe(true);
+    expect(t.objects.has('_live/sitio-malo/404.html')).toBe(true); // the "no disponible" page
     expect(t.sites.get('sitio-malo')!.status).toBe('quarantined');
     expect(t.invalidated).toContain('sitio-malo');
     expect(t.sent).toHaveLength(3);

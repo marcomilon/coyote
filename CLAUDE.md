@@ -33,7 +33,7 @@ npm run templates:make -w services/generator -- --count 5   # Opus designs templ
 ./coyote.sh domains    # the domains owners registered
 ./coyote.sh domain-order <slug> [resend]   # the domain a paid plan ordered; resend queues it again after a DomainOrder alarm
 ./coyote.sh hosting <slug> [resend]        # a site's hosting setup on its domain (step, tenant, certificate); resend after a Hosting alarm
-./coyote.sh domain-attach <slug> <domain> | domain-detach <slug>   # testing: publish a site on a domain already in our Porkbun account, and undo it
+./coyote.sh domain-attach <slug> <domain> | domain-detach <slug>   # invited customers: publish a site on a domain already in our Porkbun account with our own plan (no Paddle), and undo it
 ./coyote.sh view <slug>   # copy a site's current draft to out/view/<slug>/ and open it
 ./coyote.sh example-page <page-dir> <slug>   # make an opus:sites page a landing example (examples/sites/<slug>/; then deploy)
 npm run dev            # astro dev for web/ on :5173 against the DEPLOYED API. Runs in the background; stop with `npx astro dev stop` in web/

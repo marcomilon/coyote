@@ -107,12 +107,31 @@ describe('edits', () => {
     expect(notices.at(-1)).toContain('Textos del dueño: 0 mantenidos, 1 devueltos, 0 perdidos');
     t.writer.options.page = undefined;
 
-    // A list read before that change is stale; texts with contact details change through the chat.
+    // A list read before that change is stale.
     expect(await editSite(t.site(), { texts: [{ id: about.id, from: about.text, to: 'Otra cosa' }] }, t.ownerDeps)).toEqual({ status: 409, error: 'stale' });
     const whatsapp = (await ownerView(t.site(), t.ownerDeps)).texts!.find((x) => x.text === 'WhatsApp')!;
-    expect(whatsapp.locked).toBeUndefined();
+    expect(whatsapp.showsContact).toBeUndefined();
     expect(await editSite(t.site(), { texts: [{ id: 0, from: 'Panadería Luna', to: '' }] }, t.ownerDeps)).toMatchObject({ status: 400 });
     expect(t.site().currentDraftId).toBe('draft3');
+  });
+
+  it('Tus textos: a contact detail changed in a text becomes the site\'s contact, links and all', async () => {
+    const t = await withDraft();
+    t.writer.options.page = () =>
+      '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Panadería Luna</title></head><body><main><h1>Panadería Luna</h1><p>' + 'Pan recién horneado. '.repeat(20) + '</p><p>Pedidos al 300 123 4567</p><a href="https://wa.me/573001234567">WhatsApp</a></main></body></html>';
+    expect(await editSite(t.site(), { instruction: 'hazla más moderna' }, t.ownerDeps)).toMatchObject({ status: 202 });
+    await runGenerateJob('job-2', t.generateDeps);
+    t.writer.options.page = undefined;
+    const texts = (await ownerView(t.site(), t.ownerDeps)).texts!;
+    const orders = texts.find((x) => x.text === 'Pedidos al 300 123 4567')!;
+    expect(orders.showsContact).toBe(true);
+    expect(await editSite(t.site(), { texts: [{ id: orders.id, from: orders.text, to: 'Pedidos al 311 999 8877' }] }, t.ownerDeps)).toEqual({ status: 200, missing: [] });
+    const draft = t.site().currentDraftId!;
+    const page = t.objects.get(`_draft/${draft}/index.html`)!;
+    expect(page).toContain('<p>Pedidos al 311 999 8877</p>');
+    expect(page).toContain('https://wa.me/573119998877');
+    expect(page).not.toContain('3001234567');
+    expect((await ownerView(t.site(), t.ownerDeps)).contact).toMatchObject({ whatsapp: '573119998877' });
   });
 
   it('Tus textos: refuses text the content policy or the guardrail rejects, and waits for a running redesign', async () => {

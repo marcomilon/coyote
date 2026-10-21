@@ -291,7 +291,7 @@ function dedupe(violations: Violation[]): Violation[] {
 }
 
 /** The ways a number can be written without its country code, longest first (an Argentine mobile with or without the 9). */
-function localForms(n: string): string[] {
+export function localForms(n: string): string[] {
   const country = countryOf(n);
   if (!country) {
     const local = n.replace(/^(1|2\d|3\d|4\d|5[1-8]|59\d|6\d|7|8\d|9\d)/, '');
@@ -306,7 +306,7 @@ function localForms(n: string): string[] {
  * the non-breaking kinds the page writer uses so a number doesn't wrap (as characters or as HTML entities).
  */
 const NUMBER_GAP = '(?:[\\s().\\u2010-\\u2015\\u2212-]|&nbsp;|&#160;|&#x0*a0;|&#8209;|&#x0*2011;)*';
-const numberPattern = (n: string) => new RegExp(n.split('').join(NUMBER_GAP), 'gi');
+export const numberPattern = (n: string) => new RegExp(n.split('').join(NUMBER_GAP), 'gi');
 
 /** Puts `next`'s digits into a matched number, keeping the page's formatting when the two numbers have the same length. */
 const swapDigits = (next: string) => (match: string) => {
@@ -324,7 +324,7 @@ const ACCENTED: Record<string, string> = { a: 'aáàâäã', e: 'eéèêë', i: 
  * breaks between its words ("av. bolivar 244, pueblo libre" finds "Av. Bolívar 244<br>Pueblo Libre"). Only for
  * addresses of two words or more, so a one-word address doesn't match ordinary text.
  */
-function addressPattern(address: string): RegExp | undefined {
+export function addressPattern(address: string): RegExp | undefined {
   const words = address.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().match(/[a-z0-9]+/g);
   if (!words || words.length < 2) return undefined;
   const word = (w: string) => [...w].map((ch) => (ACCENTED[ch] ? `[${ACCENTED[ch]}]` : ch)).join('');

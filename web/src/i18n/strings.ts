@@ -155,7 +155,7 @@ const es = {
       late: 'Tu pago está en camino. Tus diseños aparecen en unos minutos: vuelve a abrir esta página.',
       failed: 'No pudimos abrir el pago. Inténtalo de nuevo en unos minutos.',
     },
-    tabs: { label: 'Mi página web', preview: 'Vista previa', change: 'Actualiza tu página web', designs: 'Tus diseños', texts: 'Tus textos', photos: 'Tus fotos', domain: 'Publica tu página web' },
+    tabs: { label: 'Mi página web', preview: 'Vista previa', change: 'Actualiza tu página web', designs: 'Tus diseños', texts: 'Tus textos', photos: 'Tus fotos', domain: 'Publica tu página web', domainOwned: 'Tu dominio' },
     designs: {
       intro: 'Cada diseño nuevo queda guardado aquí. Elige cuál usa tu página web: cambiar de diseño no gasta diseños.',
       name: 'Diseño',
@@ -203,7 +203,6 @@ const es = {
       title: 'Título',
       description: 'Descripción',
       roles: { headline: 'Título principal', heading: 'Título de sección', subheading: 'Subtítulo', paragraph: 'Párrafo', button: 'Botón', menu: 'Menú', link: 'Enlace', item: 'Elemento de lista', table: 'Tabla', caption: 'Pie de foto', quote: 'Cita', label: 'Etiqueta', footer: 'Pie de página', text: 'Texto' },
-      locked: 'Tiene tus datos de contacto: cámbialos en «Actualiza tu página web».',
       none: 'Esta página no tiene textos para cambiar aquí. Pide los cambios en «Actualiza tu página web».',
       save: 'Guardar cambios',
       saved: 'Listo: guardamos tus cambios.',
@@ -216,8 +215,10 @@ const es = {
     },
     viewport: { label: 'Ver como', phone: 'Celular', desktop: 'Computador' },
     private: 'Por ahora solo tú puedes ver tu página web.',
+    live: 'Así ven tu página web tus clientes.',
     open: 'Abrir en otra pestaña',
     openTab: 'Abre tu página en otra pestaña',
+    openLive: 'Abre {domain} en otra pestaña',
     error: 'Algo salió mal. Inténtalo de nuevo.',
     delete: 'Borrar mi página web y mis datos', deleteConfirm: 'Escribe el nombre de tu página web para confirmar:', deleted: { title: 'Tu página web fue borrada', text: 'Eliminamos tus páginas y tus datos.' },
     domain: {
@@ -484,7 +485,6 @@ const esVos: DeepPartial<typeof es> = {
     },
     texts: {
       intro: 'Cambiá cualquier texto de tu página web acá mismo. El diseño queda igual.',
-      locked: 'Tiene tus datos de contacto: cambialos en «Actualizá tu página web».',
       none: 'Esta página no tiene textos para cambiar acá. Pedí los cambios en «Actualizá tu página web».',
       empty: 'Ningún texto puede quedar vacío. Para quitar una parte de la página, pedilo en «Actualizá tu página web».',
       stale: 'Tu página web cambió mientras escribías. Volvimos a cargar los textos: escribí tus cambios de nuevo.',
@@ -495,6 +495,7 @@ const esVos: DeepPartial<typeof es> = {
     viewport: { desktop: 'Computadora' },
     private: 'Por ahora solo vos podés ver tu página web.',
     openTab: 'Abrí tu página en otra pestaña',
+    openLive: 'Abrí {domain} en otra pestaña',
     error: 'Algo salió mal. Intentalo de nuevo.',
     deleteConfirm: 'Escribí el nombre de tu página web para confirmar:',
     domain: {
@@ -710,7 +711,7 @@ const pt: typeof es = {
       late: 'Seu pagamento está a caminho. Seus designs aparecem em alguns minutos: abra esta página de novo.',
       failed: 'Não conseguimos abrir o pagamento. Tente de novo em alguns minutos.',
     },
-    tabs: { label: 'Meu site', preview: 'Pré-visualização', change: 'Atualize seu site', designs: 'Seus designs', texts: 'Seus textos', photos: 'Suas fotos', domain: 'Publique seu site' },
+    tabs: { label: 'Meu site', preview: 'Pré-visualização', change: 'Atualize seu site', designs: 'Seus designs', texts: 'Seus textos', photos: 'Suas fotos', domain: 'Publique seu site', domainOwned: 'Seu domínio' },
     designs: {
       intro: 'Cada design novo fica guardado aqui. Escolha qual seu site usa: trocar de design não gasta designs.',
       name: 'Design',
@@ -758,7 +759,6 @@ const pt: typeof es = {
       title: 'Título',
       description: 'Descrição',
       roles: { headline: 'Título principal', heading: 'Título de seção', subheading: 'Subtítulo', paragraph: 'Parágrafo', button: 'Botão', menu: 'Menu', link: 'Link', item: 'Item de lista', table: 'Tabela', caption: 'Legenda', quote: 'Citação', label: 'Rótulo', footer: 'Rodapé', text: 'Texto' },
-      locked: 'Tem seus dados de contato: mude-os em «Atualize seu site».',
       none: 'Este site não tem textos para mudar aqui. Peça as mudanças em «Atualize seu site».',
       save: 'Salvar mudanças',
       saved: 'Pronto: salvamos suas mudanças.',
@@ -771,8 +771,10 @@ const pt: typeof es = {
     },
     viewport: { label: 'Ver como', phone: 'Celular', desktop: 'Computador' },
     private: 'Por enquanto só você pode ver seu site.',
+    live: 'É assim que seus clientes veem seu site.',
     open: 'Abrir em outra aba',
     openTab: 'Abra seu site em outra aba',
+    openLive: 'Abra {domain} em outra aba',
     error: 'Algo deu errado. Tente de novo.',
     delete: 'Apagar meu site e meus dados', deleteConfirm: 'Digite o nome do seu site para confirmar:', deleted: { title: 'Seu site foi apagado', text: 'Removemos as suas páginas e os seus dados.' },
     domain: {

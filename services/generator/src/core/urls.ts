@@ -88,5 +88,5 @@ export function urlConfigFromEnv(env: Record<string, string | undefined>): UrlCo
   throw new Error('Set DOMAIN_NAME, or APP_BASE_URL + API_BASE_URL + SITES_BASE_URL.');
 }
 
-/** A published site, on its owner's own domain (hosting.ts). */
-export const liveUrl = (domain: string) => `https://${domain}/`;
+/** A published site, on its owner's own domain (hosting.ts): on www, where the live distribution sends the bare domain. */
+export const liveUrl = (domain: string) => `https://www.${domain}/`;

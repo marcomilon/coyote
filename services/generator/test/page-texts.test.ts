@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Contact } from '../src/core/content';
-import { editTexts, ownerTextsAfter, pageTexts, restoreTexts } from '../src/core/page-texts';
+import { contactChanges, editTexts, ownerTextsAfter, pageTexts, restoreTexts } from '../src/core/page-texts';
 
 const contact: Contact = { whatsapp: '51987654321', address: 'Av. Bolívar 244, Pueblo Libre' };
 const page = `<!doctype html><html><head><meta charset="utf-8"><title>Panadería Luna &amp; Café</title>
@@ -26,8 +26,8 @@ describe('page texts', () => {
       { id: 4, text: 'Horneamos cada día <desde las 6>.', group: 'Pan recién horneado', role: 'paragraph' },
       { id: 5, text: 'Desde 1998', group: 'Pan recién horneado', role: 'text' },
       { id: 6, text: 'Visítanos', group: 'Visítanos', role: 'heading' },
-      { id: 7, text: 'Av. Bolívar 244, Pueblo Libre', group: 'Visítanos', role: 'paragraph', locked: true },
-      { id: 8, text: 'WhatsApp 987 654 321', group: 'Visítanos', role: 'button', locked: true },
+      { id: 7, text: 'Av. Bolívar 244, Pueblo Libre', group: 'Visítanos', role: 'paragraph', showsContact: true },
+      { id: 8, text: 'WhatsApp 987 654 321', group: 'Visítanos', role: 'button', showsContact: true },
     ]);
   });
 
@@ -115,11 +115,22 @@ describe('page texts', () => {
     expect(pageTexts(doc, contact).map((t) => t.text)).toEqual(['Cómo llegar', 'Escríbenos', 'Lunes a viernes 7 a 19']);
   });
 
-  it('refuses a list read from another version of the page, and texts with contact details', () => {
+  it('refuses a list read from another version of the page', () => {
     expect(editTexts(page, [{ id: 3, from: 'Pastel', to: 'Torta' }], contact)).toEqual({ problem: 'stale' });
     expect(editTexts(page, [{ id: 99, from: 'Pan', to: 'Torta' }], contact)).toEqual({ problem: 'stale' });
-    expect(editTexts(page, [{ id: 8, from: 'WhatsApp 987 654 321', to: 'WhatsApp 999 111 222' }], contact)).toEqual({ problem: 'locked' });
     expect(editTexts(page, [{ id: 8, from: 'WhatsApp 987 654 321', to: 'WhatsApp 987 654 321' }], contact)).toEqual({ page });
+  });
+
+  it('finds the contact details an edit changes, in the form the page wrote them', () => {
+    const edit = (from: string, to: string) => contactChanges([{ id: 0, from, to }], contact);
+    // Written without the country code: the new number keeps the old one's.
+    expect(edit('WhatsApp 987 654 321', 'WhatsApp 912 345 678')).toEqual({ whatsapp: '51912345678' });
+    expect(edit('WhatsApp 987 654 321', 'Escríbenos al +51 912 345 678')).toEqual({ whatsapp: '51912345678' });
+    expect(edit('Av. Bolívar 244, Pueblo Libre', 'Jr. Unión 120, Lima')).toEqual({ address: 'Jr. Unión 120, Lima' });
+    expect(contactChanges([{ id: 0, from: 'Correo: hola@luna.pe', to: 'Correo: pedidos@luna.pe' }], { ...contact, email: 'hola@luna.pe' })).toEqual({ email: 'pedidos@luna.pe' });
+    // Other words, or the detail taken out: the contact stays.
+    expect(edit('WhatsApp 987 654 321', 'Escríbenos: 987 654 321')).toEqual({});
+    expect(edit('WhatsApp 987 654 321', 'WhatsApp')).toEqual({});
   });
 
   it('remembers the texts the owner wrote while they are on the page', () => {
@@ -156,8 +167,8 @@ describe('page texts', () => {
       expect(texts.length).toBeGreaterThan(20);
       expect(texts.every((t) => t.kind || t.role)).toBe(true);
       expect(texts.filter((t) => t.role === 'headline')).toHaveLength(1);
-      for (const { id, text, locked } of texts) {
-        if (locked) continue;
+      for (const { id, text, showsContact } of texts) {
+        if (showsContact) continue;
         const edited = editTexts(written, [{ id, from: text, to: `Nuevo ${id}` }], contact);
         if (!('page' in edited)) throw new Error(`${slug} #${id}: ${JSON.stringify(edited)}`);
         const after = pageTexts(edited.page, contact).map((t) => t.text);

@@ -12,3 +12,7 @@ export function planOf(site: SiteRecord): Plan {
 }
 
 export const isSubscribed = (site: SiteRecord) => ['active', 'past_due'].includes(planOf(site));
+
+/** A plan we run ourselves for a customer we invited (`./coyote.sh domain-attach`): no Paddle subscription behind it. */
+export const INVITED = 'invited';
+export const isInvited = (site: SiteRecord) => site.billing?.subscriptionId === INVITED;

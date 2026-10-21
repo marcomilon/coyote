@@ -19,6 +19,10 @@ import { setBusy } from './busy';
 interface View {
   slug: string;
   status: string;
+  /** The site's own domain, once it has one. */
+  domain?: string;
+  /** The live page on that domain, once published there. */
+  liveUrl?: string;
   draftUrl?: string;
   previewUrl?: string;
   businessName?: string;
@@ -49,7 +53,6 @@ interface PageText {
   kind?: 'title' | 'description';
   role?: string;
   card?: number;
-  locked?: true;
 }
 interface SiteImage {
   file: string;
@@ -58,6 +61,11 @@ interface SiteImage {
 }
 type Message = { title: string; text: string };
 interface Strings {
+  openTab: string;
+  openLive: string;
+  private: string;
+  live: string;
+  tabs: { domain: string; domainOwned: string };
   designsLeft: { one: string; many: string };
   designsOut: BuyStrings;
   noToken: Message;
@@ -94,7 +102,6 @@ interface TextStrings {
   title: string;
   description: string;
   roles: Record<string, string>;
-  locked: string;
   save: string;
   saved: string;
   empty: string;
@@ -211,6 +218,24 @@ function showDesignsLeft(left: number | undefined) {
   $<HTMLElement>('[data-buy-designs]').hidden = !out || !checkoutAvailable();
 }
 
+/** Under the title: the live page on its domain ("Abre <domain> en otra pestaña") once published there, otherwise the private one (/ver). */
+function showOpenTab(live: string | undefined, domain: string | undefined) {
+  const link = $<HTMLAnchorElement>('.open-tab');
+  const text = live && domain ? strings.openLive.replace('{domain}', domain) : strings.openTab;
+  if (live) link.href = live;
+  link.querySelector('span')!.textContent = text;
+  const tip = live ? strings.live : strings.private;
+  link.dataset.tip = tip;
+  link.setAttribute('aria-label', `${text}. ${tip}`);
+}
+
+/** Once the site has its domain, the paid step's tab is just where the domain lives: "Tu dominio", in the plain tab style. */
+function showDomainTab(owned: boolean) {
+  const tab = $<HTMLElement>('#tab-domain');
+  tab.textContent = owned ? strings.tabs.domainOwned : strings.tabs.domain;
+  tab.toggleAttribute('data-owned', owned);
+}
+
 /** "Comprar 3 diseños" in the banner (buy-designs.ts). */
 function setUpBuyDesigns() {
   const line = $<HTMLElement>('[data-buy-designs]');
@@ -252,6 +277,7 @@ function fill(view: View) {
   const frame = $<HTMLIFrameElement>('.device iframe');
   if (frame.src !== view.draftUrl) frame.src = view.draftUrl;
   root.querySelectorAll<HTMLAnchorElement>('[data-draft-link]').forEach((link) => (link.href = `${strings.previewPath}${ownerHash()}`));
+  showOpenTab(view.liveUrl, view.domain);
   showChatHandoff();
   showLater(view.slug);
   showPhotos(view.images);
@@ -260,6 +286,7 @@ function fill(view: View) {
   showDesignsLeft(view.designsLeft);
   showDesigns(view.designs ?? []);
   showFrozen(view.frozen === true);
+  showDomainTab(Boolean(view.domain));
   $<HTMLButtonElement>('[data-delete]').onclick = async () => {
     if (window.prompt(`${strings.deleteConfirm} ${view.slug}`) !== view.slug) return;
     const { status } = await api('/me', 'DELETE');
@@ -485,13 +512,6 @@ function showTexts(texts: PageText[] | undefined) {
     label.htmlFor = field.id;
     label.textContent = entry.kind ? x[entry.kind] : (x.roles[entry.role ?? 'text'] ?? x.roles.text!);
     wrap.append(label, field);
-    if (entry.locked) {
-      field.readOnly = true;
-      const hint = document.createElement('p');
-      hint.className = 'hint';
-      hint.textContent = x.locked;
-      wrap.append(hint);
-    }
     if (entry.card === undefined) groupOf(name).append(wrap);
     else {
       let card = cards.get(entry.card);

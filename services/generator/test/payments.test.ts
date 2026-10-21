@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { signatureMatches } from '../src/aws/paddle';
 import { checkout, handleEvent, portal, type PaymentDeps, type Payments } from '../src/core/payments';
+import { INVITED } from '../src/core/plan';
 import { planOf } from '../src/core/plan';
 import { boughtDesigns, paidWritesLeft } from '../src/core/paid-writes';
 import type { SiteRecord } from '../src/core/jobs';
@@ -164,6 +165,12 @@ describe('the monthly plan', () => {
     expect(await portal(await t.current(), t.deps)).toEqual({ status: 409 });
     await handleEvent(subscriptionEvent('subscription.activated', 'active', '2026-10-16T10:00:00Z'), t.deps);
     expect(await portal(await t.current(), t.deps)).toEqual({ status: 200, url: 'https://portal.test/ctm_1/sub_1' });
+  });
+
+  it('an invited customer\'s plan is ours: no Paddle portal', async () => {
+    const t = withSite();
+    await t.stores.saveBilling((await t.current()).slug, { subscriptionId: INVITED, customerId: INVITED, status: 'active', updatedAt: 1 });
+    expect(await portal(await t.current(), t.deps)).toEqual({ status: 409 });
   });
 });
 

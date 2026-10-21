@@ -21,6 +21,8 @@ interface Page {
   suggestions?: Quote[];
   registerOpen: boolean;
   plan: 'none' | 'active' | 'past_due' | 'paused' | 'canceled';
+  /** Our own plan (an invited customer): there is no Paddle portal to manage it. */
+  invited?: true;
   /** The site on its domain (core/hosting.ts), once the domain is registered. */
   hosting?: 'setting_up' | 'live' | 'failed';
   liveUrl?: string;
@@ -87,7 +89,7 @@ export function startDomainTab(panel: HTMLElement, { api, strings, lang, slug }:
     $('[data-domain-name]').textContent = domain.domain;
     const date = domain.expiresAt ? new Date(domain.expiresAt).toLocaleDateString(lang, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
     $('[data-domain-status]').textContent = strings.owned[domain.status].replace('{date}', date);
-    $<HTMLButtonElement>('[data-domain-manage]').hidden = page.plan === 'none';
+    $<HTMLButtonElement>('[data-domain-manage]').hidden = page.plan === 'none' || page.invited === true;
     showHosting(domain.domain);
     view('owned');
   }

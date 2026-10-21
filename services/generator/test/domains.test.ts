@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { checkDomains, domainIdeas, domainPage, normalizeQuery, REGISTRATIONS_PER_DAY, registerDomain, RegistrarError, RetryLater, runDomainOrder, type DomainDeps, type Quote, type Registrar } from '../src/core/domains';
+import { attachDomain, checkDomains, domainIdeas, domainPage, normalizeQuery, REGISTRATIONS_PER_DAY, registerDomain, RegistrarError, RetryLater, runDomainOrder, type DomainDeps, type Quote, type Registrar } from '../src/core/domains';
 import { deleteSite } from '../src/core/owner';
+import { INVITED } from '../src/core/plan';
 import { harness, NOW } from './harness';
 
 /** A registrar in memory: names in `taken` are taken, `.co` is unanswered, everything else is available. */
@@ -205,6 +206,37 @@ describe('a paid domain order', () => {
     expect(t.site().domainOrder).toEqual({ domain: 'luna.com', at: NOW, failed: 'not_available' });
     expect(await domainPage(t.site(), t.deps)).toMatchObject({ order: { domain: 'luna.com', failed: true } });
     expect(await runDomainOrder('luna', t.deps)).toBe('none');
+  });
+});
+
+describe('attaching a domain we already own (testing)', () => {
+  it('ends as a paid registration does: account email, auto-renew off, expiry, order cleared, hosting queued', async () => {
+    const t = setup();
+    const queued: string[] = [];
+    const deps = { ...t.deps, queueHosting: async (slug: string, domain: string) => void queued.push(`${slug} ${domain}`) };
+    t.owned.set('sol.com', { autoRenew: true });
+    t.sites.set('luna', { ...t.site(), domainOrder: { domain: 'otra.com', at: NOW } });
+    expect(await attachDomain(t.site(), 'sol.com', deps)).toEqual({ status: 201, domain: { domain: 'sol.com', status: 'registered', expiresAt: NOW + 365 * 86400_000 } });
+    expect(t.owned.get('sol.com')).toEqual({ autoRenew: false });
+    expect(t.domains.get('sol.com')).toMatchObject({ slug: 'luna', status: 'registered', ownerEmail: 'luna@example.com', hosting: { step: 'publish' } });
+    expect(t.site()).toMatchObject({ domain: 'sol.com', domainOrder: undefined });
+    expect(queued).toEqual(['luna sol.com']);
+    expect(t.calls.filter((c) => c.startsWith('register'))).toEqual([]); // nothing bought
+    expect((await domainPage(t.site(), deps)).invited).toBeUndefined(); // a Paddle plan keeps its portal
+    t.sites.set('luna', { ...t.site(), billing: { subscriptionId: INVITED, customerId: INVITED, status: 'active', updatedAt: NOW } });
+    expect(await domainPage(t.site(), deps)).toMatchObject({ plan: 'active', invited: true });
+  });
+
+  it('refuses a domain not in our account, a second domain, and one linked elsewhere', async () => {
+    const t = setup();
+    expect(await attachDomain(t.site(), 'sol.com', t.deps)).toEqual({ status: 404 });
+    expect(await attachDomain(t.site(), 'sol.net', t.deps)).toEqual({ status: 400 });
+    t.owned.set('sol.com', { autoRenew: true });
+    t.owned.set('mar.com', { autoRenew: true });
+    expect((await attachDomain(t.site(), 'sol.com', t.deps)).status).toBe(201);
+    expect(await attachDomain(t.site(), 'mar.com', t.deps)).toEqual({ status: 409, error: 'has_domain' });
+    t.sites.set('sol', { slug: 'sol', status: 'draft', jobId: 'job-1', createdAt: NOW });
+    expect(await attachDomain(t.sites.get('sol')!, 'sol.com', t.deps)).toEqual({ status: 409, error: 'not_available' });
   });
 });
 

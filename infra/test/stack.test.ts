@@ -338,14 +338,14 @@ describe('CoyoteStack, domainless', () => {
     template.allResources('AWS::S3::Bucket', { DeletionPolicy: 'Delete' });
   });
 
-  it('sends email only with a verified sender, and only from the account and generate Lambdas', () => {
+  it('sends email only with a verified sender, and only from the account, generate and hosting setup Lambdas', () => {
     template.resourceCountIs('AWS::SES::EmailIdentity', 0);
     const withSender = synth({ senderEmail: 'owner@example.test' });
     withSender.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: 'owner@example.test' });
     const senders = Object.entries(withSender.findResources('AWS::IAM::Policy'))
       .filter(([, policy]) => JSON.stringify(policy.Properties.PolicyDocument).includes('ses:SendEmail'))
       .map(([id]) => id.replace(/ServiceRoleDefaultPolicy.*$/, ''));
-    expect(senders.sort()).toEqual(['GeneratorApiAccount', 'GeneratorApiGenerate']);
+    expect(senders.sort()).toEqual(['GeneratorApiAccount', 'GeneratorApiGenerate', 'GeneratorApiHostingSetup']);
     const account = Object.values(withSender.findResources('AWS::Lambda::Function')).find((f) => JSON.stringify(f.Properties.Environment ?? {}).includes('owner@example.test'));
     expect(account).toBeDefined(); // SENDER_EMAIL reaches the Lambdas
   });
@@ -363,7 +363,7 @@ describe('CoyoteStack, domainless', () => {
     for (const a of reputation) expect(a.Properties.AlarmActions).toHaveLength(2); // the alerts topic and the mail-events Lambda
     withSender.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/email', Value: 'on' });
     const guarded = Object.values(withSender.findResources('AWS::Lambda::Function')).filter((f) => f.Properties.Environment?.Variables?.MAIL_SUPPRESSION_TABLE && f.Properties.Environment.Variables.EMAIL_PARAMETER);
-    expect(guarded).toHaveLength(3); // account, generate, mail-events
+    expect(guarded).toHaveLength(4); // account, generate, hosting setup, mail-events
   });
 
   it('exports the URLs the dev server and the Lambdas need', () => {

@@ -6,7 +6,7 @@ import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { outputAllowed } from '../core/bedrock';
 import { emitMetrics } from '../core/metrics';
 import { chatView, postChat } from '../core/chat';
-import { authenticate, chooseDesign, deleteSite, editSite, ownerView, POLL_CAP, READ_CAP, undo, type OwnerDeps } from '../core/owner';
+import { authenticate, capFor, chooseDesign, deleteSite, editSite, ownerView, undo, type OwnerDeps } from '../core/owner';
 import { createUrls, urlConfigFromEnv } from '../core/urls';
 import { json, parseBody, perIpLimit } from './http';
 
@@ -31,8 +31,7 @@ const ERRORS: Record<number, string> = { 400: 'invalid', 402: 'no_designs', 409:
 
 // GET /me · POST /me/edit · POST /me/undo · POST /me/design · DELETE /me · GET /me/chat · POST /me/chat. The magic-link token is the credential.
 export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event) => {
-  const cap = event.routeKey === 'GET /me/chat' ? POLL_CAP : event.routeKey === 'GET /me' ? READ_CAP : undefined;
-  const site = await authenticate(event.headers.authorization, deps, cap);
+  const site = await authenticate(event.headers.authorization, deps, capFor(event.routeKey));
   if (site === 'rate_limited') return json(429, { error: 'rate_limited' });
   if (!site) return json(401, { error: 'unauthorized' });
 

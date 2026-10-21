@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runGenerateJob } from '../src/core/generate-job';
-import { authenticate, deleteSite, editSite, ownerView, undo } from '../src/core/owner';
+import { authenticate, capFor, deleteSite, editSite, ownerView, undo } from '../src/core/owner';
 import { submit } from '../src/core/submit';
 import { body, harness, NOW, urls } from './harness';
 
@@ -25,6 +25,14 @@ describe('magic link', () => {
     expect(await authenticate(`Bearer panaderia-luna.${'x'.repeat(43)}`, t.ownerDeps)).toBeUndefined();
     expect(await authenticate('Bearer otro-sitio.abc', t.ownerDeps)).toBeUndefined();
     expect(await authenticate(undefined, t.ownerDeps)).toBeUndefined();
+  });
+
+  it('polling the domain tab never uses up the owner\'s changes', async () => {
+    const t = await withDraft();
+    for (let i = 0; i < 70; i++) expect(await authenticate(`Bearer ${t.token}`, t.ownerDeps, capFor('GET /me/domain'))).toMatchObject({ slug: 'panaderia-luna' });
+    expect(await authenticate(`Bearer ${t.token}`, t.ownerDeps, capFor('POST /me/chat'))).toMatchObject({ slug: 'panaderia-luna' });
+    expect(capFor('GET /me/domain/check')).toBeUndefined(); // searches and registering share the owner's cap
+    expect(capFor('POST /me/domain')).toBeUndefined();
   });
 
   it('expires', async () => {

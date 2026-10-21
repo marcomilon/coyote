@@ -6,10 +6,13 @@
 //   cert:    wait until CloudFront has validated it (over HTTP, through the records above), attach it to the tenant,
 //            then wait until the domains are active
 // A step that has to wait throws RetryLater. One that can't succeed is kept as `hosting.failed` (we get an alert).
-import { publishLive } from './drafts';
+import { loadDraft, publishLive } from './drafts';
+import { voiceOf } from './i18n';
+import { liveEmail, type SendEmail } from './mail';
 import { RetryLater } from './retry';
-import type { DomainRecord, Hosting, Stores } from './jobs';
+import type { DomainRecord, Hosting, SiteRecord, Stores } from './jobs';
 import { isSubscribed } from './plan';
+import { liveUrl } from './urls';
 
 export interface DnsRecord {
   id: string;
@@ -58,6 +61,10 @@ export interface HostingDeps {
   tenants: Tenants;
   /** The live connection group's routing endpoint (`dxxxx.cloudfront.net`): what owners' domains point at. */
   routingEndpoint: string;
+  /** "Ya está en línea" to the owner once the site is live; undefined: no email. */
+  sendEmail?: SendEmail;
+  /** Our app (urls.ts appUrl), for the email's logo. */
+  appUrl?: string;
   now(): number;
 }
 
@@ -137,6 +144,7 @@ export async function runHostingSetup(slug: string, deps: HostingDeps): Promise<
         if (tenant.domains.some((d) => d.status !== 'active')) throw new RetryLater(`hosting ${slug}: domains not active yet`);
         const now = deps.now();
         await save({ step: 'live', liveAt: now });
+        await sendLive(site, record, deps); // once: a site already live returns before this
         return 'live';
       }
       case 'live':
@@ -173,6 +181,19 @@ export async function removeHosting(record: DomainRecord, deps: HostingDeps): Pr
 }
 
 /** What the owner sees (GET /me/domain). */
+/** "Tu página web ya está en línea", to the account email. A failure is logged: the site is live either way. */
+async function sendLive(site: SiteRecord, record: DomainRecord, deps: HostingDeps): Promise<void> {
+  if (!deps.sendEmail || !deps.appUrl) return;
+  try {
+    const to = record.ownerEmail ?? (site.ownerEmailId ? (await deps.stores.getAccount(site.ownerEmailId))?.email : undefined);
+    if (!to || !site.currentDraftId) return;
+    const { answers } = await loadDraft(site.slug, site.currentDraftId, deps.stores);
+    await deps.sendEmail(liveEmail(to, voiceOf(answers), answers.businessName, liveUrl(record.domain), deps.appUrl));
+  } catch (error) {
+    console.error('live email failed', { slug: site.slug, error });
+  }
+}
+
 export function hostingView(record: DomainRecord): 'setting_up' | 'live' | 'failed' | undefined {
   if (record.status !== 'registered' || !record.hosting) return undefined;
   if (record.hosting.failed) return 'failed';

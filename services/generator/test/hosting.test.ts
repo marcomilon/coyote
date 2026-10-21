@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { refreshPreview } from '../src/core/drafts';
 import { RetryLater } from '../src/core/domains';
 import { hostingView, removeHosting, runHostingSetup, tenantName, TenantTaken, type Dns, type DnsRecord, type HostingDeps, type Tenant, type Tenants } from '../src/core/hosting';
+import type { Email } from '../src/core/mail';
 import { handleEvent, type PaymentDeps } from '../src/core/payments';
 import { memoryStores } from './memory-stores';
 
@@ -68,15 +69,18 @@ function setup() {
     slug: 'luna', status: 'draft', jobId: 'j', createdAt: NOW, currentDraftId: 'd1', previewId: 'p1', domain: 'sol.com',
     billing: { subscriptionId: 'sub_1', customerId: 'ctm_1', status: 'active', updatedAt: NOW },
   });
-  memory.domains.set('sol.com', { domain: 'sol.com', slug: 'luna', status: 'registered', createdAt: NOW, priceCents: 1108, hosting: { step: 'publish', at: NOW } });
+  memory.domains.set('sol.com', { domain: 'sol.com', slug: 'luna', status: 'registered', createdAt: NOW, priceCents: 1108, ownerEmail: 'ana@luna.test', hosting: { step: 'publish', at: NOW } });
+  const answers = { businessName: 'Panadería Luna', about: 'Pan de masa madre en Montevideo', contact: { whatsapp: '59894231234' }, lang: 'es' };
+  memory.objects.set('_src/luna/d1.json', JSON.stringify({ answers, notes: [], page: '<html>v1</html>' }));
   memory.objects.set('_draft/d1/index.html', '<html>v1</html>');
   memory.objects.set('_draft/d1/assets/a.png', 'png');
   memory.objects.set('_errors/404.html', '<html>404</html>');
   const dns = fakeDns();
   const tenants = fakeTenants();
-  const deps: HostingDeps = { stores: memory.stores, dns: dns.dns, tenants: tenants.tenants, routingEndpoint: ENDPOINT, now: () => NOW };
+  const emails: Email[] = [];
+  const deps: HostingDeps = { stores: memory.stores, dns: dns.dns, tenants: tenants.tenants, routingEndpoint: ENDPOINT, sendEmail: async (email) => void emails.push(email), appUrl: 'https://app.test', now: () => NOW };
   const record = () => memory.domains.get('sol.com')!;
-  return { ...memory, ...dns, ...tenants, deps, record };
+  return { ...memory, ...dns, ...tenants, deps, record, emails };
 }
 
 describe('hosting setup', () => {
@@ -108,6 +112,34 @@ describe('hosting setup', () => {
     expect(hostingView(t.record())).toBe('live');
     expect(await runHostingSetup('luna', t.deps)).toBe('live'); // a redelivered message changes nothing
     expect(t.all.size).toBe(1);
+  });
+
+  it('emails the owner once, when the site is live on its domain', async () => {
+    const t = setup();
+    await expect(runHostingSetup('luna', t.deps)).rejects.toBeInstanceOf(RetryLater);
+    t.issue();
+    await expect(runHostingSetup('luna', t.deps)).rejects.toBeInstanceOf(RetryLater);
+    expect(t.emails).toEqual([]); // not before it is live
+    expect(await runHostingSetup('luna', t.deps)).toBe('live');
+    expect(await runHostingSetup('luna', t.deps)).toBe('live');
+    expect(t.emails).toHaveLength(1);
+    const [email] = t.emails;
+    expect(email).toMatchObject({ to: 'ana@luna.test', subject: 'Tu página web ya está en línea: Panadería Luna' });
+    // A Uruguayan number: vos. The live address, with no expiry line.
+    expect(email!.text).toContain('ya está en línea en www.sol.com. Compartila con tus clientes.');
+    expect(email!.text).toContain('Abrir mi página web: https://www.sol.com/');
+    expect(email!.text).not.toContain('durante una hora');
+  });
+
+  it('a failed email leaves the site live', async () => {
+    const t = setup();
+    t.deps.sendEmail = async () => {
+      throw new Error('SES down');
+    };
+    t.issue();
+    await expect(runHostingSetup('luna', t.deps)).rejects.toBeInstanceOf(RetryLater); // attaches the certificate
+    expect(await runHostingSetup('luna', t.deps)).toBe('live');
+    expect(t.record().hosting).toMatchObject({ step: 'live' });
   });
 
   it('each step is safe to repeat: a redelivery after the tenant was made adopts it', async () => {

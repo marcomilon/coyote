@@ -23,8 +23,8 @@ interface Content {
   names?: string[];
   button: string;
   link: string;
-  /** How long the link works. */
-  validity: string;
+  /** How long the link works; none for a link that doesn't expire. */
+  validity?: string;
   note: string;
 }
 
@@ -40,6 +40,10 @@ const MAIL = {
     readyLead: (name: string) => `La página web de ${name} está lista. Mírala y pide cambios desde tu celular.`,
     readyButton: 'Ver mi página web',
     readyNote: 'Si el botón venció, pide un enlace nuevo en «Mis páginas web» con este mismo correo.',
+    liveSubject: (name: string) => `Tu página web ya está en línea: ${name}`,
+    liveLead: (name: string, host: string) => `La página web de ${name} ya está en línea en ${host}. Compártela con tus clientes.`,
+    liveButton: 'Abrir mi página web',
+    liveNote: 'Los cambios que hagas desde Mi página web aparecen ahí solos.',
     footer: 'Ponemos tu negocio online.',
     fallback: '¿El botón no funciona? Copia este enlace en tu navegador:',
   },
@@ -54,6 +58,10 @@ const MAIL = {
     readyLead: (name: string) => `La página web de ${name} está lista. Mirala y pedí cambios desde tu celular.`,
     readyButton: 'Ver mi página web',
     readyNote: 'Si el botón venció, pedí un enlace nuevo en «Mis páginas web» con este mismo correo.',
+    liveSubject: (name: string) => `Tu página web ya está en línea: ${name}`,
+    liveLead: (name: string, host: string) => `La página web de ${name} ya está en línea en ${host}. Compartila con tus clientes.`,
+    liveButton: 'Abrir mi página web',
+    liveNote: 'Los cambios que hagas desde Mi página web aparecen ahí solos.',
     footer: 'Ponemos tu negocio online.',
     fallback: '¿El botón no funciona? Copiá este enlace en tu navegador:',
   },
@@ -68,6 +76,10 @@ const MAIL = {
     readyLead: (name: string) => `O site de ${name} está pronto. Veja e peça mudanças pelo celular.`,
     readyButton: 'Ver meu site',
     readyNote: 'Se o botão vencer, peça um link novo em «Meus sites» com este mesmo e-mail.',
+    liveSubject: (name: string) => `Seu site está no ar: ${name}`,
+    liveLead: (name: string, host: string) => `O site de ${name} já está no ar em ${host}. Compartilhe com seus clientes.`,
+    liveButton: 'Abrir meu site',
+    liveNote: 'As mudanças que você fizer em Meu site aparecem lá sozinhas.',
     footer: 'Colocamos seu negócio online.',
     fallback: 'O botão não funciona? Copie este link no navegador:',
   },
@@ -78,7 +90,7 @@ const oneLine = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, 80);
 
 function text(c: Content): string {
   const names = c.names?.length ? `\n${c.names.map((n) => `- ${n}`).join('\n')}\n` : '';
-  return `${c.greeting}\n\n${c.lead}\n${names}\n${c.button}: ${c.link}\n${c.validity}\n\n${c.note}\n\nventas314.com — ${MAIL[c.voice].footer}`;
+  return `${c.greeting}\n\n${c.lead}\n${names}\n${c.button}: ${c.link}\n${c.validity ? `${c.validity}\n` : ''}\n${c.note}\n\nventas314.com — ${MAIL[c.voice].footer}`;
 }
 
 // The app's look in email-safe HTML: tables, inline styles, system fonts, and the logo hosted by the app.
@@ -107,7 +119,7 @@ function html(c: Content, appUrl: string): string {
       <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 10px"><tr><td style="background:${ROJO};border:3px solid ${INK};border-radius:8px;box-shadow:3px 3px 0 ${INK}">
         <a href="${e(c.link)}" style="display:inline-block;padding:14px 24px;color:${CARD};text-decoration:none;font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:15px">${e(c.button)}</a>
       </td></tr></table>
-      <p style="margin:0 0 18px;font-size:13px;opacity:.75">${e(c.validity)}</p>
+      ${c.validity ? `<p style="margin:0 0 18px;font-size:13px;opacity:.75">${e(c.validity)}</p>` : ''}
       <p style="margin:0 0 18px">${e(c.note)}</p>
       <p style="margin:0;padding-top:14px;border-top:2px dashed ${INK};font-size:12px;opacity:.7">${e(m.fallback)}<br><a href="${e(c.link)}" style="color:${INK};word-break:break-all">${e(c.link)}</a></p>
     </td></tr>
@@ -130,4 +142,12 @@ export function readyEmail(to: string, voice: Voice, businessName: string, link:
   const m = MAIL[voice];
   const name = oneLine(businessName);
   return build(to, m.readySubject(name), { voice, greeting: m.greeting, lead: m.readyLead(name), button: m.readyButton, link, validity: m.validity, note: m.readyNote }, appUrl);
+}
+
+/** "Ya está en línea": the site is live on its own domain (hosting.ts). `link`: the live site (urls.ts liveUrl). */
+export function liveEmail(to: string, voice: Voice, businessName: string, link: string, appUrl: string): Email {
+  const m = MAIL[voice];
+  const name = oneLine(businessName);
+  const host = new URL(link).host;
+  return build(to, m.liveSubject(name), { voice, greeting: m.greeting, lead: m.liveLead(name, host), button: m.liveButton, link, note: m.liveNote }, appUrl);
 }

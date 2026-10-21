@@ -1,11 +1,22 @@
 import type { SQSBatchResponse, SQSEvent } from 'aws-lambda';
 import { porkbunDns } from '../aws/porkbun';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
+import { sesSendEmail } from '../aws/mail';
 import { tenants } from '../aws/tenants';
 import { runHostingSetup, type HostingDeps } from '../core/hosting';
 import { emitMetrics } from '../core/metrics';
+import { createUrls, urlConfigFromEnv } from '../core/urls';
 
-const deps: HostingDeps = { stores: createStores(storeConfigFromEnv()), dns: porkbunDns, tenants, routingEndpoint: process.env.LIVE_ROUTING_ENDPOINT ?? '', now: Date.now };
+const urls = createUrls(urlConfigFromEnv(process.env));
+const deps: HostingDeps = {
+  stores: createStores(storeConfigFromEnv()),
+  dns: porkbunDns,
+  tenants,
+  routingEndpoint: process.env.LIVE_ROUTING_ENDPOINT ?? '',
+  sendEmail: sesSendEmail(urls.mailFrom),
+  appUrl: urls.appUrl,
+  now: Date.now,
+};
 
 // The hosting-setups queue (one message per registered domain, from core/domains.ts). A step that has to wait (DNS,
 // the certificate) throws and the message comes back after the visibility timeout; after 24 tries (about 2 hours) it

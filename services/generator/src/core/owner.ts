@@ -45,6 +45,16 @@ export const POLL_CAP = { name: 'poll', max: 3000 };
 export const READ_CAP = { name: 'read', max: 1000 };
 
 /**
+ * The daily cap a route counts against. Reads that pages poll (GET /me, GET /me/domain while a domain is registered
+ * and published) have their own, so they never use up the owner's changes; everything else shares the owner's cap.
+ */
+export function capFor(routeKey: string): { name: string; max: number } | undefined {
+  if (routeKey === 'GET /me/chat') return POLL_CAP;
+  if (routeKey === 'GET /me' || routeKey === 'GET /me/domain') return READ_CAP;
+  return undefined;
+}
+
+/**
  * `Authorization: Bearer <slug>.<secret>` → the site, or undefined. The secret is the site's magic link, or a
  * "Mis sitios" session (`@<id>.<secret>`) of the account the site belongs to. Also enforces a per-site daily cap.
  */

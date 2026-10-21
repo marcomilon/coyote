@@ -4,7 +4,7 @@ import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { porkbun } from '../aws/porkbun';
 import { createStores, storeConfigFromEnv } from '../aws/stores';
 import { checkDomains, domainPage, registerDomain, type DomainDeps } from '../core/domains';
-import { authenticate } from '../core/owner';
+import { authenticate, capFor } from '../core/owner';
 import { json, parseBody, perIpLimit } from './http';
 
 const stores = createStores(storeConfigFromEnv());
@@ -35,7 +35,7 @@ export const deps: DomainDeps = {
 
 // GET /me/domain · GET /me/domain/check?q= · POST /me/domain. Same credential as Mi sitio.
 export const handler: APIGatewayProxyHandlerV2 = perIpLimit(stores, async (event) => {
-  const site = await authenticate(event.headers.authorization, deps);
+  const site = await authenticate(event.headers.authorization, deps, capFor(event.routeKey));
   if (site === 'rate_limited') return json(429, { error: 'rate_limited' });
   if (!site) return json(401, { error: 'unauthorized' });
 

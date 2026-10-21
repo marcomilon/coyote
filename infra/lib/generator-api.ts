@@ -240,6 +240,8 @@ export class GeneratorApi extends Construct {
     for (const f of [account, owner, generate]) props.accountsTable.grantReadWriteData(f);
     props.sitesTable.grantReadData(account);
     props.rateLimitTable.grantReadWriteData(account);
+    // Lambdas defined further down that send email too (the hosting setup's "ya está en línea").
+    let canSendEmail: (f: nodejs.NodejsFunction) => void = () => undefined;
     if (props.mailIdentity) {
       // In the SES sandbox the recipients are identities too, so the permission covers every identity of the account.
       // The identity's default configuration set is authorized on the same call.
@@ -255,13 +257,14 @@ export class GeneratorApi extends Construct {
         stringValue: 'on',
         description: 'Whether we send email: on or off. The bounce and complaint rate alarms turn it off. Set with ./coyote.sh email',
       });
-      for (const f of [account, generate]) {
+      canSendEmail = (f) => {
         f.addToRolePolicy(sendEmail);
         f.addEnvironment('EMAIL_PARAMETER', EMAIL_PARAMETER);
         f.addEnvironment('MAIL_SUPPRESSION_TABLE', props.mailSuppressionTable.tableName);
         emailSwitch.grantRead(f);
         props.mailSuppressionTable.grantReadData(f);
-      }
+      };
+      for (const f of [account, generate]) canSendEmail(f);
       if (props.mailEvents) {
         const mailEvents = fn('MailEvents', 'mail-events', {
           memorySize: 256,
@@ -343,6 +346,9 @@ export class GeneratorApi extends Construct {
     props.domainsTable.grantReadWriteData(hosting);
     props.sitesTable.grantReadWriteData(hosting);
     props.sitesBucket.grantRead(hosting, '_draft/*');
+    props.sitesBucket.grantRead(hosting, '_src/*'); // the site's answers, for the email
+    props.accountsTable.grantReadData(hosting);
+    canSendEmail(hosting);
     props.sitesBucket.grantRead(hosting, '_errors/*');
     props.sitesBucket.grantReadWrite(hosting, '_live/*');
     props.sitesBucket.grantDelete(hosting, '_live/*');

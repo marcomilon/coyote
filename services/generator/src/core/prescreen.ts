@@ -52,7 +52,7 @@ Reject only these:
 - alcohol_tobacco: businesses whose main activity is selling alcohol, tobacco, or vapes: bars, cantinas, nightclubs, liquor stores, alcohol delivery, tobacco and vape shops. A restaurant or café that also serves drinks is allowed.
 - money_services: pawn shops and money exchange offices.
 - drugs_weapons: recreational drugs including cannabis, prescription drugs without prescription, firearms or ammunition.
-- financial_fraud: guaranteed investment returns, crypto "investment" schemes, pyramid or recruit-to-earn schemes, loans that ask for an advance fee.
+- financial_fraud: guaranteed investment returns, crypto "investment" schemes, pyramid or recruit-to-earn schemes (people earn mainly from recruiting others or from their sign-up fees, not from selling a product), loans that ask for an advance fee. Reselling a real product or service and keeping the margin is an ordinary business.
 - impersonation: the business name or description presents itself as a bank, payment company, government agency, courier, or well-known brand, or as its "official support". Misspellings and look-alike names count (B4ncolombia, Nu-bank). A business that merely works with them is allowed (an accountant who files taxes with the SAT, a shop that accepts Mercado Pago, an authorized reseller that says so plainly).
 - credential_collection: asks visitors for passwords, PINs, card numbers, verification codes, or to "verify" or "unlock" an account.
 - piracy_counterfeit: pirated films, IPTV, software cracks, fake documents or diplomas, counterfeit goods.

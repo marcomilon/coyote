@@ -90,6 +90,20 @@ describe('checkPage', () => {
     expect(checkPage(doc('<p>Llámanos al +54 9 11 5555 0000</p>'), { ...opts, ownerText }).violations).not.toEqual([]);
   });
 
+  it('keeps links to web addresses the owner wrote, over https, unless they hide where they go or download a file', () => {
+    const ownerText = 'Nuestra tienda: https://www.ventas314.com y el catálogo en www.mitienda.pe/catalogo. Más en http://viejo.test';
+    // By name: an address written with http is linked over https.
+    const kept = ['https://www.ventas314.com', 'https://ventas314.com/precios?x=1', 'https://www.mitienda.pe/otra', 'https://viejo.test/'];
+    const removed = ['http://www.ventas314.com', 'https://otra.test/', 'https://bit.ly/x', 'https://www.mitienda.pe/app.apk', 'https://203.0.113.9/', 'https://user@ventas314.com/'];
+    const page = doc([...kept, ...removed].map((href, i) => `<a href="${href}">L${i}</a>`).join(''));
+    const result = checkPage(page, { ...opts, ownerText });
+    expect(result.violations).toEqual([]);
+    for (const href of kept) expect(result.html).toContain(`href="${href.replace(/&/g, '&amp;')}"`);
+    expect(result.repairs).toEqual(removed.map((href) => `link to ${href} → #`));
+    // A lookalike name written by the owner is still refused.
+    expect(checkPage(doc('<a href="https://xn--ventas34-7ya.com/">x</a>'), { ...opts, ownerText: 'https://xn--ventas34-7ya.com' }).repairs).toHaveLength(1);
+  });
+
   it('keeps structured data (JSON-LD) with the owner\'s details, and removes it when it has anyone else\'s', () => {
     const data = (sameAs: string, telephone = '+573001234567') =>
       doc(`<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Bakery", "name": "Panadería Luna",

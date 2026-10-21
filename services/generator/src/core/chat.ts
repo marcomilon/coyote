@@ -39,6 +39,7 @@ const REPLIES = {
     contact: 'Ese dato de contacto no parece válido. Revísalo y escríbemelo de nuevo.',
     notOnPage: 'Guardé el dato, pero no encontré dónde cambiarlo en la página. Dime en qué parte aparece y lo cambio.',
     textsTip: 'También puedes cambiar cualquier texto tú mismo en «Tus textos», en Mi página web.',
+    linkRemoved: 'Ojo: no pude poner ese enlace. Solo puedo enlazar a direcciones que me escribas completas, con https:// (sin acortadores ni descargas).',
     noDesigns: 'Ya usaste todos tus diseños, así que no puedo hacer uno nuevo. Si quieres otro diseño, compra 3 más con el botón de abajo. Mientras tanto, sí puedo cambiar tus textos y tus datos de contacto.',
   },
   vos: {
@@ -48,6 +49,7 @@ const REPLIES = {
     contact: 'Ese dato de contacto no parece válido. Revisalo y escribímelo de nuevo.',
     notOnPage: 'Guardé el dato, pero no encontré dónde cambiarlo en la página. Decime en qué parte aparece y lo cambio.',
     textsTip: 'También podés cambiar cualquier texto vos mismo en «Tus textos», en Mi página web.',
+    linkRemoved: 'Ojo: no pude poner ese enlace. Solo puedo enlazar a direcciones que me escribas completas, con https:// (sin acortadores ni descargas).',
     noDesigns: 'Ya usaste todos tus diseños, así que no puedo hacer uno nuevo. Si querés otro diseño, comprá 3 más con el botón de abajo. Mientras tanto, sí puedo cambiar tus textos y tus datos de contacto.',
   },
   pt: {
@@ -57,6 +59,7 @@ const REPLIES = {
     contact: 'Esse dado de contato não parece válido. Confira e me mande de novo.',
     notOnPage: 'Guardei o dado, mas não encontrei onde mudá-lo na página. Me diga em que parte aparece e eu mudo.',
     textsTip: 'Você também pode mudar qualquer texto direto em «Seus textos», em Meu site.',
+    linkRemoved: 'Atenção: não consegui colocar esse link. Só posso usar endereços que você me escrever completos, com https:// (sem encurtadores nem downloads).',
     noDesigns: 'Você já usou todos os seus designs, então não posso fazer um novo. Se quiser outro design, compre mais 3 no botão abaixo. Enquanto isso, posso mudar seus textos e seus contatos.',
   },
 } as const;
@@ -313,7 +316,11 @@ async function chatTurn(slug: string, at: number, deps: ChatDeps): Promise<ChatO
     // A text edit the owner could have made in Tus textos (no model call): say so, once in a while.
     const tipped = history.some((m) => m.role === 'coyote' && m.text?.endsWith(say.textsTip));
     if (edited !== undefined && !tipped && pageTexts(next.page, next.answers.contact).length > 0) result = { ...result, reply: `${result.reply} ${say.textsTip}` };
-    const before = new Set(checkPage(doc.page, { ...options, contact: doc.answers.contact, ownerText: ownerText(doc) }).texts);
+    const previous = checkPage(doc.page, { ...options, contact: doc.answers.contact, ownerText: ownerText(doc) });
+    const before = new Set(previous.texts);
+    // A link this change added that the checks turned into "#": say so rather than "listo".
+    const isLink = (repair: string) => repair.startsWith('link to ');
+    if (checked.repairs.some((r) => isLink(r) && !previous.repairs.includes(r))) result = { ...result, reply: `${result.reply} ${say.linkRemoved}` };
     const added = checked.texts.filter((text) => !before.has(text));
     if (!(await deps.outputAllowed([...added, result.reply].join('\n')))) return await answer('REJECTED', { text: withSupport(say.refused, voice, deps.urls.supportEmail) });
 

@@ -7,10 +7,10 @@ import { countryOf, nationalNumber } from './phones';
 import { checkTexts, type Violation } from './policy';
 
 /**
- * Checks on a page Opus wrote freely. What can be repaired is repaired (a link that isn't the owner's becomes
- * "#", an outside image or script is removed); what can't (a redirect, a phone number or email the owner never
- * gave, text the content policy rejects) is a violation, and the page is not used. The sites CSP is the second
- * line: scripts cannot fetch or send anything, images load only from the site itself.
+ * Checks on a page Opus wrote freely. What can be repaired is repaired (a link that isn't the owner's contact or an
+ * address they wrote becomes "#", an outside image or script is removed); what can't (a redirect, a phone number or
+ * email the owner never gave, text the content policy rejects) is a violation, and the page is not used. The sites
+ * CSP is the second line: scripts cannot fetch or send anything, images load only from the site itself.
  */
 
 /** Where page scripts, stylesheets, and fonts may come from. The sites CSP lists the same hosts. */
@@ -46,20 +46,53 @@ const PHONE_LIKE = /[+(]?\d[\d\s().-]{6,}\d/g;
 const EMAIL_LIKE = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
 
 /**
- * The contact details a page may show: the owner's contact answers, and every phone number and email the owner
- * wrote anywhere else (a second branch, an orders email). What the model invents is none of these.
+ * The contact details a page may show: the owner's contact answers, and every phone number, email and web address
+ * the owner wrote anywhere else (a second branch, an orders email, their shop). What the model invents is none of these.
  */
 interface Known {
   contact: Contact;
   numbers: string[];
   emails: string[];
+  /** Hosts of the web addresses the owner wrote (`https://…` or `www.…`), without `www.`. */
+  hosts: Set<string>;
+}
+
+const URL_LIKE = /\b(?:https?:\/\/|www\.)[^\s"'<>()[\]{}]+/gi;
+/** Link shorteners: they hide where a link goes. */
+const SHORTENERS = new Set(['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'cutt.ly', 'rebrand.ly', 'shorturl.at', 'rb.gy', 'tiny.cc', 'bl.ink', 's.id', 'v.gd', 't.ly', 'lnkd.in', 'shorte.st', 'adf.ly']);
+/** Direct downloads a page should not hand out. */
+const DOWNLOAD = /\.(?:exe|msi|apk|dmg|pkg|bat|cmd|scr|jar|zip|rar|7z)$/i;
+const bareHost = (host: string) => host.replace(/^www\./, '');
+
+/**
+ * A web address the owner wrote, by host: https only, a real name (no IP address, no lookalike `xn--` label), no
+ * link shortener, no direct download.
+ */
+function ownersLink(href: string, known: Known): boolean {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return false;
+  }
+  const host = url.hostname.toLowerCase();
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) return false;
+  if (/^[\d.]+$/.test(host) || host.startsWith('[') || host.split('.').some((label) => label.startsWith('xn--'))) return false;
+  if (SHORTENERS.has(bareHost(host)) || DOWNLOAD.test(url.pathname)) return false;
+  return known.hosts.has(bareHost(host));
 }
 
 function knownDetails(contact: Contact, ownerText: string): Known {
   const written = [...ownerText.matchAll(PHONE_LIKE)].map(([n]) => digits(n)).filter((d) => d.length >= 7);
   const numbers = [contact.whatsapp, contact.phone, ...written].filter((n): n is string => !!n);
   const emails = [contact.email, ...[...ownerText.matchAll(EMAIL_LIKE)].map(([e]) => e)].filter((e): e is string => !!e).map((e) => e.toLowerCase());
-  return { contact, numbers, emails };
+  const hosts = new Set(
+    [...ownerText.matchAll(URL_LIKE)].flatMap(([u]) => {
+      const host = hostOf(/^www\./i.test(u) ? `https://${u}` : u);
+      return host ? [bareHost(host.replace(/:\d+$/, ''))] : [];
+    }),
+  );
+  return { contact, numbers, emails, hosts };
 }
 
 /** A number is the owner's when its digits end with a known number (with or without the country code). */
@@ -83,7 +116,7 @@ function linkAllowed(href: string, known: Known): boolean {
   if (host === 'maps.google.com' || host === 'maps.app.goo.gl' || ((host === 'www.google.com' || host === 'google.com') && new URL(href).pathname.startsWith('/maps')) || host === 'goo.gl') return true;
   if (host.endsWith('instagram.com')) return !!contact.instagram && new URL(href).pathname.replace(/\/+$/, '').toLowerCase() === `/${contact.instagram.toLowerCase()}`;
   if (host.endsWith('facebook.com')) return !!contact.facebook && new URL(href).pathname.replace(/\/+$/, '').toLowerCase() === `/${contact.facebook.toLowerCase()}`;
-  return false;
+  return ownersLink(href, known);
 }
 
 /** Scripts that send the visitor somewhere else. Links opened by a script must be the owner's WhatsApp or a map. */

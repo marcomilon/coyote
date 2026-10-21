@@ -65,6 +65,18 @@ describe('chat', () => {
     expect(t.writer.requests).toHaveLength(1); // no page writer call
   });
 
+  it('a link to an address the owner wrote stays; any other is removed, and the reply says so', async () => {
+    const link = (href: string) => ({ action: 'edit' as const, reply: 'Listo.', changes: [{ find: ABOUT, replace: `${ABOUT} <a href="${href}">Tienda</a>` }] });
+    const t = await withDraft({ chat: (n: number) => link(n === 1 ? 'https://www.mitienda.pe/promo' : 'https://bit.ly/abc') });
+    const kept = await t.send('pon un enlace a mi tienda https://www.mitienda.pe');
+    expect(kept.outcome).toMatchObject({ outcome: 'EDITED' });
+    expect(kept.reply.text).not.toContain('Ojo');
+    expect(t.objects.get(`_draft/${kept.reply.draftId}/index.html`)).toContain('href="https://www.mitienda.pe/promo"');
+    const removed = await t.send('mejor usa https://bit.ly/abc');
+    expect(removed.reply.text).toContain('Ojo: no pude poner ese enlace.');
+    expect(t.objects.get(`_draft/${removed.reply.draftId}/index.html`)).not.toContain('bit.ly');
+  });
+
   it('a text edit points to Tus textos, once; contact changes and plain replies do not', async () => {
     const edit = { action: 'edit' as const, reply: 'Listo.', changes: [{ find: ABOUT, replace: `${ABOUT} Abrimos los domingos.` }] };
     const t = await withDraft({ chat: (n: number) => (n === 1 ? edit : { ...edit, changes: [{ find: 'Abrimos los domingos.', replace: 'Abrimos los domingos y feriados.' }] }) });

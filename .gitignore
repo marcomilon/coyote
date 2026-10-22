@@ -10,3 +10,4 @@ web/.astro/
 .env*
 .DS_Store
 paddle.json
+design_handoff_*/

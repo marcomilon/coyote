@@ -73,7 +73,7 @@ const es = {
     proof: { title: ['Negocios como el tuyo', 'ya están en línea'], screenshot: 'Página web de {business}', visit: 'Abre este ejemplo' },
     pricing: {
       title: 'Cuánto cuesta',
-      note: 'El precio final se confirma al pagar.',
+      note: 'El precio final se confirma al pagar. Si pagas en dólares, el monto en tu moneda depende del tipo de cambio de tu banco.',
       sub: 'Precios en {currency}, con los impuestos de tu país. Crear es gratis; pagas al publicar o si quieres más diseños. Sin contratos.',
       free: { name: 'Para empezar', price: 'Gratis', text: ['Crea tu página web gratis, con 3 diseños incluidos, sin saber nada de tecnología.', 'Pide cambios con tus palabras y, cuando te guste, la publicas.'], cta: 'Empezar gratis' },
       designs: { name: 'Más diseños', per: 'pago único', text: ['3 diseños nuevos para tu página web, cuando quieras otro estilo.', 'Los compras desde Mi página web cuando usaste tus 3 diseños gratis.'] },
@@ -447,6 +447,7 @@ const esVos: DeepPartial<typeof es> = {
       { n: '3', title: 'Lo ajustás y publicás', text: 'Ves tu página web y pedís cambios con tus palabras, desde tu enlace privado.' },
     ],
     pricing: {
+      note: 'El precio final se confirma al pagar. Si pagás en dólares, el monto en tu moneda depende del tipo de cambio de tu banco.',
       sub: 'Precios en {currency}, con los impuestos de tu país. Crear es gratis; pagás al publicar o si querés más diseños. Sin contratos.',
       free: { text: ['Creá tu página web gratis, con 3 diseños incluidos, sin saber nada de tecnología.', 'Pedí cambios con tus palabras y, cuando te guste, la publicás.'] },
       designs: { text: ['3 diseños nuevos para tu página web, cuando quieras otro estilo.', 'Los comprás desde Mi página web cuando usaste tus 3 diseños gratis.'] },
@@ -722,7 +723,7 @@ const pt: typeof es = {
     proof: { title: ['Negócios como o seu', 'já estão online'], screenshot: 'Site de {business}', visit: 'Abra este exemplo' },
     pricing: {
       title: 'Quanto custa',
-      note: 'O preço final é confirmado no pagamento.',
+      note: 'O preço final é confirmado no pagamento. Se você pagar em dólares, o valor na sua moeda depende da taxa de câmbio do seu banco.',
       sub: 'Preços em {currency}, com os impostos do seu país. Criar é grátis; você paga ao publicar ou se quiser mais designs. Sem contrato.',
       free: { name: 'Para começar', price: 'Grátis', text: ['Crie seu site grátis, com 3 designs incluídos, sem precisar entender de tecnologia.', 'Peça mudanças com as suas palavras e, quando gostar, publique.'], cta: 'Começar grátis' },
       designs: { name: 'Mais designs', per: 'pagamento único', text: ['3 designs novos para o seu site, quando quiser outro estilo.', 'Você compra em Meu site depois de usar seus 3 designs grátis.'] },

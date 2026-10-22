@@ -1,0 +1,42 @@
+---
+// The cookie banner for the marketing tags (scripts/tags.ts): shown until the visitor chooses, and again from the
+// footer's "Cookies" button. Pages without tags never show it.
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+  vos?: boolean;
+}
+const { lang, vos = false } = Astro.props;
+const s = t(lang, vos);
+---
+
+<div class="consent" data-consent role="region" aria-label={s.footer.cookies} hidden>
+  <p>{s.consent.text} <a href={s.paths.privacy}>{s.consent.more}</a></p>
+  <div class="consent-actions">
+    <button type="button" class="btn small ghost flat" data-consent-choice="denied">{s.consent.reject}</button>
+    <button type="button" class="btn small" data-consent-choice="granted">{s.consent.accept}</button>
+  </div>
+</div>
+
+<script>
+  import { savedConsent, setConsent, tagsOn, type Consent } from '../scripts/tags';
+
+  const banner = document.querySelector<HTMLElement>('[data-consent]');
+  if (banner && tagsOn()) {
+    if (!savedConsent()) banner.hidden = false;
+    for (const button of banner.querySelectorAll<HTMLButtonElement>('[data-consent-choice]')) {
+      button.addEventListener('click', () => {
+        setConsent(button.dataset.consentChoice as Consent);
+        banner.hidden = true;
+      });
+    }
+    for (const open of document.querySelectorAll<HTMLButtonElement>('[data-consent-open]')) {
+      open.hidden = false;
+      open.addEventListener('click', () => {
+        banner.hidden = false;
+        banner.querySelector<HTMLButtonElement>('[data-consent-choice="granted"]')!.focus();
+      });
+    }
+  }
+</script>

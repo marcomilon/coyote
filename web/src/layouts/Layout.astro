@@ -3,6 +3,7 @@ import '../styles/global.css';
 import { t, type Lang } from '../i18n/strings';
 import { WHATSAPP, whatsappLink } from '../config/landing';
 import SiteHeader from '../components/SiteHeader.astro';
+import Consent from '../components/Consent.astro';
 
 interface Props {
   lang: Lang;
@@ -41,6 +42,8 @@ const [es, pt] = lang === 'es' ? [here, there] : [there, here];
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {/* Marketing tags (Google Tag Manager, from the stack; empty in development): before every other script. */}
+    <script is:inline src="/tags.js"></script>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     {noindex && <meta name="robots" content="noindex" />}
@@ -93,8 +96,10 @@ const [es, pt] = lang === 'es' ? [here, there] : [there, here];
           <a href={s.paths.terms}>{s.footer.terms}</a>
           <a href={s.paths.privacy}>{s.footer.privacy}</a>
           <a href={s.paths.refunds}>{s.footer.refunds}</a>
+          <button type="button" class="link-button" data-consent-open hidden>{s.footer.cookies}</button>
         </nav>
       </div>
     </footer>
+    <Consent lang={lang} vos={vos} />
   </body>
 </html>

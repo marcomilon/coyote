@@ -143,7 +143,7 @@ export function startDomainTab(panel: HTMLElement, { api, strings, lang, slug }:
       const { status, body } = await api<{ transactionId?: string; email?: string; error?: string }>('/me/checkout', 'POST', { kind: 'hosting', domain: chosen!.domain });
       if (body.error === 'subscribed') return void (await follow()); // already paid (another tab): pick it up
       if (body.error === 'not_available' || body.error === 'has_domain') return void (confirmError.textContent = strings.errors[body.error]!);
-      const opened = status === 200 && body.transactionId && (await openCheckout({ transactionId: body.transactionId, email: body.email }, lang, () => void follow()));
+      const opened = status === 200 && body.transactionId && (await openCheckout('hosting', { transactionId: body.transactionId, email: body.email }, lang, () => void follow()));
       if (!opened) confirmError.textContent = strings.plan.failed;
     } catch {
       confirmError.textContent = strings.plan.failed;

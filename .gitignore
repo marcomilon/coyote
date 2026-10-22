@@ -5,6 +5,7 @@ out/
 infra/cdk-outputs*.json
 web/config.js
 web/public/config.js
+web/public/tags.js
 web/dist/
 web/.astro/
 .env*

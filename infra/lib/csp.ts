@@ -1,4 +1,6 @@
 /** Content-Security-Policy strings. Inputs may be CloudFormation tokens, so this only joins strings. */
+import { TAG_HOSTS } from './tags';
+
 
 /**
  * Generated sites: pages the page writer wrote run their own inline scripts and libraries from a few CDNs
@@ -32,16 +34,17 @@ export const PADDLE = {
   frame: ['https://buy.paddle.com', 'https://sandbox-buy.paddle.com'],
 };
 
-/** Our app: own scripts only (Astro emits external files), Turnstile's and Paddle's, the API, the draft iframe and its photos (Mi sitio), direct S3 uploads. */
-export function appCsp(options: { connectSrc: string[]; frameSrc: string[] }): string {
+/** Our app: own scripts only (Astro emits external files), Turnstile's and Paddle's, with `tags` GTM's and the tags it loads (no inline scripts, so no Custom HTML tags), the API, the draft iframe and its photos (Mi sitio), direct S3 uploads. */
+export function appCsp(options: { connectSrc: string[]; frameSrc: string[]; tags?: boolean }): string {
+  const tags = (kind: keyof typeof TAG_HOSTS) => (options.tags ? TAG_HOSTS[kind] : []);
   return [
     "default-src 'self'",
-    `script-src 'self' ${TURNSTILE_ORIGIN} ${PADDLE.script}`,
-    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${PADDLE.script}`,
+    `script-src ${["'self'", TURNSTILE_ORIGIN, PADDLE.script, ...tags('script')].join(' ')}`,
+    `style-src ${["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', PADDLE.script, ...tags('style')].join(' ')}`,
     'font-src https://fonts.gstatic.com',
-    `img-src 'self' data: blob: ${options.frameSrc.join(' ')}`,
-    `connect-src ${[...options.connectSrc, PADDLE.connect].join(' ')}`,
-    `frame-src ${[...options.frameSrc, TURNSTILE_ORIGIN, ...PADDLE.frame].join(' ')}`,
+    `img-src ${["'self'", 'data:', 'blob:', ...options.frameSrc, ...tags('img')].join(' ')}`,
+    `connect-src ${[...options.connectSrc, PADDLE.connect, ...tags('connect')].join(' ')}`,
+    `frame-src ${[...options.frameSrc, TURNSTILE_ORIGIN, ...PADDLE.frame, ...tags('frame')].join(' ')}`,
     "frame-ancestors 'none'",
     "object-src 'none'",
     "base-uri 'self'",

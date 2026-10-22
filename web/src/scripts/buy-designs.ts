@@ -32,7 +32,7 @@ export async function buyDesignPack<V extends { designsLeft?: number }>(api: Api
   on.say(strings.opening);
   try {
     const { status, body } = await api<{ transactionId?: string; email?: string }>('/me/checkout', 'POST', { kind: 'designs' });
-    const opened = status === 200 && body?.transactionId && (await openCheckout({ transactionId: body.transactionId, email: body.email }, lang, () => void waitForDesigns()));
+    const opened = status === 200 && body?.transactionId && (await openCheckout('designs', { transactionId: body.transactionId, email: body.email }, lang, () => void waitForDesigns()));
     on.say(opened ? '' : strings.failed, !opened);
   } catch {
     on.say(strings.failed, true);

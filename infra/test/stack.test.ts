@@ -153,6 +153,20 @@ describe('CoyoteStack, domainless', () => {
     expect(csp).not.toContain("'unsafe-eval'");
   });
 
+  it('allows no marketing tags without a GTM container', () => {
+    const csp = cspOf(template, 'AppHeaders');
+    expect(csp).not.toContain('googletagmanager');
+    expect(csp).not.toContain('facebook');
+  });
+
+  it("with a GTM container, allows GTM's, Google Analytics' and Meta's hosts, still with no inline scripts", () => {
+    const csp = cspOf(synth({ gtmId: 'GTM-TEST123' }), 'AppHeaders');
+    expect(csp).toMatch(/script-src 'self' [^;]*https:\/\/www\.googletagmanager\.com[^;]*https:\/\/connect\.facebook\.net/);
+    expect(/script-src ([^;]*);/.exec(csp)![1]).not.toContain('unsafe');
+    expect(csp).toMatch(/connect-src [^;]*https:\/\/\*\.google-analytics\.com[^;]*https:\/\/www\.facebook\.com/);
+    expect(csp).toMatch(/img-src [^;]*https:\/\/www\.facebook\.com/);
+  });
+
   it('keeps the CAPTCHA switch in SSM, starting off, readable with the Turnstile secret by the three anonymous forms only', () => {
     template.hasResourceProperties('AWS::SSM::Parameter', { Name: '/coyote/captcha', Value: 'off' });
     const users = Object.entries(template.findResources('AWS::Lambda::Function'))

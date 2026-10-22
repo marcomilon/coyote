@@ -2,9 +2,19 @@
 // email (services/generator core/payments.ts), so the browser never chooses what it buys or for whom. The designs
 // arrive through Paddle's webhook, not from here: after `checkout.completed` the caller polls GET /me.
 // No `paddle` in config.js (local builds, tests): no checkout.
+import { track } from './tags';
+
+/** What the checkout sells: a design pack, or the site's monthly plan (core/payments.ts). */
+export type CheckoutItem = 'designs' | 'hosting';
 
 interface PaddleEvent {
   name?: string;
+  data?: {
+    transaction_id?: string;
+    currency_code?: string;
+    totals?: { subtotal?: number; tax?: number };
+    items?: { price_id?: string; product?: { name?: string }; billing_cycle?: unknown }[];
+  };
 }
 interface PaddleJs {
   Environment: { set(env: string): void };
@@ -38,6 +48,7 @@ function loadPaddle(): Promise<PaddleJs | undefined> {
         token: config.clientToken,
         eventCallback: (event) => {
           if (event.name !== 'checkout.completed') return;
+          trackPurchase(event.data);
           onCompleted?.();
           // Paddle's success screen stays until closed; our page already says the payment arrived.
           setTimeout(() => paddle.Checkout.close(), CLOSE_AFTER_MS);
@@ -53,6 +64,21 @@ function loadPaddle(): Promise<PaddleJs | undefined> {
   }));
 }
 
+/** The marketing tags' purchase (tags.ts), in GA4's ecommerce shape; GTM passes it on to Meta as well. */
+function trackPurchase(data: PaddleEvent['data']) {
+  if (!data?.transaction_id) return;
+  track('purchase', {
+    ecommerce: {
+      transaction_id: data.transaction_id,
+      value: data.totals?.subtotal ?? 0,
+      tax: data.totals?.tax ?? 0,
+      currency: data.currency_code,
+      // Only the monthly plan bills again (also when its checkout opens from one of Paddle's emails).
+      items: (data.items ?? []).map((item) => ({ item_id: item.billing_cycle ? 'hosting' : 'designs', item_name: item.product?.name, price: data.totals?.subtotal ?? 0, quantity: 1 })),
+    },
+  });
+}
+
 export const checkoutAvailable = () => Boolean(window.COYOTE_CONFIG?.paddle);
 
 /**
@@ -64,10 +90,11 @@ export function openLinkedCheckout() {
 }
 
 /** Opens the checkout for a transaction from POST /me/checkout. Resolves to false when it couldn't open; `completed` runs once paid. */
-export async function openCheckout(transaction: { transactionId: string; email?: string }, lang: string, completed: () => void): Promise<boolean> {
+export async function openCheckout(item: CheckoutItem, transaction: { transactionId: string; email?: string }, lang: string, completed: () => void): Promise<boolean> {
   const paddle = await loadPaddle();
   if (!paddle) return false;
   onCompleted = completed;
+  track('begin_checkout', { ecommerce: { items: [{ item_id: item }] } });
   paddle.Checkout.open({
     transactionId: transaction.transactionId,
     ...(transaction.email && { customer: { email: transaction.email } }),

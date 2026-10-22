@@ -17,13 +17,15 @@
     "account": "887799775985",
     "turnstileSiteKey": "0x4AAAAAAFU3UMZOLrYHhjX3",
     "paddle": { "env": "production", "clientToken": "live_a5aad4bc8a6fd3736741c8e773a", "designsPriceId": "pri_01m5b0z47zne9wkce5x7ntcvh5", "hostingPriceId": "pri_01m5b0z3qnrq14f2vyg9n2dj40" },
+    "gtmId": "GTM-58VB3VC3",
     "mailMx": [
       { "priority": 10, "hostName": "mx1.improvmx.com" },
       { "priority": 20, "hostName": "mx2.improvmx.com" }
     ],
     "apexTxt": [
       "v=spf1 include:spf.improvmx.com ~all",
-      "google-site-verification=tItdiXfx4uZNl5T5T9j28r0eh056qjrLBdPIvVjPSOE"
+      "google-site-verification=tItdiXfx4uZNl5T5T9j28r0eh056qjrLBdPIvVjPSOE",
+      "facebook-domain-verification=02lbyfn4i934ojsczulx9slm0qa2fj"
     ],
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
     "@aws-cdk/core:newStyleStackSynthesis": true,

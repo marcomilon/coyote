@@ -17,6 +17,7 @@ new CoyoteStack(app, 'Coyote', {
   senderEmail: app.node.tryGetContext('senderEmail') as string | undefined,
   turnstileSiteKey: app.node.tryGetContext('turnstileSiteKey') as string | undefined,
   paddle: app.node.tryGetContext('paddle') as CoyoteStackProps['paddle'],
+  gtmId: app.node.tryGetContext('gtmId') as string | undefined,
   mailMx: app.node.tryGetContext('mailMx') as CoyoteStackProps['mailMx'],
   apexTxt: app.node.tryGetContext('apexTxt') as string[] | undefined,
 });

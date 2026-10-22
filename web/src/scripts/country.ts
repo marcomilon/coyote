@@ -8,7 +8,7 @@ const KEY = 'ventas314.country';
 
 /**
  * The chosen country, for CloudFront: cf-app-rewrite.js uses it instead of the detected one to pick the tú or vos
- * pages (PLAN.md "Spanish with vos"). Our only cookie; it holds just the country code.
+ * pages (PLAN.md "Spanish with vos"). Our only cookie of our own; it holds just the country code.
  */
 function rememberCountry(code: string) {
   const secure = location.protocol === 'https:' ? '; Secure' : '';

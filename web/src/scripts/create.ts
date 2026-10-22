@@ -11,6 +11,7 @@ import { readSession } from './session';
 import { humanCheck } from './turnstile';
 import { captionsOf, showThumbs, UploadLimitError, uploadImages } from './upload';
 import { setBusy } from './busy';
+import { track } from './tags';
 
 type State = 'form' | 'working' | 'questions' | 'message';
 /** `action`: a button back to the form, with the owner's answers filled in again. */
@@ -248,8 +249,10 @@ function showDone(jobId: string, job: JobView) {
   const magic = rememberMagic(jobId, job);
   forgetAnswers();
   if (!magic) return showMessage(strings.lostLink);
-  // Mi sitio on this app (localhost in development); replace() keeps this finished page out of Back.
-  location.replace(`${strings.mySitePath}${new URL(magic.miSitioUrl).hash}`);
+  // Mi sitio on this app (localhost in development); replace() keeps this finished page out of Back. The marketing
+  // tags (Meta's CompleteRegistration) get a moment first, without the job in the address (tags.ts).
+  history.replaceState(null, '', location.pathname + location.search);
+  track('draft_ready', {}, () => location.replace(`${strings.mySitePath}${new URL(magic.miSitioUrl).hash}`));
 }
 
 function showQuestions(jobId: string, job: JobView) {
@@ -373,14 +376,18 @@ form.addEventListener('submit', async (event) => {
       body: JSON.stringify({ ...raw, ownerEmail, turnstileToken }),
     });
     if (status === 202 && body.jobId) {
+      const jobId = body.jobId;
       try {
-        sessionStorage.setItem(emailKey(body.jobId), ownerEmail);
+        sessionStorage.setItem(emailKey(jobId), ownerEmail);
       } catch {
         // Only the "you may close" note uses it.
       }
-      // The job lives in the URL so a reload picks it up again.
-      history.replaceState(null, '', `#job=${body.jobId}`);
-      return void follow(body.jobId);
+      // The marketing tags (Meta's Lead) first, before the job is in the address (tags.ts).
+      return void track('generate_lead', {}, () => {
+        // The job lives in the URL so a reload picks it up again.
+        history.replaceState(null, '', `#job=${jobId}`);
+        void follow(jobId);
+      });
     }
     human.reset();
     if (status === 400) return formErrors(body.fields?.length ? body.fields : ['generic']);

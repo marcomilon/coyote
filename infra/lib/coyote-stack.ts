@@ -27,6 +27,7 @@ import { EXAMPLE_SITES } from '../../services/generator/src/core/examples';
 import { VOSEO_COUNTRIES } from '../../services/generator/src/core/i18n';
 import { PAGE_FONT_HOSTS, PAGE_SCRIPT_HOSTS, PAGE_STYLE_HOSTS } from '../../services/generator/src/core/page-check';
 import { appCsp, sitesCsp } from './csp';
+import { tagsJs } from './tags';
 import { GeneratorApi, type PaddleConfig } from './generator-api';
 import { CoyoteGuardrail } from './guardrail';
 import { Monitoring } from './monitoring';
@@ -56,6 +57,8 @@ export interface CoyoteStackProps extends StackProps {
   turnstileSiteKey?: string;
   /** Paddle, the checkout of the design packs (public values). Unset = no checkout. */
   paddle?: PaddleConfig;
+  /** Google Tag Manager's container (GTM-XXXXXXX), the app's marketing tags (lib/tags.ts). Unset = no tags. */
+  gtmId?: string;
   /** Domain mode: MX records of the bare domain, for our own inbound mail (a forwarding service such as ImprovMX). */
   mailMx?: route53.MxRecordValue[];
   /**
@@ -200,6 +203,7 @@ export class CoyoteStack extends Stack {
               `https://${this.sitesBucket.bucketRegionalDomainName}`, // presigned photo uploads
             ],
             frameSrc: [domain ? domain.urls.draftOrigin : 'https://*.cloudfront.net'],
+            tags: Boolean(props.gtmId),
           }),
         },
         ...commonSecurityHeaders,
@@ -446,21 +450,21 @@ export class CoyoteStack extends Stack {
     const webDist = props.webDist ?? asset('../../web/dist');
     if (!existsSync(webDist)) throw new Error(`${webDist} does not exist. Build the frontend first: npm run build -w web`);
     const appDeployment = new s3deploy.BucketDeployment(this, 'AppDeployment', {
-      // config.js is excluded (and so never pruned): a local one (written for `astro dev`) must never reach the bucket.
-      sources: [s3deploy.Source.asset(webDist, { exclude: ['config.js'] })],
-      exclude: ['config.js'],
+      // config.js and tags.js are excluded (and so never pruned): local ones (written for `astro dev`) must never reach the bucket.
+      sources: [s3deploy.Source.asset(webDist, { exclude: ['config.js', 'tags.js'] })],
+      exclude: ['config.js', 'tags.js'],
       destinationBucket: this.appBucket,
       distribution: appDistribution,
       distributionPaths: ['/*'],
     });
-    // config.js on its own, with no-cache: browsers would otherwise keep an old one (no new example links, an old API URL).
+    // config.js and tags.js on their own, with no-cache: browsers would otherwise keep an old one (no new example links, an old API URL).
     new s3deploy.BucketDeployment(this, 'AppConfigDeployment', {
-      sources: [s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl, examples: exampleUrls, ...(props.turnstileSiteKey ? { turnstileSiteKey: props.turnstileSiteKey } : {}), ...(props.paddle ? { paddle: { env: props.paddle.env, clientToken: props.paddle.clientToken } } : {}), ...(domain?.urls.supportEmail ? { supportEmail: domain.urls.supportEmail } : {}) })};\n`)],
+      sources: [s3deploy.Source.data('tags.js', tagsJs(props.gtmId)), s3deploy.Source.data('config.js', `window.COYOTE_CONFIG = ${JSON.stringify({ apiUrl, examples: exampleUrls, ...(props.turnstileSiteKey ? { turnstileSiteKey: props.turnstileSiteKey } : {}), ...(props.paddle ? { paddle: { env: props.paddle.env, clientToken: props.paddle.clientToken } } : {}), ...(domain?.urls.supportEmail ? { supportEmail: domain.urls.supportEmail } : {}) })};\n`)],
       destinationBucket: this.appBucket,
       prune: false,
       cacheControl: [s3deploy.CacheControl.noCache()],
       distribution: appDistribution,
-      distributionPaths: ['/config.js'],
+      distributionPaths: ['/config.js', '/tags.js'],
     }).node.addDependency(appDeployment);
 
     // ---------------------------------------------------------------------------------------

@@ -120,7 +120,7 @@ const es = {
       { icon: '↩️', title: 'Reembolso en 14 días', text: 'Si no estás conforme, pides el reembolso de cualquier pago dentro de los 14 días.' },
       { icon: '🔓', title: 'Sin contratos', text: 'Cancelas el plan cuando quieras desde Mi página web, sin multas. Sigue activo hasta el fin del mes pagado.' },
       { icon: '🏠', title: 'Tu página es tuya', text: 'La editas, la pones fuera de línea o la borras cuando quieras. Si lo pides, te pasamos el dominio a tu nombre sin costo.' },
-      { icon: '🔒', title: 'Tus datos, cuidados', text: 'Tu correo no aparece en tu página y no te enviamos publicidad. No usamos analítica ni vendemos tus datos. Puedes borrarlos tú mismo.' },
+      { icon: '🔒', title: 'Tus datos, cuidados', text: 'Tu correo no aparece en tu página y no te enviamos publicidad. Las cookies de medición solo con tu permiso, y no vendemos tus datos. Puedes borrarlos tú mismo.' },
       { icon: '🛡️', title: 'Páginas revisadas', text: 'Revisamos cada pedido y no creamos páginas para estafas ni actividades prohibidas. Cada página tiene un enlace «Reportar».' },
     ],
     faqTitle: 'Preguntas sobre pagos',
@@ -410,7 +410,13 @@ const es = {
     limited: 'Enviaste muchos reportes hoy. Inténtalo mañana.',
     captcha: 'No pudimos comprobar que eres una persona. Inténtalo de nuevo; si aparece una casilla, márcala.',
   },
-  footer: { made: 'ventas314.com', about: 'Sobre nosotros', terms: 'Términos', privacy: 'Privacidad', refunds: 'Reembolsos', support: 'Soporte por WhatsApp:' },
+  footer: { made: 'ventas314.com', about: 'Sobre nosotros', terms: 'Términos', privacy: 'Privacidad', refunds: 'Reembolsos', support: 'Soporte por WhatsApp:', cookies: 'Cookies' },
+  consent: {
+    text: 'Usamos cookies de Google y Meta para medir nuestros anuncios y mejorar ventas314.com. ¿Nos lo permites?',
+    more: 'Más información',
+    accept: 'Aceptar',
+    reject: 'Rechazar',
+  },
 };
 
 type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
@@ -420,6 +426,7 @@ type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K
  * are replaced whole. The app builds every Spanish page twice and CloudFront serves this version in those countries.
  */
 const esVos: DeepPartial<typeof es> = {
+  consent: { text: 'Usamos cookies de Google y Meta para medir nuestros anuncios y mejorar ventas314.com. ¿Nos lo permitís?' },
   humanCheck: { hint: 'Un último paso: marcá la casilla de abajo para confirmar que sos una persona.' },
   header: { items: { contact: { title: 'Contacto', text: 'Escribinos por correo' } } },
   home: {
@@ -490,7 +497,7 @@ const esVos: DeepPartial<typeof es> = {
       { icon: '↩️', title: 'Reembolso en 14 días', text: 'Si no estás conforme, pedís el reembolso de cualquier pago dentro de los 14 días.' },
       { icon: '🔓', title: 'Sin contratos', text: 'Cancelás el plan cuando quieras desde Mi página web, sin multas. Sigue activo hasta el fin del mes pagado.' },
       { icon: '🏠', title: 'Tu página es tuya', text: 'La editás, la ponés fuera de línea o la borrás cuando quieras. Si lo pedís, te pasamos el dominio a tu nombre sin costo.' },
-      { icon: '🔒', title: 'Tus datos, cuidados', text: 'Tu correo no aparece en tu página y no te enviamos publicidad. No usamos analítica ni vendemos tus datos. Podés borrarlos vos mismo.' },
+      { icon: '🔒', title: 'Tus datos, cuidados', text: 'Tu correo no aparece en tu página y no te enviamos publicidad. Las cookies de medición solo con tu permiso, y no vendemos tus datos. Podés borrarlos vos mismo.' },
       { icon: '🛡️', title: 'Páginas revisadas', text: 'Revisamos cada pedido y no creamos páginas para estafas ni actividades prohibidas. Cada página tiene un enlace «Reportar».' },
     ],
     faq: [
@@ -772,7 +779,7 @@ const pt: typeof es = {
       { icon: '↩️', title: 'Reembolso em 14 dias', text: 'Se não ficar satisfeito, você pede o reembolso de qualquer pagamento em até 14 dias.' },
       { icon: '🔓', title: 'Sem contrato', text: 'Você cancela o plano quando quiser em Meu site, sem multa. Ele continua ativo até o fim do mês pago.' },
       { icon: '🏠', title: 'Seu site é seu', text: 'Você edita, tira do ar ou apaga quando quiser. Se pedir, passamos o domínio para o seu nome sem custo.' },
-      { icon: '🔒', title: 'Seus dados protegidos', text: 'Seu e-mail não aparece no seu site e não enviamos publicidade. Não usamos ferramentas de análise nem vendemos seus dados. Você mesmo pode apagá-los.' },
+      { icon: '🔒', title: 'Seus dados protegidos', text: 'Seu e-mail não aparece no seu site e não enviamos publicidade. Cookies de medição só com a sua permissão, e não vendemos seus dados. Você mesmo pode apagá-los.' },
       { icon: '🛡️', title: 'Sites revisados', text: 'Revisamos cada pedido e não criamos sites para golpes nem atividades proibidas. Cada site tem um link «Denunciar».' },
     ],
     faqTitle: 'Perguntas sobre pagamentos',
@@ -1060,7 +1067,13 @@ const pt: typeof es = {
     limited: 'Você enviou muitas denúncias hoje. Tente amanhã.',
     captcha: 'Não conseguimos confirmar que você é uma pessoa. Tente de novo; se aparecer uma caixa, marque-a.',
   },
-  footer: { made: 'ventas314.com', about: 'Sobre nós', terms: 'Termos', privacy: 'Privacidade', refunds: 'Reembolsos', support: 'Suporte pelo WhatsApp:' },
+  footer: { made: 'ventas314.com', about: 'Sobre nós', terms: 'Termos', privacy: 'Privacidade', refunds: 'Reembolsos', support: 'Suporte pelo WhatsApp:', cookies: 'Cookies' },
+  consent: {
+    text: 'Usamos cookies do Google e da Meta para medir nossos anúncios e melhorar o ventas314.com. Você permite?',
+    more: 'Saiba mais',
+    accept: 'Aceitar',
+    reject: 'Recusar',
+  },
 };
 
 export const STRINGS = { es, pt };

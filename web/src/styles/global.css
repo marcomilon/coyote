@@ -329,7 +329,20 @@ html.scroll-lock, html.scroll-lock body { overflow: hidden; }
 .site-footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 24px; padding-block: 12px; }
 .site-footer .about { display: flex; flex-direction: column; gap: 6px; }
 .site-footer nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0 20px; }
-.site-footer nav a { display: inline-flex; align-items: center; min-height: 44px; }
+.site-footer nav a, .site-footer nav .link-button { display: inline-flex; align-items: center; min-height: 44px; }
+.site-footer .link-button { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+.site-footer .link-button:hover { color: var(--rojo); }
+.site-footer .link-button[hidden] { display: none; }
+
+/* The cookie banner (Consent.astro): a card at the bottom until the visitor chooses. */
+.consent {
+  position: fixed; left: 1rem; right: 1rem; bottom: 1rem; z-index: 40; max-width: 40rem; margin-inline: auto;
+  display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; padding: 1rem 1.25rem;
+  background: var(--paper-light); border: 2px solid var(--ink); border-radius: 12px; box-shadow: var(--shadow); font-size: 15px;
+}
+.consent[hidden] { display: none; }
+.consent p { flex: 1 1 18rem; margin: 0; }
+.consent-actions { display: flex; gap: .75rem; }
 
 /* ---- Create: the order ticket ---- */
 .create { padding-block: 1.5rem 4rem; }

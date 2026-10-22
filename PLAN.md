@@ -256,14 +256,23 @@ The owner looks at the draft on a computer and asks for changes from their phone
 
 ## Spanish with vos
 - Visitors from Argentina, Uruguay and Paraguay (`VOSEO_COUNTRIES`, `core/i18n.ts`) read the app with vos instead of tú. `strings.ts` holds `esVos`, only the strings that differ; `t(lang, vos)` lays it over `es`.
-- Every Spanish page is built twice: the usual one and its twin under `web/src/pages/vos/` (legal pages are vos copies of the markdown). The app's rewrite (`cf-app-rewrite.js`) serves the twin at the usual URL when `CloudFront-Viewer-Country` is a voseo country; the canonical points at the usual URL, and the sitemap leaves the twins out. The country chosen in the home page's picker overrides the detected one: it is kept in a `country` cookie (our only cookie, named on the privacy page), which the rewrite reads first, and the page reloads when the choice changes the voice.
+- Every Spanish page is built twice: the usual one and its twin under `web/src/pages/vos/` (legal pages are vos copies of the markdown). The app's rewrite (`cf-app-rewrite.js`) serves the twin at the usual URL when `CloudFront-Viewer-Country` is a voseo country; the canonical points at the usual URL, and the sitemap leaves the twins out. The country chosen in the home page's picker overrides the detected one: it is kept in a `country` cookie (named on the privacy page), which the rewrite reads first, and the page reloads when the choice changes the voice.
 - The texts the backend writes for a site (chat replies, chat notes, the "page ready" email) follow the site's phone country (`voiceOf`). The sign-in email has no site and stays tú.
 - `npm run dev` has no edge: open `/vos/…` to see the vos pages.
 
 ## Privacy and legal
 - Privacy and terms pages (es/pt, written in Markdown): what we store (answers, owner WhatsApp number, IP hashes for rate limiting; later owner email and visitor messages for 30 d), why, retention, how to delete (magic-link page or email). Covers the basics of LGPD (BR), LFPDPPP (MX), Ley 1581 (CO), Ley 25.326 (AR).
-- IPs stored only as salted hashes. No cookies or analytics on generated sites.
+- IPs stored only as salted hashes. No cookies or analytics on generated sites; the app's marketing tags need the visitor's consent ("Marketing tags").
 - The privacy page names Anthropic (answers and photos, never the phone number) and the public CDNs the sites load fonts and libraries from.
+
+## Marketing tags
+- For the ad campaigns, the app (never the generated sites, drafts or live sites) loads Google Tag Manager, container in CDK context `gtmId`. GTM sends our events to the Meta Pixel and Google Analytics 4; their IDs live only in GTM, so adding or changing a tag needs no deploy.
+- The stack writes `/tags.js` next to `config.js` (`infra/lib/tags.ts`): Consent Mode defaults to denied, then GTM. No `gtmId` = an empty file, no CSP hosts, no banner. `npm run dev` writes an empty one.
+- Consent: a banner (`Consent.astro`) until the visitor accepts or rejects; the choice is in localStorage (`ventas314.consent`) and can be changed from the footer's "Cookies". Meta's tags in GTM require `ad_storage` consent. GTM doesn't retry a tag consent held back, so accepting pushes `consent_granted`, a second trigger of the PageView tags.
+- Events (`web/src/scripts/tags.ts` `track`, GA4 names): `generate_lead` (the form is accepted; Meta Lead), `draft_ready` (Mi sitio opens; Meta CompleteRegistration), `begin_checkout` (Paddle checkout opens; Meta InitiateCheckout), `purchase` (Paddle `checkout.completed`: transaction id, value without tax, currency; Meta Purchase). No email, name or answers go to the tags.
+- Secrets in the address never reach the tags: GTM loads after the page's scripts took `#token=` / `#login=` / `#job=` out of the address, and a page that still has one gets no tags. The create flow fires its events before putting the job in the address and after taking it out.
+- CSP: the app allows GTM's, Google Analytics' and Meta's hosts (`TAG_HOSTS`), but still no inline scripts: in GTM use only built-in or gallery templates, never Custom HTML tags or Custom JavaScript variables.
+- Later: Meta's Conversions API from the Paddle webhook (the server-side Purchase, same event id as the browser's), Google Ads conversions.
 
 ## Environments and delivery
 - **Environment**: one stack (see Decisions). With domains: `www.<domain>` (and the bare domain, which redirects), `api.<domain>`, `*.<domain>` (drafts and examples).
@@ -449,6 +458,15 @@ MVP = phases 0–6. Tick a box (`[x]`) only when the item is done and its check 
 - [x] Check in submit, sign-in link and report (`core/captcha.ts`, `aws/turnstile.ts`); widget on the three forms (`web/src/scripts/turnstile.ts`), es/vos/pt messages, privacy pages; switch `/coyote/captcha`, secret grants, CSP, `turnstileSiteKey` in `config.js`; `./coyote.sh captcha`; unit and stack tests
 - [x] 👤 Cloudflare dashboard → Turnstile → add a widget (Managed; hostnames: the app domain, and `localhost` for `npm run dev`); put the site key in `infra/cdk.json` (`turnstileSiteKey`); create the secret: `aws secretsmanager create-secret --name coyote/turnstile --secret-string '<secret key>' --profile coyote`
 - [ ] 👤 Deploy, `./coyote.sh captcha on`, then check live: a site from the form, a sign-in link, a report; `/generate` with no token answers 403. Done: deployed, on; with no token or a fake one, create, sign-in link and report answer 403 (Cloudflare accepts the secret). Left: a site from the form in a browser
+
+### Phase 6c — Marketing tags (GTM, Meta Pixel, GA4)
+- [x] `/tags.js` from the stack (`gtmId`), CSP, consent banner and footer "Cookies" (es/vos/pt), events in the create flow and the Paddle checkout, privacy pages and the home page's data card
+- [x] 👤 GTM container (`GTM-58VB3VC3`)
+- [x] 👤 Meta: business portfolio, pixel (dataset `3664955743653297`), automatic advanced matching and automatic events off, ad account linked; domain verified (TXT in `apexTxt`)
+- [x] 👤 GTM: Meta Pixel tags (Meta's own "Meta Pixel" template: PageView, Lead, CompleteRegistration, InitiateCheckout, Purchase), each requiring `ad_storage`, Meta's Conversions API opt-in off; published
+- [x] Deploy; GTM preview: PageView held back until "Aceptar", then fired. The template's extra Parameter Builder script is blocked by the CSP, on purpose
+- [ ] Lead and CompleteRegistration checked with a test site; InitiateCheckout and Purchase with a real purchase
+- [ ] 👤 GA4 property and its tags in GTM (`page_location` = `{{Page URL}}`, no fragment)
 
 **MVP line.** Product phase 2 (`PLAN-PHASE2.md`) runs here: WhatsApp creation, contact form, leads on WhatsApp.
 

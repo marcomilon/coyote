@@ -6,7 +6,7 @@ description: As regras para criar um site com ventas314.com.
 alternate: /terminos
 ---
 
-Ao criar um site com ventas314.com você aceita estas regras. O ventas314.com é um serviço operado a partir da Argentina; você pode escrever para soporte@ventas314.com.
+Ao criar um site com ventas314.com você aceita estas regras. Você pode escrever para soporte@ventas314.com.
 
 ## O que oferecemos
 

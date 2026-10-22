@@ -6,7 +6,7 @@ description: Las reglas para crear una página web con ventas314.com.
 alternate: /pt/termos
 ---
 
-Al crear una página web con ventas314.com aceptas estas reglas. ventas314.com es un servicio operado desde Argentina; puedes escribirnos a soporte@ventas314.com.
+Al crear una página web con ventas314.com aceptas estas reglas. Puedes escribirnos a soporte@ventas314.com.
 
 ## Qué ofrecemos
 

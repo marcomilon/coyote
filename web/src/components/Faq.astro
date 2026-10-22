@@ -1,18 +1,32 @@
 ---
 // Questions and answers that open one at a time (<details name>: no script). The home page and Sobre nosotros use it.
+// An answer with a `link` shows that text of the answer as a link (to another site, in a new tab).
 interface Props {
-  items: { q: string; a: string }[];
+  items: { q: string; a: string; link?: { text: string; href: string } }[];
 }
 const { items } = Astro.props;
 ---
 
 <div class="faq-list">
   {
-    items.map((item, i) => (
-      <details name="faq" open={i === 0}>
-        <summary>{item.q}</summary>
-        <p>{item.a}</p>
-      </details>
-    ))
+    items.map((item, i) => {
+      const [before, after] = item.link ? item.a.split(item.link.text) : [item.a];
+      return (
+        <details name="faq" open={i === 0}>
+          <summary>{item.q}</summary>
+          <p>
+            {before}
+            {item.link && (
+              <>
+                <a href={item.link.href} target="_blank" rel="noopener">
+                  {item.link.text}
+                </a>
+                {after}
+              </>
+            )}
+          </p>
+        </details>
+      );
+    })
   }
 </div>

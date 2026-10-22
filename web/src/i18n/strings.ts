@@ -125,8 +125,8 @@ const es = {
     ],
     faqTitle: 'Preguntas sobre pagos',
     faq: [
-      { q: '¿Qué es Paddle?', a: 'Paddle es una empresa de pagos que procesa los cobros de empresas de software de todo el mundo. Cobra por nosotros, te envía el recibo y responde tus consultas sobre cobros. Los datos de tu tarjeta los recibe Paddle, no nosotros.' },
-      { q: '¿Cómo aparece el cobro en mi estado de cuenta?', a: 'Como «PADDLE.NET* VENTAS314». Si pagas con PayPal, como «PAYPAL *PADDLE.NET».' },
+      { q: '¿Qué es Paddle?', a: 'Paddle es una empresa de pagos que procesa los cobros de empresas de software de todo el mundo. Cobra por nosotros, te envía el recibo y responde tus consultas sobre cobros. Los datos de tu tarjeta los recibe Paddle, no nosotros. Más información en paddle.net.', link: { text: 'paddle.net', href: 'https://paddle.net' } },
+      { q: '¿Cómo aparece el cobro en mi estado de cuenta?', a: 'Como «PADDLE.NET* VENTAS314». Si pagas con PayPal, como «PAYPAL *PADDLE.NET». Si no reconoces un cobro, puedes buscarlo en paddle.net con tu correo.', link: { text: 'paddle.net', href: 'https://paddle.net' } },
       { q: '¿Qué medios de pago aceptan?', a: 'Tarjeta de crédito o débito, PayPal y Apple Pay. Las opciones que ves al pagar dependen de tu país y de tu dispositivo.' },
       { q: '¿Qué pasa con mi página y mi dominio si cancelo?', a: 'Tu página sigue publicada hasta el fin del mes pagado; después deja de verse en tu dominio, pero sigue guardada en Mi página web. Tu dominio queda registrado hasta que termine su año y, si lo pides, te lo pasamos a tu nombre.' },
     ],
@@ -492,8 +492,8 @@ const esVos: DeepPartial<typeof es> = {
       { icon: '🛡️', title: 'Páginas revisadas', text: 'Revisamos cada pedido y no creamos páginas para estafas ni actividades prohibidas. Cada página tiene un enlace «Reportar».' },
     ],
     faq: [
-      { q: '¿Qué es Paddle?', a: 'Paddle es una empresa de pagos que procesa los cobros de empresas de software de todo el mundo. Cobra por nosotros, te envía el recibo y responde tus consultas sobre cobros. Los datos de tu tarjeta los recibe Paddle, no nosotros.' },
-      { q: '¿Cómo aparece el cobro en mi estado de cuenta?', a: 'Como «PADDLE.NET* VENTAS314». Si pagás con PayPal, como «PAYPAL *PADDLE.NET».' },
+      { q: '¿Qué es Paddle?', a: 'Paddle es una empresa de pagos que procesa los cobros de empresas de software de todo el mundo. Cobra por nosotros, te envía el recibo y responde tus consultas sobre cobros. Los datos de tu tarjeta los recibe Paddle, no nosotros. Más información en paddle.net.', link: { text: 'paddle.net', href: 'https://paddle.net' } },
+      { q: '¿Cómo aparece el cobro en mi estado de cuenta?', a: 'Como «PADDLE.NET* VENTAS314». Si pagás con PayPal, como «PAYPAL *PADDLE.NET». Si no reconocés un cobro, podés buscarlo en paddle.net con tu correo.', link: { text: 'paddle.net', href: 'https://paddle.net' } },
       { q: '¿Qué medios de pago aceptan?', a: 'Tarjeta de crédito o débito, PayPal y Apple Pay. Las opciones que ves al pagar dependen de tu país y de tu dispositivo.' },
       { q: '¿Qué pasa con mi página y mi dominio si cancelo?', a: 'Tu página sigue publicada hasta el fin del mes pagado; después deja de verse en tu dominio, pero sigue guardada en Mi página web. Tu dominio queda registrado hasta que termine su año y, si lo pedís, te lo pasamos a tu nombre.' },
     ],
@@ -774,8 +774,8 @@ const pt: typeof es = {
     ],
     faqTitle: 'Perguntas sobre pagamentos',
     faq: [
-      { q: 'O que é a Paddle?', a: 'A Paddle é uma empresa de pagamentos que processa as cobranças de empresas de software do mundo todo. Ela cobra por nós, envia seu recibo e responde suas dúvidas sobre cobranças. Os dados do seu cartão ficam com a Paddle, não com a gente.' },
-      { q: 'Como a cobrança aparece na minha fatura?', a: 'Como «PADDLE.NET* VENTAS314». Se você pagar com PayPal, como «PAYPAL *PADDLE.NET».' },
+      { q: 'O que é a Paddle?', a: 'A Paddle é uma empresa de pagamentos que processa as cobranças de empresas de software do mundo todo. Ela cobra por nós, envia seu recibo e responde suas dúvidas sobre cobranças. Os dados do seu cartão ficam com a Paddle, não com a gente. Mais informações em paddle.net.', link: { text: 'paddle.net', href: 'https://paddle.net' } },
+      { q: 'Como a cobrança aparece na minha fatura?', a: 'Como «PADDLE.NET* VENTAS314». Se você pagar com PayPal, como «PAYPAL *PADDLE.NET». Se não reconhecer uma cobrança, você pode procurá-la em paddle.net com seu e-mail.', link: { text: 'paddle.net', href: 'https://paddle.net' } },
       { q: 'Quais formas de pagamento vocês aceitam?', a: 'Cartão de crédito ou débito, PayPal e Apple Pay. As opções que aparecem no pagamento dependem do seu país e do seu dispositivo.' },
       { q: 'O que acontece com meu site e meu domínio se eu cancelar?', a: 'Seu site continua publicado até o fim do mês pago; depois deixa de aparecer no seu domínio, mas continua salvo em Meu site. Seu domínio continua registrado até completar um ano e, se você pedir, passamos ele para o seu nome.' },
     ],

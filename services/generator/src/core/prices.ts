@@ -40,13 +40,18 @@ export const CURRENCY_NAMES: Record<Currency, { es: string; pt: string }> = {
 
 export const pricesFor = (country: string): CountryPrices => LOCAL_PRICES[country] ?? BASE;
 
+/** The amount as people write it (179, 49.9), in the country's currency. */
+export function priceValue(kind: PriceKind, country: string): { currency: Currency; value: number } {
+  const { currency, [kind]: amount } = pricesFor(country);
+  return { currency, value: amount / 10 ** DECIMALS[currency] };
+}
+
 /**
  * "$179", "R$ 49,90", "US$ 9,99": the way the country writes it (an unknown country: Latin American Spanish or
  * Brazilian Portuguese). Whole amounts lose their ",00".
  */
 export function formatPrice(kind: PriceKind, country: string, lang: 'es' | 'pt'): string {
-  const { currency, [kind]: amount } = pricesFor(country);
-  const value = amount / 10 ** DECIMALS[currency];
+  const { currency, value } = priceValue(kind, country);
   const locale = country === 'BR' || (!country && lang === 'pt') ? 'pt-BR' : country ? `es-${country}` : 'es-419';
   const digits = Number.isInteger(value) ? 0 : 2;
   return new Intl.NumberFormat(locale, { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);

@@ -13,6 +13,7 @@ import {
   whatsappLink,
 } from '../config/landing';
 import { CURRENCY_NAMES, formatPrice, pricesFor, type PriceKind } from '../../../services/generator/src/core/prices';
+import { offers } from '../config/offers';
 
 interface Props {
   lang: Lang;
@@ -53,8 +54,17 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
         set:html={JSON.stringify({
           '@context': 'https://schema.org',
           '@graph': [
-            { '@type': 'Organization', name: 'ventas314.com', url: new URL('/', Astro.site).href, logo: new URL('/logo.png', Astro.site).href },
+            { '@type': 'Organization', '@id': new URL('/#org', Astro.site).href, name: 'ventas314.com', url: new URL('/', Astro.site).href, logo: new URL('/logo.png', Astro.site).href },
             { '@type': 'WebSite', name: 'ventas314.com', url: new URL(s.paths.home, Astro.site).href, inLanguage: s.htmlLang, description: h.description },
+            {
+              '@type': 'Service',
+              name: h.title,
+              description: h.description,
+              serviceType: lang === 'es' ? 'Diseño de páginas web' : 'Criação de sites',
+              provider: { '@id': new URL('/#org', Astro.site).href },
+              areaServed: COUNTRIES.map((c) => ({ '@type': 'Country', name: c.code })),
+              offers: offers(lang, vos, new URL(s.paths.home + '#precio', Astro.site).href),
+            },
             {
               '@type': 'FAQPage',
               url: new URL(s.paths.home, Astro.site).href,

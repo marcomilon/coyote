@@ -1,0 +1,268 @@
+---
+import { t, type Lang } from '../i18n/strings';
+import { countriesFor, DEFAULT_COUNTRY } from '../config/landing';
+
+interface Props {
+  lang: Lang;
+  vos?: boolean;
+  /** The full header: menus, country picker and the create button. Otherwise only the logo, and the account bar
+   * ("Hola … · Salir") that signed-in pages put in the slot. */
+  menu?: boolean;
+}
+const { lang, vos = false, menu = false } = Astro.props;
+const s = t(lang, vos);
+const h = s.header;
+// soporte@<domain> from astro.config.mjs (urls.ts); a domainless build has none.
+const support = import.meta.env.PUBLIC_SUPPORT_EMAIL as string;
+
+/** The two menus. An item with no href (no page yet) is left off the page. `home + '#…'` links are sections of the home page. */
+const home = s.paths.home;
+const MENUS = [
+  {
+    id: 'producto',
+    label: h.product,
+    items: [
+      { ...h.items.price, href: `${home}#precio` },
+      { ...h.items.examples, href: `${home}#ejemplos` },
+      { ...h.items.templates, href: null }, // TODO: Plantillas page
+      { ...h.items.how, href: `${home}#como-funciona` }, // TODO: its own page; for now the home page's steps
+    ],
+  },
+  {
+    id: 'empresa',
+    label: h.company,
+    items: [
+      { ...h.items.about, href: s.paths.about },
+      { ...h.items.help, href: `${home}#preguntas-frecuentes` }, // TODO: its own page; for now the home page's FAQ
+      { ...h.items.blog, href: null }, // TODO: Blog
+      { ...h.items.contact, href: support ? `mailto:${support}` : null }, // TODO: a contact page (and WhatsApp once there is a number)
+    ],
+  },
+].map((menu) => ({ ...menu, items: menu.items.filter((item) => item.href) }));
+
+const countries = countriesFor(lang);
+const current = countries.find((c) => c.code === DEFAULT_COUNTRY[lang])!;
+---
+
+<header class:list={['site-header', { 'with-menu': menu }]} data-site-header={menu ? '' : undefined}>
+  <div class="header-bar wrap">
+    <div class="brand">
+      <a href={s.paths.home}>
+        <img src="/logo.png" alt="ventas314.com" width="668" height="132" />
+      </a>
+      <span>{s.brandTagline}</span>
+    </div>
+    {
+      menu && (
+        <>
+          <div class="desk-nav">
+            <nav aria-label={h.label}>
+              {MENUS.map((menu) => (
+                <div class="menu" data-menu>
+                  <button type="button" class="menu-trigger" aria-expanded="false" aria-controls={`menu-${menu.id}`}>
+                    {menu.label}
+                    <svg class="caret" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 3h8L5 8z" fill="currentColor" /></svg>
+                  </button>
+                  <div class="menu-panel" id={`menu-${menu.id}`} hidden>
+                    <ul>
+                      {menu.items.map((item) => (
+                        <li>
+                          <a class="menu-item" href={item.href}>
+                            <b>{item.title}</b>
+                            <span>{item.text}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ))}
+              <a class="my-sites" href={s.paths.mySites}>{s.nav.mySites}</a>
+              <span class="nav-divider" aria-hidden="true" />
+              <div class="menu country-menu" data-menu>
+                <button type="button" class="menu-trigger country-trigger" aria-expanded="false" aria-controls="menu-country">
+                  <span class="flag" aria-hidden="true" data-country-flag>{current.flag}</span>
+                  <span aria-hidden="true" data-country-code>{current.code}</span>
+                  <span class="visually-hidden">{s.home.nav.country}: <span data-country-name>{current.name[lang]}</span></span>
+                  <svg class="caret" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 3h8L5 8z" fill="currentColor" /></svg>
+                </button>
+                <div class="menu-panel country-panel" id="menu-country" hidden>
+                  <ul>
+                    {countries.map((c) => (
+                      <li>
+                        <button type="button" class="country-option" data-country-option={c.code} data-flag={c.flag} data-name={c.name[lang]} aria-current={c.code === current.code ? 'true' : undefined}>
+                          <span class="flag" aria-hidden="true">{c.flag}</span>
+                          {c.name[lang]}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </nav>
+            <a class="btn header-cta" href={s.paths.create}>{s.nav.create}</a>
+          </div>
+          <button type="button" class="menu-button" aria-expanded="false" aria-controls="site-drawer" aria-label={h.open} data-open={h.open} data-close={h.close}>
+            <svg class="icon-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" /></svg>
+            <svg class="icon-close" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" /></svg>
+          </button>
+        </>
+      )
+    }
+    {/* Signed-in pages put their account bar ("Hola … · Salir") here. */}
+    <slot />
+  </div>
+  {
+    menu && (
+        <div class="drawer" id="site-drawer" hidden>
+          <div class="drawer-list">
+            {MENUS.map((menu) => (
+              <div class="drawer-section">
+                <button type="button" class="drawer-row" aria-expanded="false" aria-controls={`drawer-${menu.id}`} data-section>
+                  {menu.label}
+                  <span class="sign" aria-hidden="true" />
+                </button>
+                <ul class="drawer-items" id={`drawer-${menu.id}`} hidden>
+                  {menu.items.map((item) => (
+                    <li>
+                      <a class="drawer-item" href={item.href}>
+                        <b>{item.title}</b>
+                        <span>{item.text}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+            <div class="drawer-section">
+              <a class="drawer-row" href={s.paths.mySites}>{s.nav.mySites}</a>
+            </div>
+            <div class="drawer-section">
+              <button type="button" class="drawer-row country-row" aria-expanded="false" aria-controls="drawer-country" data-section>
+                <span class="country-now">
+                  <span class="flag" aria-hidden="true" data-country-flag>{current.flag}</span>
+                  <span class="visually-hidden">{s.home.nav.country}: </span>
+                  <span data-country-name>{current.name[lang]}</span>
+                </span>
+                <span class="change">{h.change}</span>
+              </button>
+              <ul class="drawer-items" id="drawer-country" hidden>
+                {countries.map((c) => (
+                  <li>
+                    <button type="button" class="country-option" data-country-option={c.code} data-flag={c.flag} data-name={c.name[lang]} aria-current={c.code === current.code ? 'true' : undefined}>
+                      <span class="flag" aria-hidden="true">{c.flag}</span>
+                      {c.name[lang]}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div class="drawer-foot">
+            <a class="btn" href={s.paths.create}>{s.nav.create}</a>
+          </div>
+        </div>
+    )
+  }
+</header>
+
+<script>
+  import '../scripts/country';
+
+  // The full header: one desktop menu open at a time (Producto, Empresa, country), and the mobile drawer with its
+  // sections. Choosing a country is country.ts's job; here a choice only closes the menu.
+  const header = document.querySelector<HTMLElement>('[data-site-header]');
+  if (header) {
+    const panelOf = (button: HTMLElement) => document.getElementById(button.getAttribute('aria-controls') ?? '')!;
+    const focusables = (panel: HTMLElement) => [...panel.querySelectorAll<HTMLElement>('a, button')];
+
+    let open: HTMLButtonElement | null = null;
+    const closeMenu = (focus = false) => {
+      if (!open) return;
+      const trigger = open;
+      open = null;
+      trigger.setAttribute('aria-expanded', 'false');
+      panelOf(trigger).hidden = true;
+      if (focus) trigger.focus();
+    };
+    const openMenu = (trigger: HTMLButtonElement) => {
+      closeMenu();
+      trigger.setAttribute('aria-expanded', 'true');
+      panelOf(trigger).hidden = false;
+      open = trigger;
+    };
+
+    for (const menu of header.querySelectorAll<HTMLElement>('[data-menu]')) {
+      const trigger = menu.querySelector<HTMLButtonElement>('.menu-trigger')!;
+      const panel = panelOf(trigger);
+      trigger.addEventListener('click', () => (open === trigger ? closeMenu() : openMenu(trigger)));
+      trigger.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowDown') return;
+        e.preventDefault();
+        openMenu(trigger);
+        const items = focusables(panel);
+        (items.find((el) => el.getAttribute('aria-current') === 'true') ?? items[0])?.focus();
+      });
+      // Arrows move through the panel's links; Tab keeps working as usual.
+      panel.addEventListener('keydown', (e) => {
+        const items = focusables(panel);
+        const i = items.indexOf(document.activeElement as HTMLElement);
+        const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+        if (to === undefined) return;
+        e.preventDefault();
+        items[(to + items.length) % items.length]?.focus();
+      });
+      panel.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('a, button')) closeMenu();
+      });
+      // Tabbing out of the menu closes it.
+      menu.addEventListener('focusout', (e) => {
+        if (open === trigger && !menu.contains(e.relatedTarget as Node | null)) closeMenu();
+      });
+    }
+    document.addEventListener('click', (e) => {
+      if (open && !open.closest('[data-menu]')!.contains(e.target as Node)) closeMenu();
+    });
+
+    // The mobile drawer: the page under it doesn't scroll while it's open.
+    const toggle = header.querySelector<HTMLButtonElement>('.menu-button')!;
+    const drawer = panelOf(toggle);
+    const setDrawer = (on: boolean, focus = false) => {
+      // The bar leaves the page's flow while the drawer is open: keep its height so the page doesn't move under it.
+      header.style.minHeight = on ? `${header.offsetHeight}px` : '';
+      toggle.setAttribute('aria-expanded', String(on));
+      toggle.setAttribute('aria-label', (on ? toggle.dataset.close : toggle.dataset.open) ?? '');
+      drawer.hidden = !on;
+      header.classList.toggle('drawer-open', on);
+      document.documentElement.classList.toggle('scroll-lock', on);
+      if (!on && focus) toggle.focus();
+    };
+    toggle.addEventListener('click', () => setDrawer(drawer.hidden));
+    drawer.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('a, [data-country-option]')) setDrawer(false);
+    });
+    window.matchMedia('(min-width: 64rem)').addEventListener('change', (e) => {
+      if (e.matches) setDrawer(false);
+      else closeMenu();
+    });
+
+    // The drawer's sections: opening one closes the others.
+    const sections = [...drawer.querySelectorAll<HTMLButtonElement>('[data-section]')];
+    for (const section of sections) {
+      section.addEventListener('click', () => {
+        const expand = section.getAttribute('aria-expanded') !== 'true';
+        for (const other of sections) {
+          const on = expand && other === section;
+          other.setAttribute('aria-expanded', String(on));
+          panelOf(other).hidden = !on;
+        }
+      });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (open) closeMenu(true);
+      else if (!drawer.hidden) setDrawer(false, true);
+    });
+  }
+</script>

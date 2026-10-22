@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 import { t } from '../i18n/strings';
 
 type Paths = ReturnType<typeof t>['paths'];
-const PUBLIC: (keyof Paths)[] = ['home', 'create', 'terms', 'privacy', 'refunds'];
+const PUBLIC: (keyof Paths)[] = ['home', 'create', 'about', 'terms', 'privacy', 'refunds'];
 
 export const GET: APIRoute = ({ site }) => {
   if (!site) return new Response('', { status: 404 });

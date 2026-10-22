@@ -1,0 +1,18 @@
+---
+// Questions and answers that open one at a time (<details name>: no script). The home page and Sobre nosotros use it.
+interface Props {
+  items: { q: string; a: string }[];
+}
+const { items } = Astro.props;
+---
+
+<div class="faq-list">
+  {
+    items.map((item, i) => (
+      <details name="faq" open={i === 0}>
+        <summary>{item.q}</summary>
+        <p>{item.a}</p>
+      </details>
+    ))
+  }
+</div>

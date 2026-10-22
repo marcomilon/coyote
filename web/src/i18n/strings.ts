@@ -5,13 +5,32 @@ export type Lang = 'es' | 'pt';
 const es = {
   htmlLang: 'es-419',
   otherLang: { code: 'pt' as Lang, label: 'Português' },
-  paths: { home: '/', create: '/crear', mySite: '/mi-pagina-web', mySites: '/mis-paginas-web', chat: '/chat', preview: '/ver', terms: '/terminos', privacy: '/privacidad', refunds: '/reembolsos' },
+  paths: { home: '/', create: '/crear', mySite: '/mi-pagina-web', mySites: '/mis-paginas-web', chat: '/chat', preview: '/ver', terms: '/terminos', privacy: '/privacidad', refunds: '/reembolsos', about: '/sobre-nosotros' },
   brandTagline: 'Ponemos tu negocio online',
   loading: 'Cargando…',
   notFound: { title: 'Página no encontrada — ventas314.com', heading: 'Esta página no existe', text: 'Puede que el enlace esté incompleto o que la página se haya movido.', home: 'Ir al inicio' },
   nav: { create: 'Crear mi página web', mySites: 'Mis páginas web', home: 'Inicio', breadcrumb: 'Ruta de navegación' },
   /** Shown next to the CAPTCHA when Cloudflare wants a click. */
   humanCheck: { hint: 'Un último paso: marca la casilla de abajo para confirmar que eres una persona.' },
+  /** The home page's header menus (SiteHeader.astro). */
+  header: {
+    label: 'Menú principal',
+    product: 'Producto',
+    company: 'Empresa',
+    open: 'Abrir menú',
+    close: 'Cerrar menú',
+    change: 'Cambiar',
+    items: {
+      price: { title: 'Precio', text: 'Planes y qué incluye cada uno' },
+      examples: { title: 'Ejemplos', text: 'Páginas hechas con ventas314.com' },
+      templates: { title: 'Plantillas', text: 'Diseños listos por rubro' },
+      how: { title: 'Cómo funciona', text: 'De tus respuestas a tu página en minutos' },
+      about: { title: 'Sobre nosotros', text: 'Quiénes somos y por qué lo hacemos' },
+      help: { title: 'Ayuda', text: 'Preguntas frecuentes' },
+      blog: { title: 'Blog', text: 'Consejos para vender online' },
+      contact: { title: 'Contacto', text: 'Escríbenos por correo' },
+    },
+  },
   home: {
     title: 'ventas314.com — tu negocio en internet, hoy',
     description: 'Responde unas pocas preguntas y ventas314.com diseña la página web de tu negocio en minutos. En español, con botón de WhatsApp.',
@@ -85,6 +104,34 @@ const es = {
     ],
     questions: '¿Dudas?',
     writeUs: 'Escríbenos por WhatsApp',
+  },
+  about: {
+    title: 'Sobre nosotros',
+    description: 'Quién hace ventas314.com, cómo cobramos y cómo cuidamos tu página web y tus datos.',
+    intro: [
+      'ventas314.com es un producto de Dev Analytics EIRL.',
+      'Sabemos que poner en marcha un negocio requiere tiempo y esfuerzo. Por eso creamos ventas314.com: para que tener una página web profesional sea sencillo y accesible, sin necesidad de conocimientos técnicos.',
+      'Respondes unas preguntas sobre tu negocio y la plataforma crea tu página, lista para mostrar lo que ofreces y facilitar que tus clientes se pongan en contacto contigo.',
+      'Detrás de la plataforma hay una empresa comprometida con el desarrollo del producto.',
+    ],
+    trustTitle: 'Por qué puedes confiar en nosotros',
+    trust: [
+      { icon: '💳', title: 'Pagos seguros', text: 'Cobramos a través de Paddle, una empresa internacional de pagos. Paddle hace el cobro y te envía el recibo; los datos de tu tarjeta no pasan por nosotros.' },
+      { icon: '↩️', title: 'Reembolso en 14 días', text: 'Si no estás conforme, pides el reembolso de cualquier pago dentro de los 14 días.' },
+      { icon: '🔓', title: 'Sin contratos', text: 'Cancelas el plan cuando quieras desde Mi página web, sin multas. Sigue activo hasta el fin del mes pagado.' },
+      { icon: '🏠', title: 'Tu página es tuya', text: 'La editas, la pones fuera de línea o la borras cuando quieras. Si lo pides, te pasamos el dominio a tu nombre sin costo.' },
+      { icon: '🔒', title: 'Tus datos, cuidados', text: 'Tu correo no aparece en tu página y no te enviamos publicidad. No usamos analítica ni vendemos tus datos. Puedes borrarlos tú mismo.' },
+      { icon: '🛡️', title: 'Páginas revisadas', text: 'Revisamos cada pedido y no creamos páginas para estafas ni actividades prohibidas. Cada página tiene un enlace «Reportar».' },
+    ],
+    faqTitle: 'Preguntas sobre pagos',
+    faq: [
+      { q: '¿Qué es Paddle?', a: 'Paddle es una empresa de pagos que procesa los cobros de empresas de software de todo el mundo. Cobra por nosotros, te envía el recibo y responde tus consultas sobre cobros. Los datos de tu tarjeta los recibe Paddle, no nosotros.' },
+      { q: '¿Cómo aparece el cobro en mi estado de cuenta?', a: 'Como «PADDLE.NET* VENTAS314». Si pagas con PayPal, como «PAYPAL *PADDLE.NET».' },
+      { q: '¿Qué medios de pago aceptan?', a: 'Tarjeta de crédito o débito, PayPal y Apple Pay. Las opciones que ves al pagar dependen de tu país y de tu dispositivo.' },
+      { q: '¿Qué pasa con mi página y mi dominio si cancelo?', a: 'Tu página sigue publicada hasta el fin del mes pagado; después deja de verse en tu dominio, pero sigue guardada en Mi página web. Tu dominio queda registrado hasta que termine su año y, si lo pides, te lo pasamos a tu nombre.' },
+    ],
+    questions: '¿Preguntas? Escríbenos a {support}.',
+    read: 'Lee también:',
   },
   create: {
     title: 'Crea tu página web — ventas314.com',
@@ -362,7 +409,7 @@ const es = {
     limited: 'Enviaste muchos reportes hoy. Inténtalo mañana.',
     captcha: 'No pudimos comprobar que eres una persona. Inténtalo de nuevo; si aparece una casilla, márcala.',
   },
-  footer: { made: 'ventas314.com', terms: 'Términos', privacy: 'Privacidad', refunds: 'Reembolsos', support: 'Soporte por WhatsApp:' },
+  footer: { made: 'ventas314.com', about: 'Sobre nosotros', terms: 'Términos', privacy: 'Privacidad', refunds: 'Reembolsos', support: 'Soporte por WhatsApp:' },
 };
 
 type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
@@ -373,6 +420,7 @@ type DeepPartial<T> = T extends readonly unknown[] ? T : T extends object ? { [K
  */
 const esVos: DeepPartial<typeof es> = {
   humanCheck: { hint: 'Un último paso: marcá la casilla de abajo para confirmar que sos una persona.' },
+  header: { items: { contact: { title: 'Contacto', text: 'Escribinos por correo' } } },
   home: {
     description: 'Respondé unas pocas preguntas y ventas314.com diseña la página web de tu negocio en minutos. En español, con botón de WhatsApp.',
     ctaWhatsapp: 'Crealo por WhatsApp',
@@ -426,6 +474,31 @@ const esVos: DeepPartial<typeof es> = {
     ],
     writeUs: 'Escribinos por WhatsApp',
     proof: { visit: 'Abrí este ejemplo' },
+  },
+  about: {
+    intro: [
+      'ventas314.com es un producto de Dev Analytics EIRL.',
+      'Sabemos que poner en marcha un negocio requiere tiempo y esfuerzo. Por eso creamos ventas314.com: para que tener una página web profesional sea sencillo y accesible, sin necesidad de conocimientos técnicos.',
+      'Respondés unas preguntas sobre tu negocio y la plataforma crea tu página, lista para mostrar lo que ofrecés y facilitar que tus clientes se pongan en contacto con vos.',
+      'Detrás de la plataforma hay una empresa comprometida con el desarrollo del producto.',
+    ],
+    trustTitle: 'Por qué podés confiar en nosotros',
+    trust: [
+      { icon: '💳', title: 'Pagos seguros', text: 'Cobramos a través de Paddle, una empresa internacional de pagos. Paddle hace el cobro y te envía el recibo; los datos de tu tarjeta no pasan por nosotros.' },
+      { icon: '↩️', title: 'Reembolso en 14 días', text: 'Si no estás conforme, pedís el reembolso de cualquier pago dentro de los 14 días.' },
+      { icon: '🔓', title: 'Sin contratos', text: 'Cancelás el plan cuando quieras desde Mi página web, sin multas. Sigue activo hasta el fin del mes pagado.' },
+      { icon: '🏠', title: 'Tu página es tuya', text: 'La editás, la ponés fuera de línea o la borrás cuando quieras. Si lo pedís, te pasamos el dominio a tu nombre sin costo.' },
+      { icon: '🔒', title: 'Tus datos, cuidados', text: 'Tu correo no aparece en tu página y no te enviamos publicidad. No usamos analítica ni vendemos tus datos. Podés borrarlos vos mismo.' },
+      { icon: '🛡️', title: 'Páginas revisadas', text: 'Revisamos cada pedido y no creamos páginas para estafas ni actividades prohibidas. Cada página tiene un enlace «Reportar».' },
+    ],
+    faq: [
+      { q: '¿Qué es Paddle?', a: 'Paddle es una empresa de pagos que procesa los cobros de empresas de software de todo el mundo. Cobra por nosotros, te envía el recibo y responde tus consultas sobre cobros. Los datos de tu tarjeta los recibe Paddle, no nosotros.' },
+      { q: '¿Cómo aparece el cobro en mi estado de cuenta?', a: 'Como «PADDLE.NET* VENTAS314». Si pagás con PayPal, como «PAYPAL *PADDLE.NET».' },
+      { q: '¿Qué medios de pago aceptan?', a: 'Tarjeta de crédito o débito, PayPal y Apple Pay. Las opciones que ves al pagar dependen de tu país y de tu dispositivo.' },
+      { q: '¿Qué pasa con mi página y mi dominio si cancelo?', a: 'Tu página sigue publicada hasta el fin del mes pagado; después deja de verse en tu dominio, pero sigue guardada en Mi página web. Tu dominio queda registrado hasta que termine su año y, si lo pedís, te lo pasamos a tu nombre.' },
+    ],
+    questions: '¿Preguntas? Escribinos a {support}.',
+    read: 'Leé también:',
   },
   create: {
     title: 'Creá tu página web — ventas314.com',
@@ -583,12 +656,30 @@ const esVos: DeepPartial<typeof es> = {
 const pt: typeof es = {
   htmlLang: 'pt-BR',
   otherLang: { code: 'es', label: 'Español' },
-  paths: { home: '/pt/', create: '/pt/criar', mySite: '/pt/meu-site', mySites: '/pt/meus-sites', chat: '/pt/chat', preview: '/pt/ver', terms: '/pt/termos', privacy: '/pt/privacidade', refunds: '/pt/reembolsos' },
+  paths: { home: '/pt/', create: '/pt/criar', mySite: '/pt/meu-site', mySites: '/pt/meus-sites', chat: '/pt/chat', preview: '/pt/ver', terms: '/pt/termos', privacy: '/pt/privacidade', refunds: '/pt/reembolsos', about: '/pt/sobre-nos' },
   brandTagline: 'Colocamos seu negócio online',
   loading: 'Carregando…',
   notFound: { title: 'Página não encontrada — ventas314.com', heading: 'Esta página não existe', text: 'Talvez o link esteja incompleto ou a página tenha mudado de lugar.', home: 'Ir para o início' },
   nav: { create: 'Criar meu site', mySites: 'Meus sites', home: 'Início', breadcrumb: 'Trilha de navegação' },
   humanCheck: { hint: 'Só mais um passo: marque a caixa abaixo para confirmar que você é uma pessoa.' },
+  header: {
+    label: 'Menu principal',
+    product: 'Produto',
+    company: 'Empresa',
+    open: 'Abrir menu',
+    close: 'Fechar menu',
+    change: 'Trocar',
+    items: {
+      price: { title: 'Preço', text: 'Planos e o que cada um inclui' },
+      examples: { title: 'Exemplos', text: 'Sites feitos com ventas314.com' },
+      templates: { title: 'Modelos', text: 'Designs prontos por ramo' },
+      how: { title: 'Como funciona', text: 'Das suas respostas ao seu site em minutos' },
+      about: { title: 'Sobre nós', text: 'Quem somos e por que fazemos isso' },
+      help: { title: 'Ajuda', text: 'Perguntas frequentes' },
+      blog: { title: 'Blog', text: 'Dicas para vender online' },
+      contact: { title: 'Contato', text: 'Escreva para nós por e-mail' },
+    },
+  },
   home: {
     title: 'ventas314.com — seu negócio na internet, hoje',
     description: 'Responda algumas perguntas e ventas314.com cria o site do seu negócio em minutos. Em português, com botão de WhatsApp.',
@@ -662,6 +753,34 @@ const pt: typeof es = {
     ],
     questions: 'Dúvidas?',
     writeUs: 'Fale com a gente pelo WhatsApp',
+  },
+  about: {
+    title: 'Sobre nós',
+    description: 'Quem faz o ventas314.com, como cobramos e como cuidamos do seu site e dos seus dados.',
+    intro: [
+      'O ventas314.com é um produto da Dev Analytics EIRL.',
+      'Sabemos que colocar um negócio para funcionar exige tempo e esforço. Por isso criamos o ventas314.com: para que ter um site profissional seja simples e acessível, sem precisar de conhecimentos técnicos.',
+      'Você responde algumas perguntas sobre o seu negócio e a plataforma cria o seu site, pronto para mostrar o que você oferece e facilitar que seus clientes entrem em contato com você.',
+      'Por trás da plataforma há uma empresa comprometida com o desenvolvimento do produto.',
+    ],
+    trustTitle: 'Por que você pode confiar em nós',
+    trust: [
+      { icon: '💳', title: 'Pagamentos seguros', text: 'Cobramos por meio da Paddle, uma empresa internacional de pagamentos. A Paddle faz a cobrança e envia seu recibo; os dados do seu cartão não passam por nós.' },
+      { icon: '↩️', title: 'Reembolso em 14 dias', text: 'Se não ficar satisfeito, você pede o reembolso de qualquer pagamento em até 14 dias.' },
+      { icon: '🔓', title: 'Sem contrato', text: 'Você cancela o plano quando quiser em Meu site, sem multa. Ele continua ativo até o fim do mês pago.' },
+      { icon: '🏠', title: 'Seu site é seu', text: 'Você edita, tira do ar ou apaga quando quiser. Se pedir, passamos o domínio para o seu nome sem custo.' },
+      { icon: '🔒', title: 'Seus dados protegidos', text: 'Seu e-mail não aparece no seu site e não enviamos publicidade. Não usamos ferramentas de análise nem vendemos seus dados. Você mesmo pode apagá-los.' },
+      { icon: '🛡️', title: 'Sites revisados', text: 'Revisamos cada pedido e não criamos sites para golpes nem atividades proibidas. Cada site tem um link «Denunciar».' },
+    ],
+    faqTitle: 'Perguntas sobre pagamentos',
+    faq: [
+      { q: 'O que é a Paddle?', a: 'A Paddle é uma empresa de pagamentos que processa as cobranças de empresas de software do mundo todo. Ela cobra por nós, envia seu recibo e responde suas dúvidas sobre cobranças. Os dados do seu cartão ficam com a Paddle, não com a gente.' },
+      { q: 'Como a cobrança aparece na minha fatura?', a: 'Como «PADDLE.NET* VENTAS314». Se você pagar com PayPal, como «PAYPAL *PADDLE.NET».' },
+      { q: 'Quais formas de pagamento vocês aceitam?', a: 'Cartão de crédito ou débito, PayPal e Apple Pay. As opções que aparecem no pagamento dependem do seu país e do seu dispositivo.' },
+      { q: 'O que acontece com meu site e meu domínio se eu cancelar?', a: 'Seu site continua publicado até o fim do mês pago; depois deixa de aparecer no seu domínio, mas continua salvo em Meu site. Seu domínio continua registrado até completar um ano e, se você pedir, passamos ele para o seu nome.' },
+    ],
+    questions: 'Dúvidas? Escreva para {support}.',
+    read: 'Leia também:',
   },
   create: {
     title: 'Crie seu site — ventas314.com',
@@ -937,7 +1056,7 @@ const pt: typeof es = {
     limited: 'Você enviou muitas denúncias hoje. Tente amanhã.',
     captcha: 'Não conseguimos confirmar que você é uma pessoa. Tente de novo; se aparecer uma caixa, marque-a.',
   },
-  footer: { made: 'ventas314.com', terms: 'Termos', privacy: 'Privacidade', refunds: 'Reembolsos', support: 'Suporte pelo WhatsApp:' },
+  footer: { made: 'ventas314.com', about: 'Sobre nós', terms: 'Termos', privacy: 'Privacidade', refunds: 'Reembolsos', support: 'Suporte pelo WhatsApp:' },
 };
 
 export const STRINGS = { es, pt };

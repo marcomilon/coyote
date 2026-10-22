@@ -42,6 +42,7 @@ export const GET: APIRoute = ({ site }) => {
     `- [Home, Spanish](${url(es.paths.home)}): what it is, examples, prices and FAQ`,
     `- [Home, Portuguese](${url(pt.paths.home)}): the same, for Brazil`,
     `- [Create a website](${url(es.paths.create)}) ([Portuguese](${url(pt.paths.create)})): the form`,
+    `- [About](${url(es.paths.about)}) ([Portuguese](${url(pt.paths.about)})): who runs it, payments, refunds and data`,
     `- [Terms of use](${url(es.paths.terms)}) ([Portuguese](${url(pt.paths.terms)}))`,
     `- [Privacy](${url(es.paths.privacy)}) ([Portuguese](${url(pt.paths.privacy)}))`,
     `- [Refunds](${url(es.paths.refunds)}) ([Portuguese](${url(pt.paths.refunds)}))`,

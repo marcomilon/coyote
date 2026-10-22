@@ -1,7 +1,8 @@
 ---
 import '../styles/global.css';
 import { t, type Lang } from '../i18n/strings';
-import { countriesFor, DEFAULT_COUNTRY, WHATSAPP, whatsappLink } from '../config/landing';
+import { WHATSAPP, whatsappLink } from '../config/landing';
+import SiteHeader from '../components/SiteHeader.astro';
 
 interface Props {
   lang: Lang;
@@ -15,10 +16,10 @@ interface Props {
   withConfig?: boolean;
   /** Pages for one owner (Mi sitio, the chat, Mis sitios): kept out of search engines. */
   noindex?: boolean;
-  /** The home page: its header links to its own sections and has the country picker. Other pages show only the logo. */
-  home?: boolean;
+  /** The full header: menus, country picker and the create button. Other pages show only the logo. */
+  menu?: boolean;
 }
-const { lang, vos = false, title, description, alternate, withConfig = false, noindex = false, home = false } = Astro.props;
+const { lang, vos = false, title, description, alternate, withConfig = false, noindex = false, menu = false } = Astro.props;
 const s = t(lang, vos);
 const support = whatsappLink(lang);
 // Absolute links need the site's address (astro.config.mjs); a domainless build leaves them out.
@@ -79,30 +80,7 @@ const [es, pt] = lang === 'es' ? [here, there] : [there, here];
     {withConfig && <script is:inline src="/config.js" />}
   </head>
   <body>
-    <header class:list={["site-header wrap", { home }]}>
-      <div class="brand"><a href={s.paths.home}><img src="/logo.png" alt="ventas314.com" width="668" height="132" /></a><span>{s.brandTagline}</span></div>
-      {/* Only the home page has links here; every other page shows just the logo. */}
-      {
-        home && (
-          <nav class="home-nav">
-            <span class="nav-links">
-              <a href="#precio">{s.home.nav.price}</a>
-              <a href="#ejemplos">{s.home.nav.examples}</a>
-              <a href={s.paths.mySites}>{s.nav.mySites}</a>
-            </span>
-            <select class="country" data-country-select data-default={DEFAULT_COUNTRY[lang]} aria-label={s.home.nav.country}>
-              {countriesFor(lang).map((c) => (
-                <option value={c.code} selected={c.code === DEFAULT_COUNTRY[lang]}>
-                  {c.flag} {c.name[lang]}
-                </option>
-              ))}
-            </select>
-            <a class="btn small" href={s.paths.create}>{s.nav.create}</a>
-          </nav>
-        )
-      }
-      <slot name="account" />
-    </header>
+    <SiteHeader lang={lang} vos={vos} menu={menu}><slot name="account" /></SiteHeader>
     <main><slot /></main>
     <footer class="site-footer">
       <div class="wrap">
@@ -111,6 +89,7 @@ const [es, pt] = lang === 'es' ? [here, there] : [there, here];
           {support && WHATSAPP.display && <span>{s.footer.support} <a href={support}>{WHATSAPP.display}</a></span>}
         </div>
         <nav>
+          <a href={s.paths.about}>{s.footer.about}</a>
           <a href={s.paths.terms}>{s.footer.terms}</a>
           <a href={s.paths.privacy}>{s.footer.privacy}</a>
           <a href={s.paths.refunds}>{s.footer.refunds}</a>

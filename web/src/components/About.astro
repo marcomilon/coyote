@@ -1,0 +1,105 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Breadcrumb from './Breadcrumb.astro';
+import Faq from './Faq.astro';
+import { t, type Lang } from '../i18n/strings';
+
+interface Props {
+  lang: Lang;
+  vos?: boolean;
+}
+const { lang, vos = false } = Astro.props;
+const s = t(lang, vos);
+const a = s.about;
+const other = t(s.otherLang.code);
+/** The picture next to the intro, in web/public: our illustration, or a real photo later; null leaves it out. */
+const IMAGE: string | null = '/sobre-nosotros.svg';
+// soporte@<domain> from astro.config.mjs (urls.ts); a domainless build has none, and the line is left out.
+const support = import.meta.env.PUBLIC_SUPPORT_EMAIL as string;
+const [before, after = ''] = a.questions.split('{support}') as [string, string?];
+const circles = ['amarillo', 'verde', 'celeste', 'crema', 'amarillo', 'verde'];
+---
+
+<Layout lang={lang} vos={vos} title={`${a.title} — ventas314.com`} description={a.description} alternate={other.paths.about} menu>
+  {
+    Astro.site && (
+      <script
+        is:inline
+        type="application/ld+json"
+        slot="head"
+        set:html={JSON.stringify({
+          '@context': 'https://schema.org',
+          '@graph': [
+            {
+              '@type': 'AboutPage',
+              name: a.title,
+              url: new URL(s.paths.about, Astro.site).href,
+              inLanguage: s.htmlLang,
+              about: {
+                '@type': 'Organization',
+                '@id': new URL('/#org', Astro.site).href,
+                name: 'ventas314.com',
+                legalName: 'Dev Analytics EIRL',
+              },
+            },
+            {
+              '@type': 'FAQPage',
+              url: new URL(s.paths.about, Astro.site).href,
+              inLanguage: s.htmlLang,
+              mainEntity: a.faq.map((item) => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })),
+            },
+          ],
+        })}
+      />
+    )
+  }
+  <Breadcrumb lang={lang} vos={vos} current={a.title} wrap />
+  <div class="about-page wrap">
+    <section class:list={['about-intro', { 'with-image': IMAGE }]}>
+      <div>
+        <h1>{a.title}</h1>
+        {a.intro.map((line, i) => <p class:list={{ lead: i === 0 }}>{line}</p>)}
+      </div>
+      {IMAGE && <img class="about-image" src={IMAGE} alt="" width="480" height="400" />}
+    </section>
+
+    <section class="about-trust">
+      <h2>{a.trustTitle}</h2>
+      <ul class="cards">
+        {
+          a.trust.map((item, i) => (
+            <li class="card">
+              <span class={`icon ${circles[i % circles.length]}`} aria-hidden="true">
+                {item.icon}
+              </span>
+              <h3>{item.title}</h3>
+              <p>{item.text}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
+
+    <section class="faq about-faq">
+      <h2>{a.faqTitle}</h2>
+      <Faq items={a.faq} />
+    </section>
+
+    <section class="about-contact card">
+      {
+        support && (
+          <p>
+            {before}
+            <a href={`mailto:${support}`}>{support}</a>
+            {after}
+          </p>
+        )
+      }
+      <p>
+        {a.read} <a href={s.paths.terms}>{s.footer.terms}</a> · <a href={s.paths.privacy}>{s.footer.privacy}</a> ·{' '}
+        <a href={s.paths.refunds}>{s.footer.refunds}</a>
+      </p>
+      <a class="btn" href={s.paths.create}>{s.home.cta}</a>
+    </section>
+  </div>
+</Layout>

@@ -28,12 +28,16 @@ const fallback = DEFAULT_COUNTRY[lang];
 // Every country's value is on the page; the country picker (scripts/landing.ts) shows one set and hides the rest.
 const perCountry = (value: (c: (typeof COUNTRIES)[number]) => string) =>
   COUNTRIES.map((c) => ({ code: c.code, value: value(c), hidden: c.code !== fallback }));
-// "…{tld}…" → the text around it, with the TLD switched by country.
-const splitTld = (text: string) => text.split('{tld}') as [string, string?];
 // The plan's and the design pack's price, and the currency they're in, as each country pays them (core/prices.ts).
 const price = (kind: PriceKind) => perCountry((c) => formatPrice(kind, c.code, lang));
 const currency = perCountry((c) => CURRENCY_NAMES[pricesFor(c.code).currency][lang]);
 const [subBefore, subAfter = ''] = h.pricing.sub.split('{currency}') as [string, string?];
+// soporte@<domain> from astro.config.mjs (urls.ts); a domainless build has none, and the lines that name it are left out.
+const support = import.meta.env.PUBLIC_SUPPORT_EMAIL as string;
+const withSupport = <T extends { text?: string; a?: string }>(items: T[]) =>
+  items.filter((item) => support || !(item.text ?? item.a ?? '').includes('{support}'));
+const fill = (text: string) => text.replace('{support}', support);
+const faq = withSupport(h.faq).map((item) => ({ q: item.q, a: fill(item.a) }));
 const contact = whatsappLink(lang);
 // Until owners can create a site on WhatsApp, the WhatsApp buttons open the web form.
 const onboarding = (WHATSAPP.onboarding && contact) || s.paths.create;
@@ -69,7 +73,7 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
               '@type': 'FAQPage',
               url: new URL(s.paths.home, Astro.site).href,
               inLanguage: s.htmlLang,
-              mainEntity: h.faq.map((item) => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })),
+              mainEntity: faq.map((item) => ({ '@type': 'Question', name: item.q, acceptedAnswer: { '@type': 'Answer', text: item.a } })),
             },
           ],
         })}
@@ -134,32 +138,18 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
     <p class="sub">{h.includes.sub}</p>
     <ul class="cards">
       {
-        h.includes.items.map((item, i) => {
-          const [before, after] = splitTld(item.text);
-          return (
-            <li class="card">
-              <span class={`icon ${circles[i % circles.length]}`} aria-hidden="true">
-                {item.icon}
-              </span>
-              <h3>{item.title}</h3>
-              <p>
-                {before}
-                {after !== undefined && (
-                  <>
-                    {perCountry((c) => c.tld).map((v) => (
-                      <span data-country={v.code} hidden={v.hidden}>
-                        {v.value}
-                      </span>
-                    ))}
-                    {after}
-                  </>
-                )}
-              </p>
-            </li>
-          );
-        })
+        h.includes.items.map((item, i) => (
+          <li class="card">
+            <span class={`icon ${circles[i % circles.length]}`} aria-hidden="true">
+              {item.icon}
+            </span>
+            <h3>{item.title}</h3>
+            <p>{item.text}</p>
+          </li>
+        ))
       }
     </ul>
+    <p class="extra"><span aria-hidden="true">📷</span> {h.includes.extra}</p>
   </section>
 
   <section class="steps wrap">
@@ -268,28 +258,7 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
           ))}
           <small>{h.pricing.pro.per}</small>
         </p>
-        <ul>
-          {
-            h.pricing.pro.features.map((f) => {
-              const [before, after] = splitTld(f);
-              return (
-                <li>
-                  {before}
-                  {after !== undefined && (
-                    <>
-                      {perCountry((c) => c.tld).map((v) => (
-                        <span data-country={v.code} hidden={v.hidden}>
-                          {v.value}
-                        </span>
-                      ))}
-                      {after}
-                    </>
-                  )}
-                </li>
-              );
-            })
-          }
-        </ul>
+        <ul>{h.pricing.pro.features.map((f) => <li>{f}</li>)}</ul>
         <a class="btn flat" href={s.paths.create}>{h.pricing.pro.cta}</a>
       </div>
       <div class="card plan">
@@ -305,6 +274,32 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
         {h.pricing.designs.text.map((line) => <p class="plan-text">{line}</p>)}
       </div>
     </div>
+    <h3 class="details-title">{h.pricing.details.title}</h3>
+    <dl class="card plan-details">
+      {
+        withSupport(h.pricing.details.items).map((item) => {
+          const [before, after] = fill(item.text).split('{designsPrice}') as [string, string?];
+          return (
+            <div>
+              <dt>{item.title}</dt>
+              <dd>
+                {before}
+                {after !== undefined && (
+                  <>
+                    {price('designs').map((v) => (
+                      <span data-country={v.code} hidden={v.hidden}>
+                        {v.value}
+                      </span>
+                    ))}
+                    {after}
+                  </>
+                )}
+              </dd>
+            </div>
+          );
+        })
+      }
+    </dl>
     <p class="note">{h.pricing.note}</p>
   </section>
 
@@ -322,7 +317,7 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
     <h2>{h.faqTitle}</h2>
     <div class="faq-list">
       {
-        h.faq.map((item, i) => (
+        faq.map((item, i) => (
           <details name="faq" open={i === 0}>
             <summary>{item.q}</summary>
             <p>{item.a}</p>

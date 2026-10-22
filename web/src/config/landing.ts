@@ -12,38 +12,15 @@ export interface CountryInfo {
   code: string;
   flag: string;
   name: Record<Lang, string>;
-  tld: string;
 }
-
-/** The country's own TLD, offered next to .com. */
-const TLD: Record<string, string> = {
-  AR: '.com.ar',
-  BO: '.com.bo',
-  BR: '.com.br',
-  CL: '.cl',
-  CO: '.co',
-  CR: '.cr',
-  EC: '.ec',
-  SV: '.com.sv',
-  GT: '.com.gt',
-  HN: '.hn',
-  MX: '.mx',
-  PA: '.com.pa',
-  PY: '.com.py',
-  PE: '.pe',
-  PR: '.pr',
-  DO: '.com.do',
-  US: '.us',
-  UY: '.com.uy',
-};
 
 const flag = (iso: string) => String.fromCodePoint(...[...iso].map((ch) => 0x1f1a5 + ch.charCodeAt(0)));
 
 /**
  * The country picker in the header: the same countries as the form's phone field (core/phones.ts).
- * Changes the TLD and the prices (core/prices.ts: local currency where Paddle has one for the country, else USD).
+ * Changes the prices (core/prices.ts: local currency where Paddle has one for the country, else USD).
  */
-export const COUNTRIES: CountryInfo[] = PHONE_COUNTRIES.map((c) => ({ code: c.iso, flag: flag(c.iso), name: c.name, tld: TLD[c.iso] ?? '.com' }));
+export const COUNTRIES: CountryInfo[] = PHONE_COUNTRIES.map((c) => ({ code: c.iso, flag: flag(c.iso), name: c.name }));
 
 /** In the picker's order: alphabetical in the page's language, like the form. */
 export const countriesFor = (lang: Lang) => [...COUNTRIES].sort((a, b) => a.name[lang].localeCompare(b.name[lang], lang));

@@ -24,7 +24,7 @@ export const GET: APIRoute = ({ site }) => {
     '- The owner answers a few questions on a web form: the business name, what it does, and how customers reach it. If something is missing, we ask.',
     '- The page is designed in a few minutes. The owner asks for changes in their own words, in a chat.',
     '- The first 3 designs are free, with no card. More designs come in packs of 3.',
-    `- Publishing is the monthly plan: the site goes live on the business's own domain (.com or the country's domain), which we register. No contract; it can be cancelled any time.`,
+    `- Publishing is the monthly plan: the site goes live on the business's own domain (.com), which we register. No contract; it can be cancelled any time.`,
     '',
     '## Prices',
     '',

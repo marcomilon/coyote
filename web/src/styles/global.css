@@ -179,6 +179,15 @@ select.country { width: 12rem; text-overflow: ellipsis; white-space: nowrap; ove
 .card p { font-size: 16px; line-height: 1.45; }
 .includes { padding-block: 88px 40px; }
 .includes .cards { align-items: stretch; }
+/* Five cards: 2 columns with the last one across, then page and WhatsApp on top and the other three below */
+@media (min-width: 36rem) { .includes .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .includes .card:last-child { grid-column: 1 / -1; } }
+@media (min-width: 64rem) {
+  .includes .cards { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .includes .card { grid-column: span 2; }
+  .includes .card:nth-child(-n+2) { grid-column: span 3; }
+  .includes .card:last-child { grid-column: span 2; }
+}
+.includes .extra { margin-top: 20px; font-size: 16px; font-weight: 600; color: var(--muted); }
 .icon { display: grid; place-items: center; width: 44px; height: 44px; border: 2px solid var(--ink); border-radius: 50%; font-size: 20px; background: var(--paper); }
 .icon.amarillo { background: var(--amarillo); }
 .icon.verde { background: var(--verde); }
@@ -222,7 +231,8 @@ select.country { width: 12rem; text-overflow: ellipsis; white-space: nowrap; ove
 .plan { gap: 14px; padding: 28px; }
 .plan h3 { font-size: 20px; }
 .plan .price { font: 400 48px/1 var(--display); text-transform: uppercase; }
-.plan ul { list-style: none; margin: 0; padding: 0; font-size: 16px; line-height: 1.6; }
+.plan ul { list-style: none; margin: 0; padding: 0; font-size: 16px; line-height: 1.45; }
+.plan li + li { margin-top: 8px; }
 .plan .plan-text { margin: 0; font-size: 17px; line-height: 1.5; text-wrap: pretty; }
 .plan .btn { margin-top: auto; padding: 14px; font-size: 16px; text-align: center; white-space: normal; }
 .plan .btn.ghost { background: var(--paper-light); }
@@ -231,6 +241,10 @@ select.country { width: 12rem; text-overflow: ellipsis; white-space: nowrap; ove
 .plan .tag { flex: none; padding: 4px 8px; border: 2px solid var(--ink); border-radius: 4px; background: var(--amarillo); color: var(--ink); font: 700 12px/1.2 var(--body); text-transform: uppercase; }
 .plan .price:has(small) { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
 .plan .price small { font: 400 16px/1 var(--body); text-transform: none; }
+.details-title { margin-top: 48px; font-size: 22px; text-transform: uppercase; }
+.plan-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px 32px; max-width: 1100px; margin: 16px 0 0; padding: 28px; }
+.plan-details dt { font-size: 16px; font-weight: 700; text-transform: uppercase; }
+.plan-details dd { margin: 6px 0 0; font-size: 16px; line-height: 1.5; text-wrap: pretty; }
 .pricing .note { margin-top: 16px; font-size: 14px; opacity: .75; }
 .plan.pro .price { color: var(--amarillo); }
 .plan.pro .price small { color: var(--paper-light); }

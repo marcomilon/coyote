@@ -66,6 +66,12 @@ export const TESTIMONIALS: Record<Lang, Testimonial[]> = TODO({
  * The hero photo of each example site (examples/sites/<slug>/assets), resized to 640px. */
 export const EXAMPLE_PHOTOS: (string | null)[] = ['/ejemplos/phone-taller-ruiz.jpg', '/ejemplos/phone-panaderia-rosa.jpg', '/ejemplos/phone-salon-luna.jpg', '/ejemplos/phone-residencial-oliva.jpg'];
 
+/** Our own social pages: on Sobre nosotros and in the Organization's JSON-LD (sameAs). */
+export const SOCIAL = {
+  facebook: 'https://www.facebook.com/ventas314com/',
+  instagram: { handle: '@ventas314com', url: 'https://www.instagram.com/ventas314com/' },
+};
+
 export const WHATSAPP = {
   /** Support number, digits with country code (e.g. '5215500000000'). null hides every WhatsApp contact link. */
   number: TODO(null as string | null),

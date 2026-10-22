@@ -7,6 +7,7 @@ import {
   DEFAULT_COUNTRY,
   EXAMPLE_PHOTOS,
   SHOW_HERO_TERMS,
+  SOCIAL,
   STATS,
   TESTIMONIALS,
   WHATSAPP,
@@ -59,7 +60,7 @@ const circles = ['amarillo', 'crema', 'verde', 'celeste', 'amarillo', 'crema'];
         set:html={JSON.stringify({
           '@context': 'https://schema.org',
           '@graph': [
-            { '@type': 'Organization', '@id': new URL('/#org', Astro.site).href, name: 'ventas314.com', url: new URL('/', Astro.site).href, logo: new URL('/logo.png', Astro.site).href },
+            { '@type': 'Organization', '@id': new URL('/#org', Astro.site).href, name: 'ventas314.com', url: new URL('/', Astro.site).href, logo: new URL('/logo.png', Astro.site).href, sameAs: [SOCIAL.facebook, SOCIAL.instagram.url] },
             { '@type': 'WebSite', name: 'ventas314.com', url: new URL(s.paths.home, Astro.site).href, inLanguage: s.htmlLang, description: h.description },
             {
               '@type': 'Service',

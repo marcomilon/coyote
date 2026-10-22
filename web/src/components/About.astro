@@ -3,6 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import Breadcrumb from './Breadcrumb.astro';
 import Faq from './Faq.astro';
 import { t, type Lang } from '../i18n/strings';
+import { SOCIAL } from '../config/landing';
 
 interface Props {
   lang: Lang;
@@ -40,6 +41,7 @@ const circles = ['amarillo', 'verde', 'celeste', 'crema', 'amarillo', 'verde'];
                 '@id': new URL('/#org', Astro.site).href,
                 name: 'ventas314.com',
                 legalName: 'Dev Analytics EIRL',
+                sameAs: [SOCIAL.facebook, SOCIAL.instagram.url],
               },
             },
             {
@@ -77,6 +79,28 @@ const circles = ['amarillo', 'verde', 'celeste', 'crema', 'amarillo', 'verde'];
             </li>
           ))
         }
+      </ul>
+    </section>
+
+    <section class="about-social">
+      <h2>{a.followTitle}</h2>
+      <ul>
+        <li>
+          <a class="card social-link" href={SOCIAL.facebook} target="_blank" rel="noopener">
+            <span class="icon celeste" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M14 8.5V7c0-.8.5-1 1-1h2V2.5h-3c-3 0-4 2-4 4.3v1.7H7.5V12H10v9.5h4V12h2.6l.5-3.5z" fill="currentColor" /></svg>
+            </span>
+            Facebook
+          </a>
+        </li>
+        <li>
+          <a class="card social-link" href={SOCIAL.instagram.url} target="_blank" rel="noopener">
+            <span class="icon amarillo" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3.5" y="3.5" width="17" height="17" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" /></svg>
+            </span>
+            {SOCIAL.instagram.handle}
+          </a>
+        </li>
       </ul>
     </section>
 

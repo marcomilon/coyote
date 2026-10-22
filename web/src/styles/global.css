@@ -60,9 +60,15 @@ a:not(.btn):hover { color: var(--rojo); }
 .about-intro p.lead { margin-top: 24px; font-size: 22px; font-weight: 700; }
 .about-image { display: block; justify-self: center; width: min(440px, 100%); height: auto; }
 .about-trust { margin-top: 64px; }
-.about-trust h2, .about-faq h2 { font-size: clamp(28px, 4vw, 40px); line-height: 1.05; }
+.about-page section > h2 { font-size: clamp(28px, 4vw, 40px); line-height: 1.05; }
 .about-trust .cards { align-items: stretch; }
 @media (min-width: 64rem) { .about-trust .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.about-social { margin-top: 64px; }
+.about-social ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 20px; max-width: 772px; margin: 28px 0 0; padding: 0; list-style: none; }
+.card.social-link { flex-direction: row; align-items: center; gap: 16px; min-height: 88px; color: var(--ink); font: 700 22px/1.2 var(--body); text-decoration: none; transition: transform .12s, box-shadow .12s; }
+a.social-link:hover { color: var(--ink); transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
+.social-link .icon { flex: none; width: 52px; height: 52px; }
+.social-link svg { width: 26px; height: 26px; }
 .about-faq { max-width: 772px; margin-top: 64px; }
 .about-contact { align-items: flex-start; gap: 14px; margin-top: 48px; padding: 28px; }
 .about-contact p { font-size: 17px; line-height: 1.5; }

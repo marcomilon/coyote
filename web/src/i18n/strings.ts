@@ -131,6 +131,7 @@ const es = {
       { q: '¿Qué pasa con mi página y mi dominio si cancelo?', a: 'Tu página sigue publicada hasta el fin del mes pagado; después deja de verse en tu dominio, pero sigue guardada en Mi página web. Tu dominio queda registrado hasta que termine su año y, si lo pides, te lo pasamos a tu nombre.' },
     ],
     questions: '¿Preguntas? Escríbenos a {support}.',
+    followTitle: 'Síguenos en redes',
     read: 'Lee también:',
   },
   create: {
@@ -499,6 +500,7 @@ const esVos: DeepPartial<typeof es> = {
       { q: '¿Qué pasa con mi página y mi dominio si cancelo?', a: 'Tu página sigue publicada hasta el fin del mes pagado; después deja de verse en tu dominio, pero sigue guardada en Mi página web. Tu dominio queda registrado hasta que termine su año y, si lo pedís, te lo pasamos a tu nombre.' },
     ],
     questions: '¿Preguntas? Escribinos a {support}.',
+    followTitle: 'Seguinos en redes',
     read: 'Leé también:',
   },
   create: {
@@ -781,6 +783,7 @@ const pt: typeof es = {
       { q: 'O que acontece com meu site e meu domínio se eu cancelar?', a: 'Seu site continua publicado até o fim do mês pago; depois deixa de aparecer no seu domínio, mas continua salvo em Meu site. Seu domínio continua registrado até completar um ano e, se você pedir, passamos ele para o seu nome.' },
     ],
     questions: 'Dúvidas? Escreva para {support}.',
+    followTitle: 'Siga a gente nas redes',
     read: 'Leia também:',
   },
   create: {

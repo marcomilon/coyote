@@ -12,8 +12,6 @@ interface Props {
 const { lang, vos = false, menu = false } = Astro.props;
 const s = t(lang, vos);
 const h = s.header;
-// soporte@<domain> from astro.config.mjs (urls.ts); a domainless build has none.
-const support = import.meta.env.PUBLIC_SUPPORT_EMAIL as string;
 
 /** The two menus. An item with no href (no page yet) is left off the page. `home + '#…'` links are sections of the home page. */
 const home = s.paths.home;
@@ -35,7 +33,7 @@ const MENUS = [
       { ...h.items.about, href: s.paths.about },
       { ...h.items.help, href: `${home}#preguntas-frecuentes` }, // TODO: its own page; for now the home page's FAQ
       { ...h.items.blog, href: null }, // TODO: Blog
-      { ...h.items.contact, href: support ? `mailto:${support}` : null }, // TODO: a contact page (and WhatsApp once there is a number)
+      { ...h.items.contact, href: null }, // TODO: a contact page (and WhatsApp once there is a number)
     ],
   },
 ].map((menu) => ({ ...menu, items: menu.items.filter((item) => item.href) }));
